@@ -35,10 +35,34 @@ func TestDataDoesNotServeControlOrUnprefixedRoutes(t *testing.T) {
 		"/dp/api/v1/me/profile",
 		"/dp/api/v1/workspaces/current",
 		"/dp/api/v1/storage",
+		"/dp/api/v1/notifications",
+		"/dp/api/v1/notifications/ws",
 	} {
 		rec := serve(e, http.MethodGet, target)
 		if rec.Code != http.StatusNotFound {
 			t.Fatalf("%s status = %d, want 404", target, rec.Code)
 		}
+	}
+}
+
+func TestControlServesNotificationRoutes(t *testing.T) {
+	e, _, authState := newCP(t, store.NewMemoryProjectStore())
+
+	rec := serveWithAuth(e, http.MethodGet, "/cp/api/v1/notifications", authState.userCookie)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("web notifications status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	rec = serveWithAuth(e, http.MethodGet, "/cp/api/v1/notifications", nil)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("web notifications without session status = %d, want 401", rec.Code)
+	}
+
+	rec = serveWithAuth(e, http.MethodGet, "/cp/api/v1/admin/notifications", authState.opsCookie)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("admin notifications status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	rec = serveWithAuth(e, http.MethodGet, "/cp/api/v1/admin/notifications", authState.userCookie)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("admin notifications with user session status = %d, want 401", rec.Code)
 	}
 }

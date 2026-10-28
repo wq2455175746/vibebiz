@@ -43,7 +43,7 @@ func TestHTTPRequestSpanHasProjectID(t *testing.T) {
 
 	authState := newRouterAuth(t)
 	e := server.New(config.Config{Plane: "cp", ServiceName: "vibebiz-cp"}, obs)
-	RegisterControl(e, admin.NewMemoryRepository(), projects, client.NewSandbox("http://127.0.0.1:1", obs), obs, authState.authn, authState.handler, &handler.SettingsHandler{}, &handler.StorageHandler{}, authState.metas)
+	RegisterControl(e, admin.NewMemoryRepository(), projects, client.NewSandbox("http://127.0.0.1:1", obs), obs, authState.authn, authState.handler, &handler.SettingsHandler{}, &handler.StorageHandler{}, authState.metas, newNotificationHandler(t))
 
 	rec := serveWithAuth(e, http.MethodGet, "/cp/api/v1/projects/p1", authState.userCookie)
 	if rec.Code != http.StatusOK {
