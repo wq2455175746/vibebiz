@@ -6,7 +6,7 @@
 
 - 不访问 DP、sandbox 或 `/internal/projects`。
 - 不引入 OpenTelemetry、Prometheus 或日志 SDK。
-- 无登录、无 token；生产环境必须接入 SSO + RBAC。
+- 使用 CP admin 登录与 HttpOnly Cookie；生产环境必须接入 SSO + RBAC。
 - 颜色仅黑 / 白 / 灰 / 蓝。
 
 ## 命令

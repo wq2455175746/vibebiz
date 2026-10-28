@@ -20,7 +20,14 @@ export class ApiError extends Error {
 export const http = axios.create({
   baseURL: import.meta.env.VITE_OPS_API_BASE || '/cp/api/v1/admin',
   timeout: 30_000,
+  withCredentials: true,
 })
+
+let unauthorizedHandler: (() => void) | null = null
+
+export function onUnauthorized(handler: (() => void) | null): void {
+  unauthorizedHandler = handler
+}
 
 export function unwrapEnvelope<T>(envelope: Envelope<T>): T {
   if (!envelope || envelope.code !== 0) {
@@ -39,6 +46,9 @@ export async function request<T>(config: AxiosRequestConfig): Promise<T> {
     }
     if (axios.isAxiosError(error)) {
       const data = error.response?.data as Partial<Envelope<unknown>> | undefined
+      if (error.response?.status === 401) {
+        unauthorizedHandler?.()
+      }
       throw new ApiError(
         data?.message || error.message,
         error.response?.status ?? -1,

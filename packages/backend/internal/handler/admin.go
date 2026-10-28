@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -20,11 +21,13 @@ func NewAdminHandler(repo admin.Repository, projects store.ProjectStore) *AdminH
 }
 
 type adminProject struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	State     string    `json:"state"`
-	Owner     string    `json:"owner"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	State       string    `json:"state"`
+	Owner       string    `json:"owner"`
+	OwnerUserID int64     `json:"ownerUserId"`
+	WorkspaceID int64     `json:"workspaceId"`
+	CreatedAt   time.Time `json:"createdAt"`
 }
 
 func (h *AdminHandler) Overview(c echo.Context) error {
@@ -52,11 +55,13 @@ func (h *AdminHandler) Projects(c echo.Context) error {
 	out := make([]adminProject, 0, len(projects))
 	for _, project := range projects {
 		out = append(out, adminProject{
-			ID:        project.ID,
-			Name:      project.Name,
-			State:     project.State,
-			Owner:     "wangh11",
-			CreatedAt: project.CreatedAt,
+			ID:          project.ID,
+			Name:        project.Name,
+			State:       project.State,
+			Owner:       strconv.FormatInt(project.OwnerUserID, 10),
+			OwnerUserID: project.OwnerUserID,
+			WorkspaceID: project.WorkspaceID,
+			CreatedAt:   project.CreatedAt,
 		})
 	}
 	return response.OK(c, map[string]any{"projects": out})

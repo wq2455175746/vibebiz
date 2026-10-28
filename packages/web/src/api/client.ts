@@ -17,7 +17,7 @@ export class ApiError extends Error {
   }
 }
 
-const common = { timeout: 30_000 }
+const common = { timeout: 30_000, withCredentials: true }
 
 export const cpHttp = axios.create({
   ...common,
@@ -28,6 +28,19 @@ export const dpHttp = axios.create({
   ...common,
   baseURL: import.meta.env.VITE_DP_BASE || '/dp/api/v1',
 })
+
+type UnauthorizedHandler = () => void
+
+let unauthorizedHandler: UnauthorizedHandler | null = null
+
+export function onUnauthorized(handler: UnauthorizedHandler): () => void {
+  unauthorizedHandler = handler
+  return () => {
+    if (unauthorizedHandler === handler) {
+      unauthorizedHandler = null
+    }
+  }
+}
 
 export function unwrapEnvelope<T>(envelope: Envelope<T>): T {
   if (!envelope || envelope.code !== 0) {
@@ -46,6 +59,9 @@ export async function request<T>(client: AxiosInstance, config: AxiosRequestConf
     }
     if (axios.isAxiosError(error)) {
       const data = error.response?.data as Partial<Envelope<unknown>> | undefined
+      if (error.response?.status === 401) {
+        unauthorizedHandler?.()
+      }
       throw new ApiError(
         data?.message || error.message,
         error.response?.status ?? -1,

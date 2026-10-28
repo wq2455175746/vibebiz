@@ -46,10 +46,12 @@
 
 ## M3 · 产品化
 
-- [ ] 用户登录与会话（替换内存单用户）
-- [ ] 按 `docs/superpowers/specs/2026-10-28-business-database-design.md` 落地 MySQL 业务表与迁移
+- [x] 用户登录与会话（Redis Session + HttpOnly Cookie）
+- [x] DAO 基础层：20 张表 GORM model + 泛型 Repository + MySQL 连接 + sqlmock 测试
+- [x] goose 版本化 SQL 迁移：4 个迁移文件 + `cmd/migrate` + `make db-*` 命令
+- [x] 在目标 MySQL 执行 `db-create` / `db-migrate-up` 并验证 schema（已到 v5）
 - [ ] 项目元数据持久化（目标 MySQL 8，替换内存 ProjectStore）
-- [ ] 项目列表 / 重命名 / 删除
+- [x] 项目列表 / 删除（工作区成员可见；重命名待做）
 - [ ] 版本列表、diff、回滚、Remix（fork session）
 - [ ] 配额与用量事件
 
@@ -74,8 +76,9 @@
 
 ## 已知技术债
 
-- [ ] 项目元数据与 admin 数据在内存，重启丢失（待 MySQL）
-- [ ] ops-web 免登录、只读；生产需 SSO + RBAC
+- [ ] 项目元数据与 admin 数据在内存，重启丢失（待 MySQL）；工作区关系登录时快照
+- [x] ops-web 本地 admin 登录、登出与路由守卫；生产仍需 SSO + RBAC
+- [ ] 工作区成员管理 API/UI；成员变更需失效相关 Session
 - [ ] 预览与主站同 origin（M4 解决）
 - [ ] 文件 API 全量读入内存，无 Range / 流式（M2 解决）
 - [ ] `.ai` 自动更新未接 opencode 事件，当前手动 `make harness-update`

@@ -9,6 +9,11 @@ cat ../../.ai/rules/go.md
 make init
 make test
 make quality
+
+# MySQL 迁移（DSN 来自 .env 的 MYSQL_*）
+make db-create
+make db-migrate-up
+make db-migrate-status
 ```
 
 ## Module Map
@@ -28,8 +33,11 @@ make quality
 | SSE | `internal/handler/chat.go` | `bufio.Reader` 逐行读取 + Flush |
 | 预览 | `internal/handler/preview.go` | `httputil.ReverseProxy`，FlushInterval=-1 |
 | sandbox 客户端 | `internal/client/sandbox.go` | 唯一外部依赖出口，统一解析信封 |
-| 存储 | `internal/store/` | 接口 + 内存实现；M3 替换持久化 |
-| 模型 | `internal/model/` | JSON 字段与前端 camelCase 对齐 |
+| 存储 | `internal/store/` | 现有 ProjectStore 接口 + 内存实现；M3 替换持久化 |
+| DAO | `internal/dao/` | GORM + MySQL 连接、泛型 Repository、Repositories 聚合；不接 handler |
+| DAO models | `internal/dao/model/` | 20 张业务表映射；统一 Base / extra_p / 软删除 |
+| 迁移 | `migrations/` + `cmd/migrate/` | goose 版本化 SQL；`up/down/status/version/redo` |
+| 模型 | `internal/model/` | M0 项目投影；JSON 字段与前端 camelCase 对齐 |
 | 响应 | `internal/response/` | `OK / Created / Fail` |
 
 ## Patterns
@@ -71,6 +79,8 @@ make quality
 - 直接读写 `data/workspaces`（工作区归 sandbox）
 - 把 sandbox 内部 URL 暴露给前端
 - 在 handler 里复制业务逻辑；需要时下沉 service
+- 使用 `AutoMigrate` 创建/修改 schema；统一走 `migrations/` + `cmd/migrate`
+- 在迁移文件中写真实密钥或外部连接串
 
 ## Before Committing
 

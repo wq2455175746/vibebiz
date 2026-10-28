@@ -12,12 +12,15 @@ import (
 	"syscall"
 	"time"
 
+	"vibebiz/internal/auth"
 	"vibebiz/internal/client"
 	"vibebiz/internal/config"
 	"vibebiz/internal/observability"
 	"vibebiz/internal/router"
 	"vibebiz/internal/server"
 )
+
+const redisPrefix = "vibebiz"
 
 func main() {
 	cfg := config.Load("dp")
@@ -36,10 +39,27 @@ func main() {
 		}
 	}()
 
+	redisClient := auth.NewRedisClient(cfg)
+	if err := redisClient.Ping(ctx).Err(); err != nil {
+		obs.Logger.Error("redis init failed", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := redisClient.Close(); err != nil {
+			obs.Logger.Error("redis close failed", "error", err)
+		}
+	}()
+
+	sessions := auth.NewRedisStore(redisClient, redisPrefix)
+	userCookie := auth.CookieManager{Name: "vibebiz_user", Secure: cfg.CookieSecure, TTL: cfg.SessionUserTTL, Now: time.Now}
+	authService := auth.NewService(nil, nil, sessions, cfg.SessionUserTTL, cfg.SessionOpsTTL)
+	authn := auth.NewAuthenticator(authService, userCookie, auth.CookieManager{})
+	metas := auth.NewProjectMetaStore(redisClient, redisPrefix)
+
 	sandbox := client.NewSandbox(cfg.SandboxBaseURL, obs)
 
 	e := server.New(cfg, obs)
-	router.RegisterData(e, sandbox, obs)
+	router.RegisterData(e, sandbox, obs, authn, metas)
 
 	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
 	go func() {

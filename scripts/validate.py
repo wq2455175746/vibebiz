@@ -81,13 +81,19 @@ PACKAGES = {
             ".ai/AGENTS.md",
             "cmd/cp/main.go",
             "cmd/dp/main.go",
+            "cmd/migrate/main.go",
+            "migrations/00005_default_users.sql",
         ],
         "required_dirs": [
             "internal/admin",
+            "internal/auth",
             "internal/client",
             "internal/config",
             "internal/handler",
             "internal/model",
+            "internal/dao",
+            "internal/dao/model",
+            "migrations",
             "internal/observability",
             "internal/response",
             "internal/router",
@@ -120,6 +126,9 @@ PACKAGES = {
             "nginx.conf",
             ".ai/AGENTS.md",
             "src/main.ts",
+            "src/api/auth.ts",
+            "src/stores/auth.ts",
+            "src/views/LoginView.vue",
         ],
         "required_dirs": ["src/api", "src/stores", "src/views", "src/components", "src/utils"],
     },
@@ -134,6 +143,9 @@ PACKAGES = {
             "nginx.conf",
             ".ai/AGENTS.md",
             "src/main.ts",
+            "src/api/auth.ts",
+            "src/stores/auth.ts",
+            "src/views/LoginView.vue",
         ],
         "required_dirs": [
             "src/api",
@@ -352,9 +364,20 @@ def validate_contracts() -> None:
     )
     require_contains(
         "packages/backend/Makefile",
-        ["dev-cp:", "dev-dp:", "test:", "quality:", "build:", "install:"],
+        ["dev-cp:", "dev-dp:", "test:", "quality:", "build:", "install:", "db-create:", "db-migrate-up:", "db-migrate-status:"],
     )
-    require_contains("packages/backend/.env.example", ["HOST=", "CP_PORT=", "DP_PORT=", "SANDBOX_BASE_URL=", "CORS_ORIGINS="])
+    require_contains("packages/backend/.env.example", [
+        "HOST=", "CP_PORT=", "DP_PORT=", "SANDBOX_BASE_URL=", "CORS_ORIGINS=",
+        "MYSQL_HOST=", "MYSQL_DATABASE=", "REDIS_HOST=", "S3_BUCKET=", "S3_ENDPOINT=",
+    ])
+    for name in (
+        "00001_identity_workspace.sql",
+        "00002_project_resource.sql",
+        "00003_ai_chat_rag.sql",
+        "00004_seed_topics_roles.sql",
+    ):
+        require_contains(f"packages/backend/migrations/{name}", ["-- +goose Up", "-- +goose Down"])
+    require_contains("packages/backend/cmd/migrate/main.go", ["goose.Up", "goose.Down", "goose.Status", "goose.GetDBVersion"])
     require_contains("packages/sandbox/Makefile", ["dev:", "test:", "quality:", "install:"])
     require_contains("packages/sandbox/.env.example", ["WORKSPACES_DIR=", "AGENT_MODE=", "LLM_API_KEY="])
     for package in ("web", "ops-web"):

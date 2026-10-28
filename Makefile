@@ -10,6 +10,7 @@ OPS_WEB := $(ROOT)/packages/ops-web
 	test test-web test-ops-web test-backend test-sandbox \
 	lint quality validate validate-web validate-ops-web validate-backend validate-sandbox \
 	checkpoint memory-add harness-update harness-failure deps-check \
+	db-create db-migrate-up db-migrate-down db-migrate-status db-migrate-version db-migrate-redo \
 	build docker-build docker-up docker-down clean
 
 help:
@@ -18,10 +19,10 @@ help:
 	@echo "  make init            - 创建各 package .env、本地数据目录与 .ai"
 	@echo "  make install         - 安装四个 package 依赖"
 	@echo "  make dev             - 同时启动 sandbox/cp/dp/web/ops-web"
-	@echo "  make dev-web         - Web 前端 (http://localhost:5173)"
-	@echo "  make dev-ops-web     - 运营后台 (http://localhost:5174)"
-	@echo "  make dev-cp          - CP 控制面 (http://localhost:8080)"
-	@echo "  make dev-dp          - DP 数据面 (http://localhost:8081)"
+	@echo "  make dev-web         - Web 前端 (http://vibebiz-dev.com:5173)"
+	@echo "  make dev-ops-web     - 运营后台 (http://vibebiz-dev-ops.com:5174)"
+	@echo "  make dev-cp          - CP 控制面 (http://vibebiz-dev.com:8080)"
+	@echo "  make dev-dp          - DP 数据面 (http://vibebiz-dev.com:8081)"
 	@echo "  make dev-sandbox     - Python sandbox (http://localhost:8000)"
 	@echo "  make test            - 四端测试"
 	@echo "  make quality         - Go/Python/TypeScript 质量门禁"
@@ -31,6 +32,9 @@ help:
 	@echo "  make memory-add      - 交互式记录经验教训"
 	@echo "  make harness-update  - 刷新 .ai 焦点并归档检查点"
 	@echo "  make build           - CP/DP/web/ops-web 生产构建"
+	@echo "  make db-create       - 创建 MySQL database（如不存在）"
+	@echo "  make db-migrate-up   - 执行所有待执行迁移"
+	@echo "  make db-migrate-status - 查看迁移状态"
 	@echo "  make docker-build    - 构建五份镜像"
 	@echo "  make docker-up       - docker compose 启动"
 	@echo "  make docker-down     - docker compose 停止"
@@ -142,6 +146,24 @@ harness-update:
 harness-failure:
 	@test -n "$(MSG)" || (echo "usage: make harness-failure MSG='...' SERVICE=cp"; exit 1)
 	@python3 scripts/update_memory.py --failure "$(MSG)" --service=$(or $(SERVICE),unknown)
+
+db-create:
+	@$(MAKE) --no-print-directory -C $(BACKEND) db-create
+
+db-migrate-up:
+	@$(MAKE) --no-print-directory -C $(BACKEND) db-migrate-up
+
+db-migrate-down:
+	@$(MAKE) --no-print-directory -C $(BACKEND) db-migrate-down
+
+db-migrate-status:
+	@$(MAKE) --no-print-directory -C $(BACKEND) db-migrate-status
+
+db-migrate-version:
+	@$(MAKE) --no-print-directory -C $(BACKEND) db-migrate-version
+
+db-migrate-redo:
+	@$(MAKE) --no-print-directory -C $(BACKEND) db-migrate-redo
 
 build:
 	@$(MAKE) --no-print-directory -C $(BACKEND) build

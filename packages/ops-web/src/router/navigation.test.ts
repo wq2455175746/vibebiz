@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import router from './index'
 import { navItems } from './navigation'
 import { childRoutes } from './routes'
 
@@ -28,5 +29,12 @@ describe('ops navigation', () => {
   it('has a route for every navigation item', () => {
     const routeNames = childRoutes.map((route) => route.name)
     expect(routeNames).toEqual(navItems.map((item) => item.name))
+  })
+
+  it('serves the login route outside the ops layout and marks it public', () => {
+    const login = router.resolve('/login')
+    expect(login.meta.public).toBe(true)
+    expect(login.matched).toHaveLength(1)
+    expect(router.resolve('/').matched.length).toBeGreaterThan(1)
   })
 })

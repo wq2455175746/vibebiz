@@ -18,13 +18,28 @@ internal/router/     # control.go / data.go / errors.go
 internal/handler/    # HTTP 边界：绑定、校验、状态码
 internal/admin/      # 运营后台 Repository 接口 + 内存实现
 internal/client/     # 外部 HTTP 客户端
-internal/store/      # 存储接口 + 实现
-internal/model/      # 领域模型
+internal/store/      # 现有存储接口 + 内存实现
+internal/model/      # M0 领域投影模型
+internal/dao/        # GORM MySQL 连接 + 泛型 Repository
+internal/dao/model/  # 业务表 model（extra_p / 软删除）
 internal/response/   # 统一信封
 ```
 
 - CP 业务前缀 `/cp/api/v1`，DP 业务前缀 `/dp/api/v1`；禁止无前缀业务 `/api/v1`。
 - `/health`、`/metrics` 无前缀；两个入口都必须注册。
+
+### DAO 规则
+
+- 持久化使用 GORM + `gorm.io/driver/mysql`，与 `guineapig-backend` 一致；Redis/S3 后续分别用 `go-redis/v9 + redisotel`、AWS SDK v2。
+- 表模型放 `internal/dao/model`，统一嵌入 `Base`（ID / 时间 / 软删除 / `extra_p`）；显式 `TableName()`。
+- `internal/dao` 只提供连接与 repository，不 import handler/router，不写业务校验。
+- 禁止 `AutoMigrate`；DDL 由 `docs/superpowers/specs/2026-10-28-business-database-design.md` 对应的迁移管理。
+- `deleted_at` 使用 GORM 软删除；查询默认排除已删除行。
+- 凭据只从 `.env` 读取，不写日志、不写 `extra_p`。
+- schema 变更使用 `migrations/` 下的 goose SQL；禁止 `AutoMigrate`。
+- 迁移文件一次写一个版本，必须同时提供 `-- +goose Up` / `-- +goose Down`。
+- 已执行的迁移文件不改写；修正用新版本。
+- 迁移命令：`make db-create` / `db-migrate-up` / `db-migrate-status` / `db-migrate-down`。
 
 - handler 不写业务算法；复杂逻辑下沉 service。
 - 单个 handler 文件建议 < 200 行，单个函数 < 50 行。

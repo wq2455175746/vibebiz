@@ -52,7 +52,9 @@ make memory-add     # 有可复用经验时
 | `internal/client/sandbox.go` | 唯一 sandbox HTTP 客户端 |
 | `internal/observability/` | JSON 日志、OTel Trace、Prometheus Metrics |
 | `internal/store/` | `ProjectStore` 接口 + 内存实现 |
-| `internal/model/` | 项目模型 |
+| `internal/model/` | M0 项目投影模型 |
+| `internal/dao/` | GORM MySQL 连接 + 泛型 Repository + 20 表 Repositories |
+| `internal/dao/model/` | 20 张业务表 model；统一 Base / extra_p / 软删除 |
 | `internal/response/` | `{code,message,result}` 信封 |
 
 ## Sandbox 内部模块路由

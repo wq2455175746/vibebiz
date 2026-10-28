@@ -14,7 +14,9 @@ type ProjectStore interface {
 	Create(project *model.Project) error
 	Get(id string) (*model.Project, error)
 	List() []*model.Project
+	ListByWorkspaces(workspaceIDs []int64) []*model.Project
 	Update(project *model.Project) error
+	Delete(id string) error
 }
 
 type MemoryProjectStore struct {
@@ -57,6 +59,40 @@ func (s *MemoryProjectStore) List() []*model.Project {
 		return out[i].CreatedAt.After(out[j].CreatedAt)
 	})
 	return out
+}
+
+func (s *MemoryProjectStore) ListByWorkspaces(workspaceIDs []int64) []*model.Project {
+	if len(workspaceIDs) == 0 {
+		return []*model.Project{}
+	}
+	allowed := make(map[int64]struct{}, len(workspaceIDs))
+	for _, id := range workspaceIDs {
+		allowed[id] = struct{}{}
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]*model.Project, 0, len(s.items))
+	for _, project := range s.items {
+		if _, ok := allowed[project.WorkspaceID]; !ok {
+			continue
+		}
+		out = append(out, clone(project))
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].CreatedAt.After(out[j].CreatedAt)
+	})
+	return out
+}
+
+func (s *MemoryProjectStore) Delete(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.items[id]; !ok {
+		return ErrNotFound
+	}
+	delete(s.items, id)
+	return nil
 }
 
 func (s *MemoryProjectStore) Update(project *model.Project) error {

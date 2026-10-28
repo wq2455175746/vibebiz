@@ -68,9 +68,16 @@
 
 | 方法 | 路径 | sandbox 内部路径 |
 |---|---|---|
-| POST | `/projects` | `POST /internal/projects/{id}/init` |
-| GET | `/projects` | - |
-| GET | `/projects/:id` | -（读取 CP 内存 store，不调用 sandbox） |
+| POST | `/auth/login` | 公开，用户登录 |
+| GET | `/auth/me` | 用户 Cookie |
+| POST | `/auth/logout` | 用户 Cookie |
+| POST | `/projects` | 用户登录 + 工作区；`POST /internal/projects/{id}/init` |
+| GET | `/projects` | 用户登录 + 工作区过滤 |
+| GET | `/projects/:id` | 用户登录 + 工作区过滤；读取 CP 内存 store |
+| DELETE | `/projects/:id` | 用户登录 + 工作区过滤 |
+| POST | `/admin/auth/login` | 公开，ops 登录 |
+| GET | `/admin/auth/me` | ops Cookie |
+| POST | `/admin/auth/logout` | ops Cookie |
 | GET | `/admin/overview` | - |
 | GET | `/admin/users` | - |
 | GET | `/admin/projects` | - |
@@ -89,6 +96,8 @@
 | GET | `/projects/:id/preview/*` | `GET /internal/projects/{id}/preview/*` |
 
 DP 不注册项目列表 / 创建 / 详情，也不注册任何 admin 路由。CP 不注册任何 `/dp/*` 路由。
+
+除登录、`/health`、`/metrics` 外，CP 项目接口与 admin 接口、DP 项目接口全部要求 HttpOnly Cookie + Redis Session。DP 项目接口还校验 Redis 项目元数据中的工作区成员关系。
 
 文件读取返回：
 

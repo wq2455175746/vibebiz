@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
+	"vibebiz/internal/auth"
 	"vibebiz/internal/model"
 	"vibebiz/internal/observability"
 	"vibebiz/internal/response"
@@ -27,17 +28,19 @@ type ProjectInitializer interface {
 type ProjectHandler struct {
 	Store   store.ProjectStore
 	Sandbox ProjectInitializer
+	Metas   auth.ProjectMetaStore
 	Obs     *observability.Provider
 	Now     func() time.Time
 }
 
-func NewProjectHandler(projectStore store.ProjectStore, sandbox ProjectInitializer, obs *observability.Provider) *ProjectHandler {
-	return &ProjectHandler{Store: projectStore, Sandbox: sandbox, Obs: obs, Now: time.Now}
+func NewProjectHandler(projectStore store.ProjectStore, sandbox ProjectInitializer, obs *observability.Provider, metas auth.ProjectMetaStore) *ProjectHandler {
+	return &ProjectHandler{Store: projectStore, Sandbox: sandbox, Metas: metas, Obs: obs, Now: time.Now}
 }
 
 type createProjectRequest struct {
-	Prompt string `json:"prompt"`
-	Name   string `json:"name"`
+	Prompt      string `json:"prompt"`
+	Name        string `json:"name"`
+	WorkspaceID int64  `json:"workspaceId"`
 }
 
 func (h *ProjectHandler) Create(c echo.Context) error {
@@ -51,6 +54,21 @@ func (h *ProjectHandler) Create(c echo.Context) error {
 		return response.Fail(c, http.StatusBadRequest, 40002, "prompt is required")
 	}
 
+	session, ok := auth.SessionFrom(c)
+	if !ok {
+		return response.Fail(c, http.StatusUnauthorized, 40101, "unauthorized")
+	}
+	workspaceID := req.WorkspaceID
+	if workspaceID == 0 {
+		if len(session.WorkspaceIDs) == 0 {
+			return response.Fail(c, http.StatusForbidden, 40302, "no workspace available")
+		}
+		workspaceID = session.WorkspaceIDs[0]
+	}
+	if !containsInt64(session.WorkspaceIDs, workspaceID) {
+		return response.Fail(c, http.StatusForbidden, 40303, "workspace not accessible")
+	}
+
 	id := uuid.NewString()
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
@@ -59,12 +77,14 @@ func (h *ProjectHandler) Create(c echo.Context) error {
 
 	now := h.Now().UTC()
 	project := &model.Project{
-		ID:        id,
-		Name:      name,
-		Prompt:    prompt,
-		State:     model.ProjectStateReady,
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:          id,
+		Name:        name,
+		Prompt:      prompt,
+		State:       model.ProjectStateReady,
+		WorkspaceID: workspaceID,
+		OwnerUserID: session.UserID,
+		CreatedAt:   now,
+		UpdatedAt:   now,
 	}
 
 	ctx := c.Request().Context()
@@ -93,6 +113,17 @@ func (h *ProjectHandler) Create(c echo.Context) error {
 		return response.Fail(c, http.StatusInternalServerError, 50001, "create project failed")
 	}
 
+	if h.Metas != nil {
+		meta := auth.ProjectMeta{WorkspaceID: workspaceID, OwnerUserID: session.UserID}
+		if err := h.Metas.Set(ctx, id, meta); err != nil {
+			_ = h.Store.Delete(id)
+			if h.Obs != nil {
+				h.Obs.Log(ctx, slog.LevelError, "project.create", "project_id", id, "status", "error", "error", err.Error())
+			}
+			return response.Fail(c, http.StatusInternalServerError, 50003, "project metadata write failed")
+		}
+	}
+
 	if h.Obs != nil {
 		h.Obs.Log(ctx, slog.LevelInfo, "project.create", "project_id", id, "state", project.State)
 	}
@@ -101,10 +132,18 @@ func (h *ProjectHandler) Create(c echo.Context) error {
 }
 
 func (h *ProjectHandler) List(c echo.Context) error {
-	return response.OK(c, map[string]any{"projects": h.Store.List()})
+	session, ok := auth.SessionFrom(c)
+	if !ok {
+		return response.Fail(c, http.StatusUnauthorized, 40101, "unauthorized")
+	}
+	return response.OK(c, map[string]any{"projects": h.Store.ListByWorkspaces(session.WorkspaceIDs)})
 }
 
 func (h *ProjectHandler) Get(c echo.Context) error {
+	session, ok := auth.SessionFrom(c)
+	if !ok {
+		return response.Fail(c, http.StatusUnauthorized, 40101, "unauthorized")
+	}
 	project, err := h.Store.Get(c.Param("id"))
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
@@ -112,7 +151,49 @@ func (h *ProjectHandler) Get(c echo.Context) error {
 		}
 		return response.Fail(c, http.StatusInternalServerError, 50002, "get project failed")
 	}
+	if !containsInt64(session.WorkspaceIDs, project.WorkspaceID) {
+		return response.Fail(c, http.StatusNotFound, 40401, "project not found")
+	}
 	return response.OK(c, project)
+}
+
+func (h *ProjectHandler) Delete(c echo.Context) error {
+	session, ok := auth.SessionFrom(c)
+	if !ok {
+		return response.Fail(c, http.StatusUnauthorized, 40101, "unauthorized")
+	}
+	id := c.Param("id")
+	project, err := h.Store.Get(id)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return response.Fail(c, http.StatusNotFound, 40401, "project not found")
+		}
+		return response.Fail(c, http.StatusInternalServerError, 50002, "get project failed")
+	}
+	if !containsInt64(session.WorkspaceIDs, project.WorkspaceID) {
+		return response.Fail(c, http.StatusNotFound, 40401, "project not found")
+	}
+	if err := h.Store.Delete(id); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return response.Fail(c, http.StatusNotFound, 40401, "project not found")
+		}
+		return response.Fail(c, http.StatusInternalServerError, 50004, "delete project failed")
+	}
+	if h.Metas != nil {
+		if err := h.Metas.Delete(c.Request().Context(), id); err != nil && h.Obs != nil {
+			h.Obs.Log(c.Request().Context(), slog.LevelError, "project.delete", "project_id", id, "status", "error", "error", err.Error())
+		}
+	}
+	return response.OK(c, map[string]any{"id": id})
+}
+
+func containsInt64(ids []int64, target int64) bool {
+	for _, id := range ids {
+		if id == target {
+			return true
+		}
+	}
+	return false
 }
 
 func defaultProjectName(prompt string) string {

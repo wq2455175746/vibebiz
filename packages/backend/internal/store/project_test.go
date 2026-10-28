@@ -67,3 +67,44 @@ func TestMemoryProjectStoreListSortedNewestFirst(t *testing.T) {
 		t.Fatalf("unexpected order: %+v", list)
 	}
 }
+
+func TestMemoryProjectStoreListByWorkspaces(t *testing.T) {
+	s := NewMemoryProjectStore()
+	now := time.Now()
+	s.Create(&model.Project{ID: "w1-old", WorkspaceID: 1, OwnerUserID: 7, CreatedAt: now.Add(-time.Hour)})
+	s.Create(&model.Project{ID: "w1-new", WorkspaceID: 1, OwnerUserID: 8, CreatedAt: now})
+	s.Create(&model.Project{ID: "w2", WorkspaceID: 2, OwnerUserID: 9, CreatedAt: now})
+	s.Create(&model.Project{ID: "legacy", CreatedAt: now})
+
+	list := s.ListByWorkspaces([]int64{1})
+	if len(list) != 2 || list[0].ID != "w1-new" || list[1].ID != "w1-old" {
+		t.Fatalf("unexpected list: %+v", list)
+	}
+	if list[0].WorkspaceID != 1 || list[0].OwnerUserID != 8 {
+		t.Fatalf("ownership lost: %+v", list[0])
+	}
+
+	list = s.ListByWorkspaces([]int64{2, 1})
+	if len(list) != 3 || list[0].ID != "w1-new" {
+		t.Fatalf("multi workspace list: %+v", list)
+	}
+
+	if list := s.ListByWorkspaces(nil); len(list) != 0 {
+		t.Fatalf("empty workspace ids returned %+v", list)
+	}
+}
+
+func TestMemoryProjectStoreDelete(t *testing.T) {
+	s := NewMemoryProjectStore()
+	s.Create(&model.Project{ID: "p1", WorkspaceID: 1})
+
+	if err := s.Delete("p1"); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	if _, err := s.Get("p1"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("get after delete err = %v, want ErrNotFound", err)
+	}
+	if err := s.Delete("p1"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("second delete err = %v, want ErrNotFound", err)
+	}
+}

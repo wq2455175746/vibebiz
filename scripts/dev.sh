@@ -24,7 +24,7 @@ CP_PORT=$(env_value "$BACKEND/.env" CP_PORT 8080)
 DP_PORT=$(env_value "$BACKEND/.env" DP_PORT 8081)
 SANDBOX_PORT=$(env_value "$SANDBOX/.env" SANDBOX_PORT 8000)
 SANDBOX_BASE_URL=$(env_value "$BACKEND/.env" SANDBOX_BASE_URL "http://localhost:${SANDBOX_PORT}")
-CORS_ORIGINS=$(env_value "$BACKEND/.env" CORS_ORIGINS "http://localhost:5173,http://localhost:5174")
+CORS_ORIGINS=$(env_value "$BACKEND/.env" CORS_ORIGINS "http://vibebiz-dev.com:5173,http://vibebiz-dev-ops.com:5174")
 
 mkdir -p "$ROOT/data/workspaces"
 
@@ -93,9 +93,9 @@ pids+=($!)
 pids+=($!)
 
 echo "sandbox  http://localhost:${SANDBOX_PORT}/health"
-echo "cp       http://localhost:${CP_PORT}/health"
-echo "dp       http://localhost:${DP_PORT}/health"
-echo "web      http://localhost:5173"
-echo "ops-web  http://localhost:5174"
+echo "cp       http://vibebiz-dev.com:${CP_PORT}/health"
+echo "dp       http://vibebiz-dev.com:${DP_PORT}/health"
+echo "web      http://vibebiz-dev.com:5173"
+echo "ops-web  http://vibebiz-dev-ops.com:5174"
 
 wait

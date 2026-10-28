@@ -34,9 +34,9 @@ func TestAdminOverview(t *testing.T) {
 	if err := projects.Create(&model.Project{ID: "p1", Name: "demo", State: model.ProjectStateReady, CreatedAt: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
-	e, _ := newCP(t, projects)
+	e, _, authState := newCP(t, projects)
 
-	rec := serve(e, http.MethodGet, "/cp/api/v1/admin/overview")
+	rec := serveWithAuth(e, http.MethodGet, "/cp/api/v1/admin/overview", authState.opsCookie)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
@@ -51,8 +51,8 @@ func TestAdminOverview(t *testing.T) {
 }
 
 func TestAdminUsers(t *testing.T) {
-	e, _ := newCP(t, store.NewMemoryProjectStore())
-	rec := serve(e, http.MethodGet, "/cp/api/v1/admin/users")
+	e, _, authState := newCP(t, store.NewMemoryProjectStore())
+	rec := serveWithAuth(e, http.MethodGet, "/cp/api/v1/admin/users", authState.opsCookie)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d", rec.Code)
 	}
@@ -67,33 +67,76 @@ func TestAdminUsers(t *testing.T) {
 
 func TestAdminProjects(t *testing.T) {
 	projects := store.NewMemoryProjectStore()
-	if err := projects.Create(&model.Project{ID: "p1", Name: "demo", State: model.ProjectStateReady, CreatedAt: time.Now()}); err != nil {
+	now := time.Now()
+	if err := projects.Create(&model.Project{ID: "p1", Name: "demo", State: model.ProjectStateReady, WorkspaceID: 2, OwnerUserID: 7, CreatedAt: now}); err != nil {
 		t.Fatal(err)
 	}
-	e, _ := newCP(t, projects)
+	if err := projects.Create(&model.Project{ID: "p2", Name: "other", State: model.ProjectStateReady, WorkspaceID: 5, OwnerUserID: 8, CreatedAt: now.Add(-time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
+	e, _, authState := newCP(t, projects)
 
-	rec := serve(e, http.MethodGet, "/cp/api/v1/admin/projects")
+	rec := serveWithAuth(e, http.MethodGet, "/cp/api/v1/admin/projects", authState.opsCookie)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d", rec.Code)
 	}
 	var payload struct {
 		Projects []struct {
-			ID    string `json:"id"`
-			Name  string `json:"name"`
-			State string `json:"state"`
-			Owner string `json:"owner"`
+			ID          string `json:"id"`
+			Name        string `json:"name"`
+			State       string `json:"state"`
+			Owner       string `json:"owner"`
+			OwnerUserID int64  `json:"ownerUserId"`
+			WorkspaceID int64  `json:"workspaceId"`
 		} `json:"projects"`
 	}
 	if err := json.Unmarshal(decodeEnvelope(t, rec.Body.Bytes()).Result, &payload); err != nil {
 		t.Fatalf("decode projects: %v", err)
 	}
-	if len(payload.Projects) != 1 || payload.Projects[0].Owner != "wangh11" {
+	if len(payload.Projects) != 2 {
 		t.Fatalf("unexpected projects: %+v", payload.Projects)
+	}
+	found := false
+	for _, project := range payload.Projects {
+		if project.ID == "p1" {
+			found = true
+			if project.Owner != "7" || project.OwnerUserID != 7 || project.WorkspaceID != 2 {
+				t.Fatalf("project ownership = %+v", project)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("admin did not see all projects: %+v", payload.Projects)
+	}
+}
+
+func TestAdminRequiresOpsSession(t *testing.T) {
+	e, _, authState := newCP(t, store.NewMemoryProjectStore())
+
+	if rec := serve(e, http.MethodGet, "/cp/api/v1/admin/overview"); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous status = %d, want 401", rec.Code)
+	}
+	if rec := serveWithAuth(e, http.MethodGet, "/cp/api/v1/admin/overview", authState.userCookie); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("user cookie status = %d, want 401", rec.Code)
+	}
+}
+
+func TestProjectsRequireUserSession(t *testing.T) {
+	e, _, authState := newCP(t, store.NewMemoryProjectStore())
+
+	if rec := serve(e, http.MethodGet, "/cp/api/v1/projects"); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous status = %d, want 401", rec.Code)
+	}
+	if rec := serveWithAuth(e, http.MethodGet, "/cp/api/v1/projects", authState.opsCookie); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("ops cookie status = %d, want 401", rec.Code)
+	}
+	if rec := serveWithAuth(e, http.MethodGet, "/cp/api/v1/projects", authState.userCookie); rec.Code != http.StatusOK {
+		t.Fatalf("user status = %d, want 200", rec.Code)
 	}
 }
 
 func TestAdminSandboxesQuotasAudit(t *testing.T) {
-	e, _ := newCP(t, store.NewMemoryProjectStore())
+	e, _, authState := newCP(t, store.NewMemoryProjectStore())
 
 	for _, tc := range []struct {
 		path   string
@@ -116,7 +159,7 @@ func TestAdminSandboxesQuotasAudit(t *testing.T) {
 			return len(v), err
 		}},
 	} {
-		rec := serve(e, http.MethodGet, tc.path)
+		rec := serveWithAuth(e, http.MethodGet, tc.path, authState.opsCookie)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("%s status = %d", tc.path, rec.Code)
 		}

@@ -4,11 +4,15 @@ import { useOpsStore } from '@/stores/ops'
 const ops = useOpsStore()
 
 const services = [
-  { label: 'CP 控制面', value: 'localhost:8080', note: '业务前缀 /cp/api/v1' },
-  { label: 'DP 数据面', value: 'localhost:8081', note: '文件 / SSE / 预览，业务前缀由 DP 提供' },
+  { label: 'CP 控制面', value: 'vibebiz-dev.com:8080', note: '业务前缀 /cp/api/v1' },
+  {
+    label: 'DP 数据面',
+    value: 'vibebiz-dev.com:8081',
+    note: '文件 / SSE / 预览，业务前缀由 DP 提供',
+  },
   { label: 'sandbox', value: '8000', note: '文件 API / Agent 循环 / 静态预览' },
-  { label: 'web', value: 'localhost:5173', note: '用户控制台' },
-  { label: 'ops-web', value: 'localhost:5174', note: '本运营后台' },
+  { label: 'web', value: 'vibebiz-dev.com:5173', note: '用户控制台' },
+  { label: 'ops-web', value: 'vibebiz-dev-ops.com:5174', note: '本运营后台' },
 ]
 
 const runtime = [
@@ -24,7 +28,11 @@ const runtime = [
 
 const security = [
   { label: '环境', value: ops.environment, note: '仅允许本地访问' },
-  { label: '鉴权', value: '无登录 / 无 token', note: '生产环境必须接入 SSO + RBAC' },
+  {
+    label: '鉴权',
+    value: 'HttpOnly Cookie',
+    note: 'Redis 服务端 Session，生产环境必须接入 SSO + RBAC',
+  },
   { label: 'admin 路由', value: '不得裸露在公网', note: '由网关或内网访问策略限制' },
 ]
 </script>

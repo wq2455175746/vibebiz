@@ -1,3 +1,10 @@
+export interface OpsUser {
+  id: number
+  username: string
+  email: string
+  roleCode: string
+}
+
 export interface Overview {
   projects: number
   users: number

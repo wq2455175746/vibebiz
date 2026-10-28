@@ -1,14 +1,26 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { RouterLink, RouterView, useRoute } from 'vue-router'
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 
 import { navItems } from '@/router/navigation'
+import { useOpsAuthStore } from '@/stores/auth'
 import { useOpsStore } from '@/stores/ops'
 
 const route = useRoute()
+const router = useRouter()
 const ops = useOpsStore()
+const auth = useOpsAuthStore()
 
 const title = computed(() => (typeof route.meta.title === 'string' ? route.meta.title : '概览'))
+const adminName = computed(() => auth.user?.username || '运营管理员')
+const adminEmail = computed(() => auth.user?.email || '')
+const adminInitial = computed(() => adminName.value.slice(0, 1).toUpperCase())
+const roleCode = computed(() => auth.user?.roleCode || 'LOCAL')
+
+async function handleLogout(): Promise<void> {
+  await auth.logout()
+  await router.replace({ name: 'login' })
+}
 </script>
 
 <template>
@@ -36,7 +48,20 @@ const title = computed(() => (typeof route.meta.title === 'string' ? route.meta.
       </nav>
 
       <div class="ops-sidebar-foot">
-        <span class="tag">本机模式</span>
+        <div class="ops-user">
+          <span class="ops-avatar">{{ adminInitial }}</span>
+          <div class="ops-user-text">
+            <strong>{{ adminName }}</strong>
+            <span class="ops-user-email">{{ adminEmail }}</span>
+          </div>
+        </div>
+        <div class="ops-foot-actions">
+          <span class="tag">{{ roleCode }}</span>
+          <button class="ops-logout" type="button" @click="handleLogout">
+            <i class="pi pi-sign-out" />
+            <span>退出登录</span>
+          </button>
+        </div>
       </div>
     </aside>
 
@@ -152,8 +177,81 @@ const title = computed(() => (typeof route.meta.title === 'string' ? route.meta.
 }
 
 .ops-sidebar-foot {
-  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
   border-top: 1px solid var(--line);
+}
+
+.ops-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ops-avatar {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: var(--ink);
+  border-radius: 999px;
+  color: var(--surface);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ops-user-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ops-user-text strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ops-user-email {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ops-foot-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ops-logout {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 9px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.ops-logout:hover {
+  background: var(--soft);
+  color: var(--ink);
 }
 
 .ops-main {
@@ -215,11 +313,22 @@ const title = computed(() => (typeof route.meta.title === 'string' ? route.meta.
 
   .ops-brand-text,
   .ops-nav-item span,
-  .ops-sidebar-foot {
+  .ops-user-text,
+  .ops-logout span,
+  .ops-foot-actions .tag {
     display: none;
   }
 
   .ops-nav-item {
+    justify-content: center;
+  }
+
+  .ops-sidebar-foot {
+    align-items: center;
+    padding: 12px 8px;
+  }
+
+  .ops-foot-actions {
     justify-content: center;
   }
 }

@@ -1,16 +1,24 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import Popover from 'primevue/popover'
 
+import { useAuthStore } from '@/stores/auth'
 import type { Project } from '@/types'
 
 defineProps<{ recentProjects: Project[] }>()
 
-const account = {
-  name: 'wangh11',
-  email: 'wangh11@example.com',
-  initial: 'W',
-}
+const auth = useAuthStore()
+const router = useRouter()
+
+const account = computed(() => {
+  const name = auth.user?.username ?? ''
+  return {
+    name,
+    email: auth.user?.email ?? '',
+    initial: name ? name.charAt(0).toUpperCase() : '?',
+  }
+})
 
 const accountMenu = ref<InstanceType<typeof Popover> | null>(null)
 
@@ -20,6 +28,12 @@ function toggleAccount(event: Event) {
 
 function closeAccount() {
   accountMenu.value?.hide()
+}
+
+async function logout() {
+  closeAccount()
+  await auth.logout()
+  await router.push({ name: 'login' })
 }
 
 const navigation = [
@@ -42,8 +56,8 @@ const navigation = [
 
     <div class="sidebar-scroll">
       <div class="sidebar-user">
-        <span class="sidebar-avatar">W</span>
-        <span class="sidebar-user-name">wangh11</span>
+        <span class="sidebar-avatar">{{ account.initial }}</span>
+        <span class="sidebar-user-name">{{ account.name }}</span>
       </div>
 
       <nav class="sidebar-nav" aria-label="主导航">
@@ -119,7 +133,7 @@ const navigation = [
               <i class="pi pi-cog" />
               设置
             </button>
-            <button class="account-action danger" type="button" @click="closeAccount">
+            <button class="account-action danger" type="button" @click="logout">
               <i class="pi pi-sign-out" />
               退出登录
             </button>

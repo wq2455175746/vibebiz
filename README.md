@@ -40,7 +40,7 @@
 - **数据面 DP**：文件树、文件读写、SSE 对话、预览反代；不持有项目元数据，也不承载 admin。
 - **单一真相源**：项目代码只存在于沙箱工作区；聊天、代码、预览都是它的投影。
 - **CP / DP 保持哑管道**：只做校验、转发、反代，不解析 Agent 消息。
-- **ops-web 只走 CP admin**：不访问 DP 或 sandbox；本轮免登录，生产必须接入 SSO + RBAC。
+- **ops-web 只走 CP admin**：不访问 DP 或 sandbox；使用独立 admin 登录，生产必须接入 SSO + RBAC。
 
 ## 目录
 
@@ -117,16 +117,24 @@ python3 scripts/generate_from_template.py \
 
 要求：Go 1.24+、Node 20+、Python 3.13+、uv。
 
+本地开发使用固定域名，先配置 hosts（仅首次）：
+
+```text
+127.0.0.1 vibebiz-dev.com vibebiz-dev-ops.com
+```
+
+登录与会话依赖 MySQL 8 + Redis：先执行 `make db-create && make db-migrate-up`，并确保 Redis 可连接。
+
 ```bash
 make init
 make install
 make dev
 ```
 
-- Web: http://localhost:5173
-- Ops Web: http://localhost:5174
-- CP health: http://localhost:8080/health
-- DP health: http://localhost:8081/health
+- Web: http://vibebiz-dev.com:5173
+- Ops Web: http://vibebiz-dev-ops.com:5174
+- CP health: http://vibebiz-dev.com:8080/health
+- DP health: http://vibebiz-dev.com:8081/health
 - Sandbox health: http://localhost:8000/health
 
 每个 package 自带 `Makefile`、`.env.example` 和 `.dockerignore`；`make init` 生成各自的 `.env`，配置不集中在根目录，`.env` 不会进入镜像。
@@ -140,7 +148,31 @@ make -C packages/ops-web dev
 
 根目录仍保留单服务别名：`make dev-sandbox` / `make dev-cp` / `make dev-dp` / `make dev-web` / `make dev-ops-web`。
 
-`make dev` 通过 `scripts/dev.sh` 分别加载各 package 的 `.env`，启动五个进程；每个进程使用自己的 `OTEL_SERVICE_NAME`（`vibebiz-cp` / `vibebiz-dp` / `vibebiz-sandbox`）与 CORS 来源（5173 / 5174）。
+`make dev` 通过 `scripts/dev.sh` 分别加载各 package 的 `.env`，启动五个进程；每个进程使用自己的 `OTEL_SERVICE_NAME`（`vibebiz-cp` / `vibebiz-dp` / `vibebiz-sandbox`）与 CORS 来源（`http://vibebiz-dev.com:5173` / `http://vibebiz-dev-ops.com:5174`）。
+
+## 登录与会话
+
+- web 与 ops-web 都需要登录；登录分别使用 `/cp/api/v1/auth/login` 与 `/cp/api/v1/admin/auth/login`。
+- 身份保存在 HttpOnly Cookie，服务端 Session 存在 Redis；用户 Session TTL 7 天，ops Session 12 小时。前端不能读取 Session ID。
+- Cookie 不设置 Domain：web Cookie 属于 `vibebiz-dev.com`，ops Cookie 属于 `vibebiz-dev-ops.com`。
+- 登录与会话依赖 MySQL 8 + Redis；Redis 不可用时 fail closed 返回 503，不做内存降级。
+- 默认账号由 `packages/backend/migrations/00005_default_users.sql` seed；默认密码仅用于本地开发，不写入文档，生产必须重置或删除默认账号。
+- web 的项目按当前登录用户的工作区过滤；ops-web 的 admin 视角可见全部项目。
+
+## 数据库迁移
+
+MySQL schema 使用版本化 SQL + `goose` 管理；`AutoMigrate` 默认关闭。迁移 DSN 从 `packages/backend/.env` 的 `MYSQL_*` 读取。
+
+```bash
+make db-create           # 创建 MYSQL_DATABASE（如不存在）
+make db-migrate-up       # 执行所有待执行迁移
+make db-migrate-status   # 查看版本状态
+make db-migrate-down     # 回滚一个迁移
+make db-migrate-version  # 当前版本
+make db-migrate-redo     # 回滚并重新执行一个迁移
+```
+
+迁移文件在 `packages/backend/migrations/`，执行器为 `packages/backend/cmd/migrate`。
 
 ## Docker
 
@@ -248,7 +280,7 @@ data: [DONE]
 
 - CP 的项目元数据当前为内存实现，重启即丢；admin 数据同样为内存 seed。
 - sandbox 工作区在磁盘持久化，是项目代码的唯一真相源。
-- 目标数据库为 **MySQL 8**；本轮不引入驱动、迁移或表结构。后续接入时替换 `ProjectStore` 与 `admin.Repository` 实现，HTTP 契约保持不变。
+- 目标数据库为 **MySQL 8**；GORM DAO 与 goose 版本化迁移已加入 `packages/backend`，但尚未接入 `ProjectStore` / `admin.Repository`。
 - 数据库凭据只存在于 CP 服务端环境变量，禁止进入前端、日志或仓库。
 
 ## 里程碑

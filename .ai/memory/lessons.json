@@ -224,6 +224,15 @@
       "context": "项目既要支持个人拥有，又要支持工作区共享；如果 project.user_id 和 workspace_id 都当成所有权，会出现权限分叉",
       "action": "workspace 为一级归属，project.workspace_id 必填、project.user_id 仅记录创建者；权限统一走 workspace_user；存储用量按 project_storage、额度按 user_quota；模型用 llm_model.scope 单表双层",
       "tags": ["mysql", "workspace", "multi-tenant", "quota", "model"]
+    },
+    {
+      "id": "L026",
+      "date": "2026-10-28",
+      "type": "database",
+      "title": "M0 投影模型与持久化 DAO 分离，避免迁移时拆业务接口",
+      "context": "现有 internal/model.Project 是 CP 的字符串投影，新业务表使用 bigint ID；直接替换会波及 handler/store",
+      "action": "新增 internal/dao/model 与 internal/dao，DAO 使用 GORM + 显式 TableName + Base(extra_p/软删除)；现有 internal/model、internal/store 保持不动，后续用 repository 适配 CP",
+      "tags": ["gorm", "dao", "migration", "backend"]
     }
   ]
 }

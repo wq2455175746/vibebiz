@@ -8,7 +8,7 @@ SANDBOX_BASE_URL ?= http://localhost:8000
 CORS_ORIGINS ?= http://localhost:5173,http://localhost:5174
 export
 
-.PHONY: help init install dev dev-cp dev-dp test lint quality validate build clean
+.PHONY: help init install dev dev-cp dev-dp test lint quality validate build clean db-create db-migrate-up db-migrate-down db-migrate-status db-migrate-version db-migrate-redo
 
 help:
 	@echo "vibebiz backend"
@@ -20,6 +20,12 @@ help:
 	@echo "  make test       - go test ./..."
 	@echo "  make quality    - gofmt + go vet"
 	@echo "  make build      - 构建 bin/cp 与 bin/dp"
+	@echo "  make db-create  - 创建 MYSQL_DATABASE（如不存在）"
+	@echo "  make db-migrate-up     - 执行所有待执行迁移"
+	@echo "  make db-migrate-down   - 回滚一个迁移"
+	@echo "  make db-migrate-status - 查看迁移状态"
+	@echo "  make db-migrate-version - 查看当前版本"
+	@echo "  make db-migrate-redo   - 回滚并重新执行一个迁移"
 
 init:
 	@test -f .env || cp .env.example .env
@@ -31,10 +37,10 @@ dev:
 	@$(MAKE) -j2 dev-cp dev-dp
 
 dev-cp: init
-	@HOST=$(HOST) PORT=$(CP_PORT) go run ./cmd/cp
+	@set -a; . ./.env; set +a; HOST=$${HOST:-$(HOST)} PORT=$${CP_PORT:-$(CP_PORT)} go run ./cmd/cp
 
 dev-dp: init
-	@HOST=$(HOST) PORT=$(DP_PORT) go run ./cmd/dp
+	@set -a; . ./.env; set +a; HOST=$${HOST:-$(HOST)} PORT=$${DP_PORT:-$(DP_PORT)} go run ./cmd/dp
 
 test:
 	@go test ./...
@@ -54,3 +60,27 @@ build:
 
 clean:
 	@rm -rf bin
+
+db-create:
+	@test -f .env || (echo "missing packages/backend/.env; run make init or create it"; exit 1)
+	@set -a; . ./.env; set +a; go run ./cmd/migrate create-db
+
+db-migrate-up:
+	@test -f .env || (echo "missing packages/backend/.env; run make init or create it"; exit 1)
+	@set -a; . ./.env; set +a; go run ./cmd/migrate up
+
+db-migrate-down:
+	@test -f .env || (echo "missing packages/backend/.env; run make init or create it"; exit 1)
+	@set -a; . ./.env; set +a; go run ./cmd/migrate down
+
+db-migrate-status:
+	@test -f .env || (echo "missing packages/backend/.env; run make init or create it"; exit 1)
+	@set -a; . ./.env; set +a; go run ./cmd/migrate status
+
+db-migrate-version:
+	@test -f .env || (echo "missing packages/backend/.env; run make init or create it"; exit 1)
+	@set -a; . ./.env; set +a; go run ./cmd/migrate version
+
+db-migrate-redo:
+	@test -f .env || (echo "missing packages/backend/.env; run make init or create it"; exit 1)
+	@set -a; . ./.env; set +a; go run ./cmd/migrate redo

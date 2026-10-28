@@ -18,7 +18,7 @@
 - 不引入 k8s / CI/CD / 多租户鉴权；这些属于后续里程碑。
 - 不交付 Collector / Jaeger / Grafana 等观测后端，只保证日志、OTLP Trace 与 `/metrics` 可接入。
 - 不使用设计文档以外的数据库。CP 项目元数据与 admin seed 在内存中，重启即丢；工作区在磁盘持久化。目标数据库为 MySQL 8，本轮不引入驱动或表结构。
-- ops-web 免登录，仅面向本地；生产必须接入 SSO + RBAC。
+- ops-web 使用本地 admin 账号登录，仅面向本地；生产必须接入 SSO + RBAC。
 
 ## 目录与职责
 
@@ -60,7 +60,7 @@ make docker-build
 
 ## 代码约定
 
-- Go：`cmd/cp` 与 `cmd/dp` 分别装配控制面 / 数据面；共享 `internal/{admin,client,config,handler,model,observability,response,router,server,store}`；错误用 `response.Fail`。规范见 `.ai/rules/go.md`。
+- Go：`cmd/cp` 与 `cmd/dp` 分别装配控制面 / 数据面；共享 `internal/{admin,client,config,dao,handler,model,observability,response,router,server,store}`；DAO 使用 GORM + MySQL，错误用 `response.Fail`。规范见 `.ai/rules/go.md`。
 - Python：`app/{routers,services,models}`；所有路径必须先 `resolve()` 再校验 `is_relative_to`；异步 Agent 用 `AsyncIterator[dict]`。规范见 `.ai/rules/python.md`。
 - Web / ops-web：Composition API + `<script setup lang="ts">`；Pinia 按领域切 store；API 统一走各自的 `src/api/client.ts`。规范见 `.ai/rules/typescript.md`。
 - 颜色仅黑 / 白 / 灰 / 蓝。

@@ -9,7 +9,7 @@ import (
 )
 
 func TestControlMetricsEndpoint(t *testing.T) {
-	e, _ := newCP(t, store.NewMemoryProjectStore())
+	e, _, _ := newCP(t, store.NewMemoryProjectStore())
 
 	serve(e, http.MethodGet, "/cp/api/v1/projects")
 
@@ -28,9 +28,9 @@ func TestControlMetricsEndpoint(t *testing.T) {
 
 func TestDataMetricsEndpoint(t *testing.T) {
 	sandbox := newSandboxServer(t)
-	e, _ := newDP(t, sandbox.URL)
+	e, _, authState := newDP(t, sandbox.URL)
 
-	rec := serve(e, http.MethodGet, "/dp/api/v1/projects/p1/files")
+	rec := serveWithAuth(e, http.MethodGet, "/dp/api/v1/projects/p1/files", authState.userCookie)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("files status = %d, body = %s", rec.Code, rec.Body.String())
 	}

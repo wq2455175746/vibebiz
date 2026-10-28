@@ -22,6 +22,7 @@ export async function* streamChat(
       Accept: 'text/event-stream',
     },
     body: JSON.stringify({ message }),
+    credentials: 'include',
     signal,
   })
 

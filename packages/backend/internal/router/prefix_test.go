@@ -8,7 +8,7 @@ import (
 )
 
 func TestControlDoesNotServeDataOrUnprefixedRoutes(t *testing.T) {
-	e, _ := newCP(t, store.NewMemoryProjectStore())
+	e, _, authState := newCP(t, store.NewMemoryProjectStore())
 
 	for _, target := range []string{
 		"/dp/api/v1/projects",
@@ -16,7 +16,7 @@ func TestControlDoesNotServeDataOrUnprefixedRoutes(t *testing.T) {
 		"/cp/api/v1/projects/p1/files",
 		"/cp/api/v1/projects/p1/preview/index.html",
 	} {
-		rec := serve(e, http.MethodGet, target)
+		rec := serveWithAuth(e, http.MethodGet, target, authState.userCookie)
 		if rec.Code != http.StatusNotFound {
 			t.Fatalf("%s status = %d, want 404", target, rec.Code)
 		}
@@ -24,7 +24,7 @@ func TestControlDoesNotServeDataOrUnprefixedRoutes(t *testing.T) {
 }
 
 func TestDataDoesNotServeControlOrUnprefixedRoutes(t *testing.T) {
-	e, _ := newDP(t, "http://127.0.0.1:1")
+	e, _, _ := newDP(t, "http://127.0.0.1:1")
 
 	for _, target := range []string{
 		"/cp/api/v1/admin/overview",

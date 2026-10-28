@@ -23,7 +23,7 @@
 
 ## 2. 非目标
 
-- 不实现真实登录、SSO、RBAC；本轮 ops-web 免登录且仅面向本地骨架。
+- 本文件保留 M0 骨架设计；本地账号登录已由 `2026-10-29-auth-workspace-session-design.md` 补充，SSO、RBAC 仍不在本轮范围。
 - 不实现 MySQL 表结构、迁移、ORM 或数据访问层；业务表由后续独立任务设计。
 - 不实现沙箱调度器、配额扣费、真实审计存储；admin API 返回固定形状的内存数据。
 - 不改变 sandbox 的工作区、文件版本、SSE、预览契约。
@@ -41,7 +41,7 @@
 | D3 | web 控制请求走 CP，数据请求直连 DP | 让预览、SSE、文件流量不经过 CP；为后续独立扩容留出位置 |
 | D4 | ops-web 只访问 CP admin API，不访问 DP 与 sandbox | 运营后台不应进入用户数据路径 |
 | D5 | 本轮 CP 继续使用内存 `ProjectStore`；admin 使用内存 Repository | 遵守 M0 无数据库边界，同时固定 HTTP 契约 |
-| D6 | ops-web 骨架免登录，仅监听 localhost | 先验证信息架构与接口形状；生产安全要求写入文档 |
+| D6 | ops-web 使用本地 admin 账号登录，仅监听 localhost | 先验证信息架构与接口形状；生产安全要求写入文档 |
 | D7 | 目标数据库改为 MySQL 8 | 用户已确认后续使用 MySQL；本轮不落表结构 |
 | D8 | CP/DP 使用服务原生 URL 前缀 | CP 固定 `/cp/api/v1/*`，DP 固定 `/dp/api/v1/*`；代理与直连语义一致，不依赖路径重写 |
 | D9 | 观测只覆盖 CP / DP / sandbox | 日志 stdout JSON、Trace 走 OTLP、Metrics 暴露 Prometheus `/metrics`；前端不接入 SDK |
@@ -364,7 +364,7 @@ Vue3 + Vite + TypeScript + PrimeVue + Pinia，与 `web` 共用语言规范与调
 
 ### 9.5 鉴权边界
 
-本轮无登录、无 token。仅允许本地访问；文档与 README 明确生产环境必须接入 SSO + RBAC，admin 路由不得裸露在公网。
+本地 admin 登录已实现：`/cp/api/v1/admin/auth/login`、`/me`、`/logout`，Cookie 为 HttpOnly，Session 存 Redis。生产环境仍必须接入 SSO + RBAC，admin 路由不得裸露在公网。详见 `2026-10-29-auth-workspace-session-design.md`。
 
 ## 10. 部署与端口
 
@@ -448,7 +448,7 @@ DP 进程单独使用 `PORT=8081` 启动；其余配置与 CP 一致。观测变
 
 ## 12. 安全
 
-- ops-web 与 admin API 仅用于本地骨架；生产必须接 SSO + RBAC。
+- ops-web 与 admin API 使用本地账号登录；生产必须接 SSO + RBAC。
 - `CORS_ORIGINS` 只允许 web 与 ops-web 的开发地址。
 - 前端不得直接访问 sandbox；DP 是唯一数据出口。
 - DP 透传 sandbox 的 404 / 409 / 502，不把内部错误细节改写成成功响应。

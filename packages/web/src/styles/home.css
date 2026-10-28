@@ -598,3 +598,97 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.login-shell {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+  background: var(--canvas);
+}
+
+.login-card {
+  display: flex;
+  width: min(400px, 100%);
+  flex-direction: column;
+  gap: 18px;
+  padding: 32px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: 0 12px 36px rgba(17, 17, 17, 0.06);
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.login-logo {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--surface);
+  font-size: 13px;
+}
+
+.login-brand-name {
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.login-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.login-title {
+  margin: 0;
+  color: var(--ink);
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.login-subtitle {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.login-field label {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.login-field .p-inputtext,
+.login-field .p-password,
+.login-field .p-password-input {
+  width: 100%;
+}
+
+.login-error {
+  margin: 0;
+  padding: 9px 12px;
+  background: var(--soft);
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.login-submit {
+  width: 100%;
+}

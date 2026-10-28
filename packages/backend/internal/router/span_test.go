@@ -36,14 +36,15 @@ func TestHTTPRequestSpanHasProjectID(t *testing.T) {
 	})
 
 	projects := store.NewMemoryProjectStore()
-	if err := projects.Create(&model.Project{ID: "p1", Name: "demo", State: model.ProjectStateReady, CreatedAt: time.Now()}); err != nil {
+	if err := projects.Create(&model.Project{ID: "p1", Name: "demo", State: model.ProjectStateReady, WorkspaceID: 1, OwnerUserID: 7, CreatedAt: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
 
+	authState := newRouterAuth(t)
 	e := server.New(config.Config{Plane: "cp", ServiceName: "vibebiz-cp"}, obs)
-	RegisterControl(e, admin.NewMemoryRepository(), projects, client.NewSandbox("http://127.0.0.1:1", obs), obs)
+	RegisterControl(e, admin.NewMemoryRepository(), projects, client.NewSandbox("http://127.0.0.1:1", obs), obs, authState.authn, authState.handler, authState.metas)
 
-	rec := serve(e, http.MethodGet, "/cp/api/v1/projects/p1")
+	rec := serveWithAuth(e, http.MethodGet, "/cp/api/v1/projects/p1", authState.userCookie)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}

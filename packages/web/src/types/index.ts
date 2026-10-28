@@ -1,3 +1,11 @@
+export interface AuthUser {
+  id: number
+  username: string
+  email: string
+  nickname: string
+  workspaceIds: number[]
+}
+
 export interface Project {
   id: string
   name: string

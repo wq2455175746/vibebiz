@@ -802,6 +802,24 @@ ON DUPLICATE KEY UPDATE
 
 > 因不建物理外键，表顺序只影响可读性；迁移脚本需自行保证应用层引用完整。
 
+### 10.1 版本化执行
+
+迁移使用 `goose`，SQL 文件在 `packages/backend/migrations/`，执行器在 `packages/backend/cmd/migrate/`：
+
+```bash
+make db-create           # 创建 MYSQL_DATABASE（如不存在）
+make db-migrate-up       # 执行所有待执行迁移
+make db-migrate-status   # 查看 goose 版本状态
+make db-migrate-down     # 回滚一个迁移
+make db-migrate-version  # 当前版本
+make db-migrate-redo     # 回滚并重新执行一个迁移
+```
+
+- 版本表由 goose 创建：`goose_db_version`。
+- `AutoMigrate` 默认关闭，不作为 schema 变更入口。
+- 新增字段/索引必须新增迁移文件，禁止直接改已执行的历史文件。
+- `down` 仅用于本地/回滚演练；生产回滚需评审数据兼容性。
+
 ## 11. 安全与配置
 
 - 数据库连接、Redis、S3 凭据只通过环境变量注入，禁止写入表、`extra_p`、`extra_configs` 或文档。

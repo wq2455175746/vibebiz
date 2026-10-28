@@ -37,7 +37,7 @@ services:
       HOST: 0.0.0.0
       PORT: 8080
       SANDBOX_BASE_URL: http://sandbox:8000
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:5174}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://vibebiz-dev.com:5173,http://vibebiz-dev-ops.com:5174}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       OTEL_SERVICE_NAME: vibebiz-cp
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
@@ -62,7 +62,7 @@ services:
       HOST: 0.0.0.0
       PORT: 8081
       SANDBOX_BASE_URL: http://sandbox:8000
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:5174}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://vibebiz-dev.com:5173,http://vibebiz-dev-ops.com:5174}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       OTEL_SERVICE_NAME: vibebiz-dp
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
