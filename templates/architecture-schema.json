@@ -1,0 +1,119 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://vibebiz.local/schemas/architecture.json",
+  "title": "Vibebiz Architecture Schema",
+  "description": "Harness architecture contract for packages, ports, dependencies and API contracts.",
+  "definitions": {
+    "package": {
+      "type": "object",
+      "required": ["name", "techStack", "dependencies", "ports"],
+      "properties": {
+        "name": { "type": "string", "enum": ["packages/web", "packages/backend", "packages/sandbox"] },
+        "techStack": {
+          "type": "object",
+          "required": ["language", "framework"],
+          "properties": {
+            "language": { "type": "string" },
+            "framework": { "type": "string" },
+            "state": { "type": "string" }
+          }
+        },
+        "dependencies": {
+          "type": "array",
+          "description": "Allowed downstream packages; never reverse.",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        },
+        "ports": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["port", "protocol"],
+            "properties": {
+              "port": { "type": "integer" },
+              "protocol": { "type": "string", "enum": ["HTTP", "SSE", "WebSocket"] },
+              "description": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "apiEndpoint": {
+      "type": "object",
+      "required": ["method", "path", "handler"],
+      "properties": {
+        "method": { "type": "string", "enum": ["GET", "POST", "PUT", "DELETE", "PATCH"] },
+        "path": { "type": "string" },
+        "handler": { "type": "string" },
+        "auth": { "type": "boolean", "default": false },
+        "request": { "type": "string" },
+        "response": { "type": "string" }
+      }
+    },
+    "designDoc": {
+      "type": "object",
+      "required": ["title", "status", "created", "sections"],
+      "properties": {
+        "title": { "type": "string" },
+        "status": { "type": "string", "enum": ["draft", "review", "approved", "implemented"] },
+        "created": { "type": "string", "format": "date" },
+        "milestone": { "type": "string", "enum": ["M0", "M1", "M2", "M3", "M4", "M5"] },
+        "sections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["heading", "content"],
+            "properties": {
+              "heading": { "type": "string" },
+              "content": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "architecture": {
+    "packages": [
+      {
+        "name": "packages/web",
+        "techStack": { "language": "TypeScript", "framework": "Vue 3 + Vite + PrimeVue + Pinia", "state": "ephemeral UI state" },
+        "dependencies": ["packages/backend"],
+        "ports": [{ "port": 5173, "protocol": "HTTP", "description": "vite dev / nginx container" }]
+      },
+      {
+        "name": "packages/backend",
+        "techStack": { "language": "Go 1.24", "framework": "Echo v4", "state": "in-memory project metadata (M0)" },
+        "dependencies": ["packages/sandbox"],
+        "ports": [{ "port": 8080, "protocol": "HTTP", "description": "REST + SSE + preview proxy" }]
+      },
+      {
+        "name": "packages/sandbox",
+        "techStack": { "language": "Python 3.13", "framework": "FastAPI", "state": "filesystem workspace" },
+        "dependencies": [],
+        "ports": [{ "port": 8000, "protocol": "HTTP", "description": "internal API + SSE + static preview" }]
+      }
+    ],
+    "dependencyDirection": ["packages/web", "packages/backend", "packages/sandbox"],
+    "apiEndpoints": [
+      { "method": "GET", "path": "/health", "handler": "server.New" },
+      { "method": "GET", "path": "/api/v1/projects", "handler": "ProjectHandler.List" },
+      { "method": "POST", "path": "/api/v1/projects", "handler": "ProjectHandler.Create" },
+      { "method": "GET", "path": "/api/v1/projects/:id", "handler": "ProjectHandler.Get" },
+      { "method": "GET", "path": "/api/v1/projects/:id/files", "handler": "FileHandler.List" },
+      { "method": "GET", "path": "/api/v1/projects/:id/file", "handler": "FileHandler.Read" },
+      { "method": "PUT", "path": "/api/v1/projects/:id/file", "handler": "FileHandler.Write" },
+      { "method": "POST", "path": "/api/v1/projects/:id/chat", "handler": "ChatHandler.Chat" },
+      { "method": "GET", "path": "/api/v1/projects/:id/preview/*", "handler": "PreviewHandler.Serve" }
+    ],
+    "contracts": {
+      "envelope": { "code": 0, "message": "ok", "result": {} },
+      "sse": { "frame": "data: <json>\\n\\n", "done": "data: [DONE]\\n\\n" },
+      "file": { "version": "sha256(content)[:12]", "conflict": 409 },
+      "palette": ["black", "white", "gray", "blue"]
+    },
+    "boundaries": {
+      "m0": ["in-memory projects", "stub agent", "same-origin preview"],
+      "notYet": ["auth", "database", "k8s", "ci-cd", "crdt"]
+    }
+  }
+}

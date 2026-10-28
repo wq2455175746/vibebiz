@@ -1,0 +1,100 @@
+name: vibebiz
+
+services:
+  sandbox:
+    build:
+      context: ./packages/sandbox
+    image: vibebiz/sandbox:local
+    env_file:
+      - ./packages/sandbox/.env
+    environment:
+      WORKSPACES_DIR: /data/workspaces
+      AGENT_MODE: ${AGENT_MODE:-stub}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.deepseek.com}
+      LLM_MODEL_NAME: ${LLM_MODEL_NAME:-deepseek-chat}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      OTEL_SERVICE_NAME: vibebiz-sandbox
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_PROTOCOL: ${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}
+      OTEL_RESOURCE_ATTRIBUTES: ${OTEL_RESOURCE_ATTRIBUTES:-deployment.environment=local,service.namespace=vibebiz}
+      OTEL_TRACES_SAMPLER: ${OTEL_TRACES_SAMPLER:-parentbased_always_on}
+    volumes:
+      - workspaces:/data/workspaces
+    ports:
+      - "127.0.0.1:8000:8000"
+    restart: unless-stopped
+
+  cp:
+    build:
+      context: ./packages/backend
+      args:
+        SERVICE: cp
+    image: vibebiz/cp:local
+    env_file:
+      - ./packages/backend/.env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8080
+      SANDBOX_BASE_URL: http://sandbox:8000
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:5174}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      OTEL_SERVICE_NAME: vibebiz-cp
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_PROTOCOL: ${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}
+      OTEL_RESOURCE_ATTRIBUTES: ${OTEL_RESOURCE_ATTRIBUTES:-deployment.environment=local,service.namespace=vibebiz}
+      OTEL_TRACES_SAMPLER: ${OTEL_TRACES_SAMPLER:-parentbased_always_on}
+    depends_on:
+      - sandbox
+    ports:
+      - "127.0.0.1:8080:8080"
+    restart: unless-stopped
+
+  dp:
+    build:
+      context: ./packages/backend
+      args:
+        SERVICE: dp
+    image: vibebiz/dp:local
+    env_file:
+      - ./packages/backend/.env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8081
+      SANDBOX_BASE_URL: http://sandbox:8000
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:5174}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      OTEL_SERVICE_NAME: vibebiz-dp
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_PROTOCOL: ${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}
+      OTEL_RESOURCE_ATTRIBUTES: ${OTEL_RESOURCE_ATTRIBUTES:-deployment.environment=local,service.namespace=vibebiz}
+      OTEL_TRACES_SAMPLER: ${OTEL_TRACES_SAMPLER:-parentbased_always_on}
+    depends_on:
+      - sandbox
+    ports:
+      - "127.0.0.1:8081:8081"
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./packages/web
+    image: vibebiz/web:local
+    depends_on:
+      - cp
+      - dp
+    ports:
+      - "127.0.0.1:5173:80"
+    restart: unless-stopped
+
+  ops-web:
+    build:
+      context: ./packages/ops-web
+    image: vibebiz/ops-web:local
+    depends_on:
+      - cp
+    ports:
+      - "127.0.0.1:5174:80"
+    restart: unless-stopped
+
+volumes:
+  workspaces:

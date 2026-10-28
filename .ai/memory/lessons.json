@@ -1,0 +1,229 @@
+{
+  "lessons": [
+    {
+      "id": "L001",
+      "date": "2026-10-28",
+      "type": "architecture",
+      "title": "三端依赖方向必须单向：web → backend → sandbox",
+      "context": "Atoms 类产品需要前端、网关、沙箱三端协作，最容易出现的越界是前端直连沙箱或网关解析 Agent 消息",
+      "action": "前端只调用 /api/v1；网关只做校验、转发、反代；Agent 事件结构只由 sandbox 定义和演进",
+      "tags": ["architecture", "layering", "harness"]
+    },
+    {
+      "id": "L002",
+      "date": "2026-10-28",
+      "type": "architecture",
+      "title": "网关保持哑管道，避免与 Agent SDK 版本耦合",
+      "context": "设计文档明确要求网关不解析工具调用与消息结构；一旦解析，SDK 升级就要改网关",
+      "action": "chat handler 只按行转发 SSE 字节；新增 Agent 事件类型时只改 sandbox 和 web 的解析",
+      "tags": ["gateway", "sse", "decoupling"]
+    },
+    {
+      "id": "L003",
+      "date": "2026-10-28",
+      "type": "security",
+      "title": "路径安全必须 resolve 后 is_relative_to，不能用字符串前缀",
+      "context": "sandbox 管理用户项目文件，字符串 startsWith 挡不住 ../ 和软链接",
+      "action": "统一在 Workspace._resolve 中 resolve() + is_relative_to(project_dir)，并拒绝 .git/.agent/node_modules",
+      "tags": ["python", "security", "path-traversal"]
+    },
+    {
+      "id": "L004",
+      "date": "2026-10-28",
+      "type": "pattern",
+      "title": "文件版本用内容 sha256 前 12 位，写入携带 baseVersion",
+      "context": "人机并发编辑同一文件时，需要轻量的乐观并发控制，不引入 OT/CRDT",
+      "action": "读取返回 version；写入时若 baseVersion 不匹配返回 409；前端提示覆盖或重新加载",
+      "tags": ["concurrency", "versioning", "files"]
+    },
+    {
+      "id": "L005",
+      "date": "2026-10-28",
+      "type": "pattern",
+      "title": "SSE 透传必须逐行 flush，反代关闭 buffering",
+      "context": "聊天流如果被网关攒批，用户会看到一次性蹦出的结果，失去打字机效果",
+      "action": "Go handler 用 bufio.Reader 逐行 Write+Flush；nginx 配 proxy_buffering off；ReverseProxy FlushInterval=-1",
+      "tags": ["sse", "streaming", "proxy"]
+    },
+    {
+      "id": "L006",
+      "date": "2026-10-28",
+      "type": "design",
+      "title": "M0 用 StubAgent 固定接口，M1 只替换实现",
+      "context": "没有 LLM key 时仍要验证端到端链路，同时避免后续重写路由与前端",
+      "action": "定义 run(project_id, message, workspace, session_id) 异步迭代器；stub 与真实实现保持相同事件形状",
+      "tags": ["agent", "interface", "m0"]
+    },
+    {
+      "id": "L007",
+      "date": "2026-10-28",
+      "type": "security",
+      "title": "本地预览同 origin 只是 harness 妥协，生产必须独立 origin",
+      "context": "iframe 与主站同 origin 时，生成代码可访问主站存储；设计文档要求独立子域",
+      "action": "M0 iframe 只给 allow-scripts allow-forms；M4 改为 preview-{id}.domain + 独立 origin",
+      "tags": ["security", "iframe", "preview"]
+    },
+    {
+      "id": "L008",
+      "date": "2026-10-28",
+      "type": "design",
+      "title": "M0 项目元数据放内存 store，重启即丢是明确边界",
+      "context": "48 小时 harness 阶段优先验证链路，不引入 DB 迁移与连接配置",
+      "action": "使用 ProjectStore 接口 + MemoryProjectStore；M3 再替换持久化实现，handler 不变",
+      "tags": ["store", "memory", "m0"]
+    },
+    {
+      "id": "L009",
+      "date": "2026-10-28",
+      "type": "testing",
+      "title": "Go handler 断言 JSON 响应时要先解码，不能匹配原始 HTML 字符串",
+      "context": "json.Marshal 会把 < > & 转义为 \\u003c 等，直接 strings.Contains 会误判失败",
+      "action": "测试中 json.Unmarshal 到信封结构后断言 Result 字段",
+      "tags": ["go", "testing", "json"]
+    },
+    {
+      "id": "L010",
+      "date": "2026-10-28",
+      "type": "config",
+      "title": "Docker 环境不可用时仍要交付 Dockerfile，但必须标注未验证",
+      "context": "本机没有 docker CLI，无法真正构建三份镜像",
+      "action": "保留多阶段 Dockerfile 与 compose，在 CURRENT_FOCUS/TODO 中明确未验证，避免虚假完成",
+      "tags": ["docker", "verification", "honesty"]
+    },
+    {
+      "id": "L011",
+      "date": "2026-10-28",
+      "type": "pattern",
+      "title": "Python sandbox 用 create_app(settings) 工厂便于测试隔离",
+      "context": "工作区目录需要每个测试独立，模块级 app 会共享路径与状态",
+      "action": "main.py 暴露 create_app(settings)，测试传 tmp_path；模块级 app 仅供 uvicorn 启动",
+      "tags": ["python", "fastapi", "testing"]
+    },
+    {
+      "id": "L012",
+      "date": "2026-10-28",
+      "type": "design",
+      "title": "每轮 Agent 结束自动 git commit，版本系统零自建",
+      "context": "设计文档建议用 commit sha 作为版本号，免费获得 diff / 回滚 / 分支",
+      "action": "Versioning.commit 在 SSE 生成结束后执行；失败不阻断回合，只返回 commit=null",
+      "tags": ["git", "versioning", "agent"]
+    },
+    {
+      "id": "L013",
+      "date": "2026-10-28",
+      "type": "pattern",
+      "title": "代码模板统一用 {{ key }} 占位符 + 标准库渲染器",
+      "context": "参考工程模板混用 Jinja 与 Go template 语法，缺少统一生成入口",
+      "action": "templates/ 统一 {{ key }}（兼容 {{ .Name }}）；scripts/generate_from_template.py 只做占位符替换，未解析项告警，输出前禁止覆盖",
+      "tags": ["templates", "codegen", "harness"]
+    },
+    {
+      "id": "L014",
+      "date": "2026-10-28",
+      "type": "testing",
+      "title": "语言规范必须落到可执行质量门禁，而不只是文档",
+      "context": "只写 .ai/rules/*.md 无法阻止 gofmt / ruff / eslint / 调色板退化",
+      "action": "check_quality.py 串联 gofmt、go vet、ruff、eslint，并扫描 print/console.log/@ts-ignore/裸 TODO；make validate 必跑",
+      "tags": ["quality", "lint", "harness"]
+    },
+    {
+      "id": "L015",
+      "date": "2026-10-28",
+      "type": "design",
+      "title": "调色板约束可以脚本化，但只扫描自有源码",
+      "context": "产品要求仅黑/白/灰/蓝，人工 review 容易漏；PrimeVue 主题内部颜色不应计入",
+      "action": "check_quality.py 只扫描 packages/web/src 的 .vue/.css/.ts，允许预定义 hex 集合；错误色也用 ink/soft 变量",
+      "tags": ["palette", "frontend", "quality"]
+    },
+    {
+      "id": "L016",
+      "date": "2026-10-28",
+      "type": "config",
+      "title": "ESLint 9 flat config 处理 Vue 时必须显式指定 TS parser",
+      "context": "eslint-plugin-vue 的 flat/essential 默认 parser 不解析 <script setup lang=\"ts\"> 的 TS 语法",
+      "action": "在 eslint.config.js 的 *.vue 配置块设置 parserOptions.parser = tseslint.parser，并关闭 no-undef / 基础 no-unused-vars",
+      "tags": ["typescript", "eslint", "vue"]
+    },
+    {
+      "id": "L017",
+      "date": "2026-10-28",
+      "type": "pattern",
+      "title": "原型落地先做区域骨架，再用截图验证整体比例",
+      "context": "首页从单列 scaffold 改为侧栏 + 创作区 + 发现区，细节尚未确认时直接写满交互会反复返工",
+      "action": "按大区拆 HomeSidebar / HomeHero / HomeDiscovery，HomeView 只装配；样式集中在 styles/home.css；用 Playwright 在 1440/1024/390 三个宽度截图并检查 scrollWidth",
+      "tags": ["frontend", "layout", "playwright"]
+    },
+    {
+      "id": "L018",
+      "date": "2026-10-28",
+      "type": "testing",
+      "title": "PrimeVue Popover 关闭有过渡动画，断言前需等待 overlay 移除",
+      "context": "点击菜单项调用 hide() 后立刻检查 is_visible 仍为 true，误判关闭失败",
+      "action": "用 locator.wait_for(state='detached') 或等待 500ms+ 再断言；同时验证点击外部与 Esc 关闭",
+      "tags": ["primevue", "playwright", "popover"]
+    },
+    {
+      "id": "L019",
+      "date": "2026-10-28",
+      "type": "pattern",
+      "title": "大体量改造按互斥文件所有权拆并行 agent",
+      "context": "CP/DP、sandbox 观测、web 双客户端、ops-web 四个工作流可同时推进，但共享根配置与脚本",
+      "action": "先写计划锁定每个 agent 的可写路径（backend / sandbox / web / ops-web），根目录、scripts、docs 交给集成 agent；并行完成后再统一跑 make test/validate/build",
+      "tags": ["multi-agent", "parallel", "planning"]
+    },
+    {
+      "id": "L020",
+      "date": "2026-10-28",
+      "type": "testing",
+      "title": "OTLP 上报要用假接收端验证，不能只看 trace_id",
+      "context": "日志里有 trace_id 只能证明 span 存在，不能证明 exporter 真的发出；默认 BatchSpanProcessor 有 5s 延迟",
+      "action": "起一个本地 HTTP /v1/traces 接收端，设置 OTEL_EXPORTER_OTLP_ENDPOINT 与 OTEL_BSP_SCHEDULE_DELAY=100，请求后确认收到 protobuf；Go 与 Python 分别验证",
+      "tags": ["opentelemetry", "otlp", "observability"]
+    },
+    {
+      "id": "L021",
+      "date": "2026-10-28",
+      "type": "architecture",
+      "title": "CP/DP 前缀必须是服务契约而不是代理重写",
+      "context": "只在代理层区分 /cp 与 /dp，直连服务时仍会落到同一 /api/v1，边界容易被绕过",
+      "action": "CP 原生注册 /cp/api/v1，DP 原生注册 /dp/api/v1；Vite/nginx 保留前缀转发；validate 静态检查 + E2E 跨平面 404",
+      "tags": ["cp", "dp", "routing", "validation"]
+    },
+    {
+      "id": "L022",
+      "date": "2026-10-28",
+      "type": "security",
+      "title": "本地多服务默认只监听 127.0.0.1，容器内再绑 0.0.0.0",
+      "context": "CP admin、DP 文件 API 与 sandbox 均未鉴权；开发机若监听 0.0.0.0，局域网可直接访问",
+      "action": "Go config 默认 HOST=127.0.0.1，dev.sh 显式设置；compose 容器内 HOST=0.0.0.0，宿主端口发布绑定 127.0.0.1；sandbox 删除浏览器 CORS",
+      "tags": ["security", "binding", "compose"]
+    },
+    {
+      "id": "L023",
+      "date": "2026-10-28",
+      "type": "configuration",
+      "title": "配置按 package 下沉，根目录只保留聚合入口",
+      "context": "统一根 .env 让服务配置脱离工程边界；package 内 .env 若不排除还会被 Docker COPY 进镜像",
+      "action": "每个 package 拥有 Makefile、.env.example、.dockerignore；make init 仅在缺失时复制；根 Makefile 只委托聚合；compose 用 env_file 读取对应 package，宿主端口固定绑 127.0.0.1",
+      "tags": ["config", "makefile", "docker", "security"]
+    },
+    {
+      "id": "L024",
+      "date": "2026-10-28",
+      "type": "architecture",
+      "title": "共享 RWX 不等于任意 Pod 可同时处理同一项目",
+      "context": "所有 sandbox 挂同一卷时，任意 Pod 都能访问目录，但用户要求一个项目同一时刻只由一个 sandbox 处理",
+      "action": "使用 project_leases（project_id、sandbox_id、lease_until、epoch）做项目级独占租约；一个 sandbox 可持多项目；所有 Pod 内置全部 Agent 类型；项目内再用 .vibebiz/lock flock 串行写；SSE 按 owner 路由，不做 sticky session",
+      "tags": ["sandbox", "lease", "rwx", "sse", "scaling"]
+    },
+    {
+      "id": "L025",
+      "date": "2026-10-28",
+      "type": "database",
+      "title": "SaaS 工作区优先归属，避免 project 同时背 user 和 workspace 双主",
+      "context": "项目既要支持个人拥有，又要支持工作区共享；如果 project.user_id 和 workspace_id 都当成所有权，会出现权限分叉",
+      "action": "workspace 为一级归属，project.workspace_id 必填、project.user_id 仅记录创建者；权限统一走 workspace_user；存储用量按 project_storage、额度按 user_quota；模型用 llm_model.scope 单表双层",
+      "tags": ["mysql", "workspace", "multi-tenant", "quota", "model"]
+    }
+  ]
+}

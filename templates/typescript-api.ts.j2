@@ -1,0 +1,9 @@
+import { request } from './client'
+import type { {{ type }} } from '@/types'
+
+export async function {{ fn }}(projectId: string): Promise<{{ type }}> {
+  return request<{{ type }}>({
+    method: 'get',
+    url: `/projects/${encodeURIComponent(projectId)}/{{ path }}`,
+  })
+}

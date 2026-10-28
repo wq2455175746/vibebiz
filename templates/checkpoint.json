@@ -1,0 +1,28 @@
+{
+  "timestamp": "{{ timestamp }}",
+  "reason": "{{ reason }}",
+  "focus": {
+    "service": "{{ service }}",
+    "task_id": "{{ task_id }}",
+    "task_name": "{{ task_name }}",
+    "status": "{{ status }}",
+    "started_at": "{{ date }}",
+    "description": "{{ description }}",
+    "milestones": {
+      "{{ milestone }}": "{{ milestone_note }}"
+    },
+    "completed_tasks": [
+      "{{ completed_task }}"
+    ],
+    "next_tasks": [
+      "{{ next_task }}"
+    ],
+    "updated_at": "{{ updated_at }}"
+  },
+  "session_end": true,
+  "verification": {
+    "backend": "{{ backend_result }}",
+    "sandbox": "{{ sandbox_result }}",
+    "web": "{{ web_result }}"
+  }
+}

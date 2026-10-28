@@ -1,0 +1,13 @@
+import { describe, expect, it } from 'vitest'
+
+import { {{ fn }} } from './{{ module }}'
+
+describe('{{ fn }}', () => {
+  it('trims input', () => {
+    expect({{ fn }}('  value  ')).toBe('value')
+  })
+
+  it('keeps empty input', () => {
+    expect({{ fn }}('')).toBe('')
+  })
+})

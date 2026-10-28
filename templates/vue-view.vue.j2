@@ -1,0 +1,54 @@
+<script setup lang="ts">
+import { onMounted, ref } from 'vue'
+import Button from 'primevue/button'
+
+import { useProjectStore } from '@/stores/project'
+
+const props = defineProps<{ projectId: string }>()
+const projectStore = useProjectStore()
+const error = ref('')
+
+async function load() {
+  error.value = ''
+  try {
+    await projectStore.load(props.projectId)
+  } catch (err) {
+    error.value = (err as Error).message
+  }
+}
+
+onMounted(load)
+</script>
+
+<template>
+  <section class="page">
+    <header class="page-head">
+      <h1>{{ title }}</h1>
+      <Button label="刷新" @click="load" />
+    </header>
+    <p v-if="error" class="page-error">{{ error }}</p>
+    <div class="page-body">
+      <slot />
+    </div>
+  </section>
+</template>
+
+<style scoped>
+.page {
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+
+.page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.page-error {
+  color: var(--ink);
+}
+</style>

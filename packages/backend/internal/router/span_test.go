@@ -1,0 +1,62 @@
+package router
+
+import (
+	"context"
+	"net/http"
+	"testing"
+	"time"
+
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+
+	"vibebiz/internal/admin"
+	"vibebiz/internal/client"
+	"vibebiz/internal/config"
+	"vibebiz/internal/model"
+	"vibebiz/internal/observability"
+	"vibebiz/internal/server"
+	"vibebiz/internal/store"
+)
+
+func TestHTTPRequestSpanHasProjectID(t *testing.T) {
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
+	ctx := context.Background()
+
+	obs, err := observability.New(ctx, "vibebiz-cp", "cp")
+	if err != nil {
+		t.Fatalf("observability.New: %v", err)
+	}
+	recorder := tracetest.NewSpanRecorder()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
+	obs.TracerProvider = tp
+	obs.Tracer = tp.Tracer("vibebiz-cp")
+	t.Cleanup(func() {
+		_ = tp.Shutdown(ctx)
+		_ = obs.Shutdown(ctx)
+	})
+
+	projects := store.NewMemoryProjectStore()
+	if err := projects.Create(&model.Project{ID: "p1", Name: "demo", State: model.ProjectStateReady, CreatedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+
+	e := server.New(config.Config{Plane: "cp", ServiceName: "vibebiz-cp"}, obs)
+	RegisterControl(e, admin.NewMemoryRepository(), projects, client.NewSandbox("http://127.0.0.1:1", obs), obs)
+
+	rec := serve(e, http.MethodGet, "/cp/api/v1/projects/p1")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+
+	found := false
+	for _, span := range recorder.Ended() {
+		for _, attr := range span.Attributes() {
+			if string(attr.Key) == "project.id" && attr.Value.AsString() == "p1" {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("no span carried project.id=p1; spans=%v", recorder.Ended())
+	}
+}

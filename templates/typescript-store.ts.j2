@@ -1,0 +1,25 @@
+import { defineStore } from 'pinia'
+import { ref } from 'vue'
+
+import { {{ fn }} } from '@/api/{{ module }}'
+import type { {{ type }} } from '@/types'
+
+export const use{{ Name }}Store = defineStore('{{ name }}', () => {
+  const items = ref<{{ type }}[]>([])
+  const loading = ref(false)
+  const error = ref('')
+
+  async function load(projectId: string) {
+    loading.value = true
+    error.value = ''
+    try {
+      items.value = await {{ fn }}(projectId)
+    } catch (err) {
+      error.value = (err as Error).message
+    } finally {
+      loading.value = false
+    }
+  }
+
+  return { items, loading, error, load }
+})

@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"import json; f=json.load(open('.ai/CURRENT_FOCUS')); print(f\\\"Task: {f.get('task_name')} [{f.get('status')}]\\\")\" 2>&1 || true",
+            "timeout": 10,
+            "statusMessage": "Loading .ai focus..."
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "matcher": "auto",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 scripts/harness_autoupdate.py",
+            "timeout": 10,
+            "statusMessage": "Saving harness checkpoint..."
+          }
+        ]
+      },
+      {
+        "matcher": "manual",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 scripts/harness_autoupdate.py --reason=compact",
+            "timeout": 10,
+            "statusMessage": "Saving harness checkpoint..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 scripts/validate.py 2>&1 || true",
+            "timeout": 30,
+            "statusMessage": "Validating harness..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_response.filePath // .tool_input.file_path' | { read -r f; case \"$f\" in *.go) gofmt -w \"$f\";; esac; } || true",
+            "timeout": 10,
+            "statusMessage": "Go fmt..."
+          },
+          {
+            "type": "command",
+            "command": "jq -r '.tool_response.filePath // .tool_input.file_path' | { read -r f; case \"$f\" in *.py) python3 -c \"import ast,sys; ast.parse(open(sys.argv[1]).read())\" \"$f\";; esac; } || true",
+            "timeout": 10,
+            "statusMessage": "Python syntax check..."
+          }
+        ]
+      }
+    ]
+  }
+}

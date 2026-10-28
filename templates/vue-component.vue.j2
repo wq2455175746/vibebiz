@@ -1,0 +1,35 @@
+<script setup lang="ts">
+const props = defineProps<{ title: string; value: string }>()
+const emit = defineEmits<{ select: [value: string] }>()
+
+function select() {
+  emit('select', props.value)
+}
+</script>
+
+<template>
+  <button class="card" type="button" @click="select">
+    <strong>{{ title }}</strong>
+    <span>{{ value }}</span>
+  </button>
+</template>
+
+<style scoped>
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.card:hover {
+  border-color: var(--blue);
+}
+</style>

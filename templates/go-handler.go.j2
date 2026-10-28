@@ -1,0 +1,30 @@
+package handler
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/labstack/echo/v4"
+
+	"vibebiz/internal/response"
+)
+
+type {{ name }}Client interface {
+	{{ method }}(ctx context.Context, projectID string) (any, error)
+}
+
+type {{ name }}Handler struct {
+	Sandbox {{ name }}Client
+}
+
+func New{{ name }}Handler(sandbox {{ name }}Client) *{{ name }}Handler {
+	return &{{ name }}Handler{Sandbox: sandbox}
+}
+
+func (h *{{ name }}Handler) Handle(c echo.Context) error {
+	result, err := h.Sandbox.{{ method }}(c.Request().Context(), c.Param("id"))
+	if err != nil {
+		return failFromSandbox(c, err, "{{ description }}")
+	}
+	return response.OK(c, result)
+}

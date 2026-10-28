@@ -1,0 +1,16 @@
+{
+  "service": "{{ service }}",
+  "task_id": "{{ task_id }}",
+  "task_name": "{{ task_name }}",
+  "status": "in_progress",
+  "started_at": "{{ date }}",
+  "description": "{{ description }}",
+  "milestones": {
+    "{{ milestone }}": "{{ date }} - {{ milestone_note }}"
+  },
+  "completed_tasks": [],
+  "next_tasks": [
+    "{{ next_task }}"
+  ],
+  "updated_at": "{{ updated_at }}"
+}

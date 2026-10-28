@@ -1,0 +1,12 @@
+func (s *Sandbox) {{ method }}(ctx context.Context, id string) (*{{ result }}, error) {
+	raw, err := s.doJSON(ctx, http.MethodGet, "/internal/projects/"+url.PathEscape(id)+"/{{ path }}", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var result {{ result }}
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}

@@ -1,0 +1,16 @@
+from pathlib import Path
+
+from app.errors import WorkspaceError
+from app.services.workspace import Workspace
+
+
+class {{ Name }}Service:
+    def __init__(self, workspace: Workspace) -> None:
+        self.workspace = workspace
+
+    async def {{ method }}(self, project_id: str, value: str) -> dict:
+        if not value.strip():
+            raise WorkspaceError("value is required")
+
+        project: Path = self.workspace.project_dir(project_id)
+        return {"projectId": project_id, "value": value.strip()}

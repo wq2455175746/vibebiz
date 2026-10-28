@@ -1,0 +1,22 @@
+from pathlib import Path
+
+import pytest
+
+from app.errors import WorkspaceError
+from app.services.{{ service }} import {{ Service }}
+from app.services.workspace import Workspace
+
+
+def make_service(tmp_path: Path) -> {{ Service }}:
+    return {{ Service }}(Workspace(tmp_path / "workspaces"))
+
+
+def test_{{ name }}_success(tmp_path: Path) -> None:
+    service = make_service(tmp_path)
+    assert service.{{ method }}("p1", "ok")["value"] == "ok"
+
+
+def test_{{ name }}_rejects_empty(tmp_path: Path) -> None:
+    service = make_service(tmp_path)
+    with pytest.raises(WorkspaceError):
+        service.{{ method }}("p1", "  ")

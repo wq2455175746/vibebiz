@@ -1,0 +1,17 @@
+from fastapi import APIRouter, Request
+from pydantic import BaseModel, Field
+
+from app.response import envelope
+from app.services.{{ service }} import {{ Service }}
+
+router = APIRouter(prefix="/internal/projects", tags=["{{ tag }}"])
+
+
+class {{ name }}Request(BaseModel):
+    value: str = Field(min_length=1)
+
+
+@router.post("/{project_id}/{{ path }}")
+def {{ handler }}(project_id: str, body: {{ name }}Request, request: Request) -> dict:
+    service: {{ Service }} = request.app.state.{{ service }}
+    return envelope(service.{{ method }}(project_id, body.value))
