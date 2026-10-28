@@ -1,8 +1,9 @@
+import os
 from pathlib import Path
 
 import pytest
 
-from app.errors import ConflictError, WorkspaceError
+from app.errors import ConflictError, NotFoundError, WorkspaceError
 from app.services.workspace import Workspace
 
 
@@ -76,3 +77,68 @@ def test_list_files_ignores_internal_dirs(tmp_path):
     paths = {entry["path"] for entry in workspace.list_files("p1")}
     assert "index.html" in paths
     assert all(not path.startswith(".git") for path in paths)
+
+
+def test_stats_for_empty_project(tmp_path):
+    workspace = make_workspace(tmp_path)
+    workspace.project_dir("empty").mkdir()
+
+    stats = workspace.stats("empty")
+
+    assert stats == {
+        "fileSizeBytes": 0,
+        "fileCount": 0,
+        "dirCount": 0,
+        "lastModifiedAt": 0,
+    }
+
+
+def test_stats_counts_nested_files_and_dirs(tmp_path):
+    workspace = make_workspace(tmp_path)
+    project = workspace.project_dir("p1")
+    project.mkdir()
+    (project / "src").mkdir()
+    (project / "src" / "components").mkdir()
+    target = project / "src" / "components" / "button.vue"
+    target.write_bytes(b"12345")
+    (project / "index.html").write_bytes(b"123")
+    os.utime(target, (1793191707, 1793191707))
+    os.utime(project / "index.html", (1793191700, 1793191700))
+
+    stats = workspace.stats("p1")
+
+    assert stats["fileSizeBytes"] == 8
+    assert stats["fileCount"] == 2
+    assert stats["dirCount"] == 2
+    assert stats["lastModifiedAt"] == 1793191707000
+
+
+def test_stats_ignores_internal_dirs(tmp_path):
+    workspace = make_workspace(tmp_path)
+    project = workspace.project_dir("p1")
+    project.mkdir()
+    (project / "app.js").write_bytes(b"abc")
+    for ignored in (".git", ".agent", "node_modules", "__pycache__", ".venv", ".pytest_cache"):
+        ignored_dir = project / ignored
+        ignored_dir.mkdir()
+        (ignored_dir / "junk.bin").write_bytes(b"x" * 1000)
+
+    stats = workspace.stats("p1")
+
+    assert stats["fileSizeBytes"] == 3
+    assert stats["fileCount"] == 1
+    assert stats["dirCount"] == 0
+
+
+def test_stats_missing_project_raises_not_found(tmp_path):
+    workspace = make_workspace(tmp_path)
+
+    with pytest.raises(NotFoundError):
+        workspace.stats("missing")
+
+
+def test_stats_invalid_project_id(tmp_path):
+    workspace = make_workspace(tmp_path)
+
+    with pytest.raises(WorkspaceError):
+        workspace.stats("bad id")

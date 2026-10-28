@@ -1,7 +1,7 @@
 {
   "service": "all",
   "task_id": "m0-harness-scaffold",
-  "task_name": "M0 Harness + Auth / Workspace Session",
+  "task_name": "M0 Harness + Auth / Workspace Settings",
   "status": "completed",
   "started_at": "2026-10-28",
   "description": "在 M0 harness 与 MySQL/goose 基础上，加入 web/ops-web 本地账号登录、HttpOnly Cookie、Redis Session、CP/DP/admin 鉴权与工作区项目隔离；项目仍为内存存储，工作区成员关系登录时快照。",
@@ -24,7 +24,8 @@
     "业务数据库设计": "2026-10-28 - 20 张业务表 ER/DDL/索引/种子/迁移，见 docs/superpowers/specs/2026-10-28-business-database-design.md",
     "Go DAO 基础层": "2026-10-28 - internal/dao：GORM MySQL 连接 + 20 表 model + 泛型 Repository + sqlmock；未接 handler/业务逻辑",
     "Goose 迁移": "2026-10-28 - 4 个版本化 SQL + goose 执行器 + make db-create/db-migrate-*",
-    "登录与工作区隔离": "2026-10-29 - web/ops 双登录 + Redis Session + CP/DP/admin 保护 + 工作区共享项目 + 默认账号 seed + 域名配置"
+    "登录与工作区隔离": "2026-10-29 - web/ops 双登录 + Redis Session + CP/DP/admin 保护 + 工作区共享项目 + 默认账号 seed + 域名配置",
+    "设置与存储": "2026-10-29 - 设置页四模块 + 工作区切换 + S3 头像 + 磁盘统计 + 成员邀请"
   },
   "completed_tasks": [
     "根目录：README / AGENTS / Makefile / docker-compose.yml / .gitignore / scripts/dev.sh；配置在 packages/*/.env.example",
@@ -48,7 +49,12 @@
     "Seed：00005 默认用户 wanghg11/vistor、ops admin、个人工作区、workspace_user、user_quota；迁移已执行到 v5",
     "Frontend：web 与 ops-web 登录页、auth store、路由守卫、401 清理、动态账号菜单与登出",
     "域名：vibebiz-dev.com / vibebiz-dev-ops.com，Vite allowedHosts、代理与 CORS、README/Makefile/dev.sh/compose",
-    "验证：Go 全量测试、web/ops test/build/lint、make validate、CP 登录/me/logout/权限与工作区隔离冒烟通过"
+    "验证：Go 全量测试、web/ops test/build/lint、make validate、CP 登录/me/logout/权限与工作区隔离冒烟通过",
+    "设置页：个人信息、磁盘空间、工作区设置、成员；账户弹窗进入设置",
+    "工作区：Session CurrentWorkspaceID、首页切换、默认自有工作区、成员邀请",
+    "S3：用户/工作区头像预签名 PUT/GET + HeadObject 校验；真实上传冒烟通过",
+    "存储：sandbox stats + CP 聚合 + 10GB 配额 + 项目大小/文件数/时间",
+    "头像上传兼容：预签名直传失败时自动回退 CP 代理上传；真实 S3 fallback 冒烟通过"
   ],
   "next_tasks": [
     "接 CP ProjectStore 与 admin Repository 到 DAO；先不写业务 handler",
@@ -60,10 +66,11 @@
     "M2：聊天前端交互、Monaco 编辑与保存、409 冲突处理、预览自动刷新",
     "M4：每项目容器、卷持久化、预览独立 origin、资源限额",
     "M5：Collector / Grafana / 告警规则、CI/CD、K8s",
-    "工作区成员管理 API/UI；成员变更时失效相关 Redis Session",
     "把 CP ProjectStore 与 admin Repository 接入 MySQL；项目归属从内存/Redis 迁移到 project 表",
     "ops-web 写操作、SSO + RBAC 与审计落库",
-    "M3：多项目持久化、版本列表 / diff / 回滚"
+    "M3：多项目持久化、版本列表 / diff / 回滚",
+    "工作区成员角色管理 / 移除成员；邀请后 Session 自动刷新",
+    "把 CP ProjectStore 与 admin Repository 接入 MySQL；项目归属迁移到 project 表"
   ],
-  "updated_at": "2026-10-29T00:41:26.148629"
+  "updated_at": "2026-10-29T01:41:24.529782"
 }

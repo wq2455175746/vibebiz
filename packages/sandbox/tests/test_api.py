@@ -79,6 +79,40 @@ def test_invalid_project_id(tmp_path):
     assert response.status_code == 400
 
 
+def test_project_stats_envelope(tmp_path):
+    client = make_client(tmp_path)
+    init_project(client)
+
+    response = client.get("/internal/projects/p1/stats")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["code"] == 0
+    assert set(body["result"]) == {"fileSizeBytes", "fileCount", "dirCount", "lastModifiedAt"}
+    files = client.get("/internal/projects/p1/files").json()["result"]["files"]
+    assert body["result"]["fileCount"] == len(files)
+    assert body["result"]["fileCount"] >= 4
+    assert body["result"]["dirCount"] == 0
+    assert body["result"]["fileSizeBytes"] > 0
+    assert body["result"]["lastModifiedAt"] > 0
+
+
+def test_project_stats_missing_project(tmp_path):
+    client = make_client(tmp_path)
+    response = client.get("/internal/projects/missing/stats")
+
+    assert response.status_code == 404
+    assert response.json()["code"] != 0
+
+
+def test_project_stats_invalid_project_id(tmp_path):
+    client = make_client(tmp_path)
+    response = client.get("/internal/projects/bad id/stats")
+
+    assert response.status_code == 400
+    assert response.json()["code"] != 0
+
+
 def test_chat_stream_updates_workspace(tmp_path):
     client = make_client(tmp_path)
     init_project(client)

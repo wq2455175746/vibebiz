@@ -11,14 +11,19 @@ vi.mock('@/api/auth', () => ({
   login: vi.fn(),
   me: vi.fn(),
   logout: vi.fn(),
+  switchWorkspace: vi.fn(),
 }))
 
 const user: AuthUser = {
   id: 1,
   username: 'wanghg11',
   email: '2455175746@qq.com',
-  nickname: '',
-  workspaceIds: [1],
+  avatarUrl: null,
+  currentWorkspaceId: 1,
+  workspaces: [
+    { id: 1, name: 'wanghg11 的个人工作区', isOwner: true, role: 'owner' },
+    { id: 2, name: '共享工作区', isOwner: false, role: 'editor' },
+  ],
 }
 
 beforeEach(() => {
@@ -78,6 +83,31 @@ describe('useAuthStore', () => {
 
     expect(authApi.logout).toHaveBeenCalledTimes(1)
     expect(store.user).toBeNull()
+    expect(store.ready).toBe(true)
+  })
+
+  it('switchWorkspace stores the refreshed me', async () => {
+    const switched = { ...user, currentWorkspaceId: 2 }
+    vi.mocked(authApi.switchWorkspace).mockResolvedValue(switched)
+    const store = useAuthStore()
+    store.user = user
+
+    await expect(store.switchWorkspace(2)).resolves.toEqual(switched)
+
+    expect(authApi.switchWorkspace).toHaveBeenCalledWith(2)
+    expect(store.user).toEqual(switched)
+  })
+
+  it('refresh replaces the user without resetting ready', async () => {
+    const updated = { ...user, username: 'renamed', avatarUrl: 'https://cdn/avatar.png' }
+    vi.mocked(authApi.me).mockResolvedValue(updated)
+    const store = useAuthStore()
+    store.user = user
+    store.ready = true
+
+    await expect(store.refresh()).resolves.toEqual(updated)
+
+    expect(store.user).toEqual(updated)
     expect(store.ready).toBe(true)
   })
 })

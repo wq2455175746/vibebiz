@@ -31,11 +31,13 @@ type Config struct {
 	SessionUserTTL time.Duration
 	SessionOpsTTL  time.Duration
 
-	S3Bucket    string
-	S3Region    string
-	S3Endpoint  string
-	S3AccessKey string
-	S3SecretKey string
+	S3Bucket               string
+	S3Region               string
+	S3Endpoint             string
+	S3AccessKey            string
+	S3SecretKey            string
+	S3ForcePathStyle       bool
+	S3PresignExpiryMinutes int
 }
 
 func Load(plane string) Config {
@@ -64,12 +66,22 @@ func Load(plane string) Config {
 		SessionUserTTL: getDuration("SESSION_USER_TTL", 168*time.Hour),
 		SessionOpsTTL:  getDuration("SESSION_OPS_TTL", 12*time.Hour),
 
-		S3Bucket:    getString("S3_BUCKET", "vibebiz"),
-		S3Region:    getString("S3_REGION", "default"),
-		S3Endpoint:  getString("S3_ENDPOINT", ""),
-		S3AccessKey: getString("S3_ACCESS_KEY", ""),
-		S3SecretKey: getString("S3_SECRET_KEY", ""),
+		S3Bucket:               getString("S3_BUCKET", "vibebiz"),
+		S3Region:               getString("S3_REGION", "default"),
+		S3Endpoint:             getString("S3_ENDPOINT", ""),
+		S3AccessKey:            getString("S3_ACCESS_KEY", ""),
+		S3SecretKey:            getString("S3_SECRET_KEY", ""),
+		S3ForcePathStyle:       getBool("S3_FORCE_PATH_STYLE", getString("S3_ENDPOINT", "") != ""),
+		S3PresignExpiryMinutes: getInt("S3_PRESIGN_EXPIRY_MINUTES", 15),
 	}
+}
+
+func (c Config) S3PresignExpiry() time.Duration {
+	minutes := c.S3PresignExpiryMinutes
+	if minutes <= 0 {
+		minutes = 15
+	}
+	return time.Duration(minutes) * time.Minute
 }
 
 func normalizePlane(plane string) string {

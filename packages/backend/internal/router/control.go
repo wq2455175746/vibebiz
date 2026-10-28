@@ -11,7 +11,7 @@ import (
 	"vibebiz/internal/store"
 )
 
-func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.ProjectStore, sandbox *client.Sandbox, obs *observability.Provider, authn *auth.Authenticator, authHandler *handler.AuthHandler, metas auth.ProjectMetaStore) {
+func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.ProjectStore, sandbox *client.Sandbox, obs *observability.Provider, authn *auth.Authenticator, authHandler *handler.AuthHandler, settingsHandler *handler.SettingsHandler, storageHandler *handler.StorageHandler, metas auth.ProjectMetaStore) {
 	projectHandler := handler.NewProjectHandler(projects, sandbox, obs, metas)
 	adminHandler := handler.NewAdminHandler(repo, projects)
 
@@ -19,6 +19,27 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 	api.POST("/auth/login", authHandler.LoginUser)
 	api.GET("/auth/me", authHandler.MeUser)
 	api.POST("/auth/logout", authHandler.LogoutUser)
+	api.PUT("/auth/workspace", authHandler.SwitchWorkspace, authn.RequireUser)
+
+	meAPI := api.Group("/me", authn.RequireUser)
+	meAPI.GET("/profile", settingsHandler.GetProfile)
+	meAPI.PUT("/profile", settingsHandler.UpdateProfile)
+	meAPI.POST("/avatar/presign", settingsHandler.PresignAvatar)
+	meAPI.PUT("/avatar", settingsHandler.ConfirmAvatar)
+	meAPI.POST("/avatar/upload", settingsHandler.UploadAvatar)
+
+	workspaceAPI := api.Group("/workspaces", authn.RequireUser)
+	workspaceAPI.GET("/current", settingsHandler.GetWorkspace)
+	workspaceAPI.PUT("/current", settingsHandler.UpdateWorkspace)
+	workspaceAPI.POST("/current/avatar/presign", settingsHandler.PresignWorkspaceAvatar)
+	workspaceAPI.PUT("/current/avatar", settingsHandler.ConfirmWorkspaceAvatar)
+	workspaceAPI.POST("/current/avatar/upload", settingsHandler.UploadWorkspaceAvatar)
+	workspaceAPI.GET("/current/members", settingsHandler.Members)
+	workspaceAPI.POST("/current/members", settingsHandler.InviteMember)
+	workspaceAPI.GET("/current/folders", settingsHandler.Folders)
+	workspaceAPI.POST("/current/folders", settingsHandler.CreateFolder)
+
+	api.GET("/storage", storageHandler.Summary, authn.RequireUser)
 
 	projectsAPI := api.Group("/projects", authn.RequireUser)
 	projectsAPI.GET("", projectHandler.List)

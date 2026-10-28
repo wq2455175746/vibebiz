@@ -1,9 +1,69 @@
+export interface WorkspaceMembership {
+  id: number
+  name: string
+  isOwner: boolean
+  role: string
+}
+
 export interface AuthUser {
   id: number
   username: string
   email: string
-  nickname: string
-  workspaceIds: number[]
+  avatarUrl: string | null
+  currentWorkspaceId: number
+  workspaces: WorkspaceMembership[]
+}
+
+export interface Workspace {
+  id: number
+  name: string
+  description: string
+  avatarUrl: string | null
+  isOwner: boolean
+  role: string
+  memberCount: number
+}
+
+export interface Member {
+  userId: number
+  username: string
+  email: string
+  avatarUrl: string | null
+  role: string
+  status: number
+  joinedAt: string | null
+  isOwner: boolean
+}
+
+export interface WorkspaceFolder {
+  id: number
+  parentId: number
+  name: string
+  createdAt: string
+}
+
+export interface Presign {
+  uploadUrl: string
+  key: string
+  headers: Record<string, string>
+}
+
+export interface StorageProject {
+  id: string
+  name: string
+  sizeBytes: number
+  ratio: number
+  fileCount: number
+  dirCount: number
+  lastModifiedAt: string
+  available: boolean
+}
+
+export interface StorageSummary {
+  usedBytes: number
+  quotaBytes: number
+  projectCount: number
+  projects: StorageProject[]
 }
 
 export interface Project {

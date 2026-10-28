@@ -180,6 +180,30 @@ class Workspace:
             )
         return entries
 
+    def stats(self, project_id: str) -> dict:
+        project = self._existing_project(project_id)
+        file_size_bytes = 0
+        file_count = 0
+        dir_count = 0
+        last_modified_at = 0
+        for path in sorted(project.rglob("*")):
+            rel_parts = path.relative_to(project).parts
+            if any(part in IGNORED_PARTS for part in rel_parts):
+                continue
+            stat = path.stat()
+            if path.is_dir():
+                dir_count += 1
+                continue
+            file_count += 1
+            file_size_bytes += stat.st_size
+            last_modified_at = max(last_modified_at, int(stat.st_mtime * 1000))
+        return {
+            "fileSizeBytes": file_size_bytes,
+            "fileCount": file_count,
+            "dirCount": dir_count,
+            "lastModifiedAt": last_modified_at,
+        }
+
     def read_file(self, project_id: str, rel_path: str) -> dict:
         path = self._resolve(project_id, rel_path)
         if not path.is_file():

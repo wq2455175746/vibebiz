@@ -46,6 +46,24 @@ func TestSandboxReadFile(t *testing.T) {
 	}
 }
 
+func TestSandboxProjectStats(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/internal/projects/p1/stats" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		w.Write([]byte(`{"code":0,"message":"ok","result":{"fileSizeBytes":123,"fileCount":4,"dirCount":1,"lastModifiedAt":1793191707598}}`))
+	}))
+	defer srv.Close()
+
+	stats, err := NewSandbox(srv.URL, nil).ProjectStats(context.Background(), "p1")
+	if err != nil {
+		t.Fatalf("stats: %v", err)
+	}
+	if stats.FileSizeBytes != 123 || stats.FileCount != 4 || stats.DirCount != 1 || stats.LastModifiedAt != 1793191707598 {
+		t.Fatalf("stats = %+v", stats)
+	}
+}
+
 func TestSandboxWriteConflict(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusConflict)

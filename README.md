@@ -159,6 +159,14 @@ make -C packages/ops-web dev
 - 默认账号由 `packages/backend/migrations/00005_default_users.sql` seed；默认密码仅用于本地开发，不写入文档，生产必须重置或删除默认账号。
 - web 的项目按当前登录用户的工作区过滤；ops-web 的 admin 视角可见全部项目。
 
+## 设置页
+
+- 账户弹窗进入 `/settings/profile`，左侧包含个人信息、磁盘空间、工作区设置、成员。
+- 用户头像和工作区头像优先使用 S3 预签名 PUT；存储不支持浏览器 CORS 时自动回退到 CP 代理上传。读取使用预签名 GET。
+- 默认存储额度 10GB；磁盘统计来自 sandbox 项目目录扫描。
+- 首页左侧工作区下拉切换当前工作区；邀请成员后对方重新登录/刷新可看到共享工作区。
+- 首页左侧“文件夹”支持在当前工作区创建一级文件夹；文件夹是工作区下的逻辑目录节点，后续用于归档项目。
+
 ## 数据库迁移
 
 MySQL schema 使用版本化 SQL + `goose` 管理；`AutoMigrate` 默认关闭。迁移 DSN 从 `packages/backend/.env` 的 `MYSQL_*` 读取。
@@ -232,6 +240,8 @@ Stub agent 只做确定性的演示改写，**不具备真实生成能力**；�
 | GET | `/projects` | 项目列表 |
 | POST | `/projects` | 创建项目 `{ prompt, name? }` |
 | GET | `/projects/:id` | 项目详情 |
+| GET | `/workspaces/current/folders` | 当前工作区文件夹列表 |
+| POST | `/workspaces/current/folders` | 创建文件夹 `{ name, parentId? }` |
 | GET | `/admin/overview` | 运营概览 |
 | GET | `/admin/users` | 用户列表 |
 | GET | `/admin/projects` | 管理视角项目列表 |

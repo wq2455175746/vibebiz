@@ -21,6 +21,47 @@ make memory-add     # 有可复用经验时
 
 不要跳过 `.ai`；它是跨会话的唯一上下文入口。
 
+## 变更分级（必须）
+
+开始实现前先判断任务大小，并把判断说清楚；不确定时按大任务处理。
+
+### 大任务：必须先设计文档，再开发
+
+满足任一条件即按大任务：
+
+- 新子系统、新页面组、新跨端功能。
+- 鉴权、权限、数据隔离、安全边界变化。
+- 数据库 schema、DAO、迁移、种子数据变化。
+- 接入外部服务（S3、Redis、邮件、支付等）。
+- 修改跨 package 的 HTTP / SSE / 事件契约。
+- 同时改动 backend / web / ops-web / sandbox 中两个及以上 package。
+- 预计改动超过 3 个文件，或需要多 agent 并行。
+
+流程：
+
+1. 读代码与原型，确认边界和验收标准。
+2. 写 `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`。
+3. 设计确认后写 `docs/superpowers/plans/YYYY-MM-DD-<topic>.md`。
+4. 按计划实现；多 agent 时先固定文件所有权与接口契约。
+5. 设计文档不能省略；时间紧可以写短，但不能跳过。
+
+### 小修改：直接开发，不写设计文档
+
+满足全部条件才算小修改：
+
+- 单点 bug、文案、样式、配置值、日志、测试修复。
+- 不改变 HTTP / SSE 契约、数据库 schema、权限模型、依赖方向。
+- 不新增子系统、页面组或外部服务。
+- 改动集中在 1-2 个文件。
+
+小修改直接按 TDD / 验证流程处理，不写 spec，不写 plan。
+
+### 边界
+
+- 设计文档是决策记录，不是形式；大任务不写文档视为未完成。
+- 设计文档与实现冲突时，先更新文档或明确记录偏离原因。
+- 多 agent 并行前必须有设计文档与文件所有权划分，避免互相覆盖。
+
 ## Module Routing Map
 
 | 任务类型 | 目标 Package | 技术栈 |
@@ -46,6 +87,10 @@ make memory-add     # 有可复用经验时
 | `internal/admin/` | admin `Repository` 接口 + 内存 seed |
 | `internal/handler/project.go` | 创建 / 列表 / 查询项目 |
 | `internal/handler/admin.go` | 概览 / 用户 / 项目 / 沙箱 / 配额 / 审计 |
+| `internal/account/` | 用户资料、工作区、成员、头像预签名编排 |
+| `internal/s3/` | S3 presigned PUT/GET + HeadObject |
+| `internal/handler/settings.go` | 设置页 API |
+| `internal/handler/storage.go` | 当前工作区磁盘统计 |
 | `internal/handler/file.go` | 文件树、读、写、409 透传 |
 | `internal/handler/chat.go` | SSE 字节流透传，逐行 flush |
 | `internal/handler/preview.go` | 预览反代（含 Upgrade 透传） |
@@ -81,11 +126,13 @@ make memory-add     # 有可复用经验时
 | `src/components/home/HomeHero.vue` | 首页问候与创作输入区域 |
 | `src/components/home/HomeDiscovery.vue` | 首页发现 / 模板区域 |
 | `src/views/EditorView.vue` | 编辑器骨架：预览 / 代码切换 |
+| `src/views/settings/` | 个人信息 / 磁盘空间 / 工作区设置 / 成员 |
+| `src/layouts/SettingsLayout.vue` | 设置页左侧菜单布局 |
 | `src/components/editor/ChatPanel.vue` | 对话面板占位（M1） |
 | `src/components/editor/PreviewPanel.vue` | iframe 预览 |
 | `src/components/editor/CodePanel.vue` | 文件列表 + 只读代码 |
 | `src/api/client.ts` | axios 实例、信封解包、`ApiError` |
-| `src/api/{projects,files,chat}.ts` | 领域 API |
+| `src/api/{projects,files,chat,settings,storage,auth}.ts` | 领域 API |
 | `src/stores/{project,files,chat}.ts` | Pinia 领域 store |
 | `src/utils/sse.ts` | 纯函数 SSE 分帧 |
 | `src/monaco/setup.ts` | Monaco worker 装配（M2 启用） |

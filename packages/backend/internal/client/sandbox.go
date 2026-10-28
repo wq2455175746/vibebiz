@@ -53,6 +53,13 @@ type WriteResult struct {
 	Mtime   int64  `json:"mtime"`
 }
 
+type ProjectStats struct {
+	FileSizeBytes  int64 `json:"fileSizeBytes"`
+	FileCount      int64 `json:"fileCount"`
+	DirCount       int64 `json:"dirCount"`
+	LastModifiedAt int64 `json:"lastModifiedAt"`
+}
+
 type Sandbox struct {
 	baseURL string
 	http    *http.Client
@@ -121,6 +128,18 @@ func (s *Sandbox) WriteFile(ctx context.Context, id, path, content, baseVersion 
 		return nil, err
 	}
 	return &result, nil
+}
+
+func (s *Sandbox) ProjectStats(ctx context.Context, id string) (ProjectStats, error) {
+	raw, err := s.doJSON(ctx, "project_stats", id, http.MethodGet, "/internal/projects/"+url.PathEscape(id)+"/stats", nil)
+	if err != nil {
+		return ProjectStats{}, err
+	}
+	var stats ProjectStats
+	if err := json.Unmarshal(raw, &stats); err != nil {
+		return ProjectStats{}, err
+	}
+	return stats, nil
 }
 
 func (s *Sandbox) Chat(ctx context.Context, id string, payload []byte) (out io.ReadCloser, err error) {

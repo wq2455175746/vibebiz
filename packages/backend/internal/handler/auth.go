@@ -7,12 +7,14 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"vibebiz/internal/account"
 	"vibebiz/internal/auth"
 	"vibebiz/internal/response"
 )
 
 type AuthHandler struct {
 	Service    *auth.Service
+	Account    *account.Service
 	UserCookie auth.CookieManager
 	OpsCookie  auth.CookieManager
 }
@@ -22,12 +24,8 @@ type loginRequest struct {
 	Password   string `json:"password"`
 }
 
-type authUser struct {
-	ID           int64   `json:"id"`
-	Username     string  `json:"username"`
-	Email        string  `json:"email"`
-	Nickname     string  `json:"nickname"`
-	WorkspaceIDs []int64 `json:"workspaceIds"`
+type switchWorkspaceRequest struct {
+	WorkspaceID int64 `json:"workspaceId"`
 }
 
 type authOpsUser struct {
@@ -49,7 +47,7 @@ func (h *AuthHandler) LoginUser(c echo.Context) error {
 	if err := h.UserCookie.Set(c, auth.CookieIdentity{SID: session.ID, Username: session.Username, Email: session.Email}); err != nil {
 		return response.Fail(c, http.StatusInternalServerError, 50005, "set session cookie failed")
 	}
-	return response.OK(c, userResult(session))
+	return h.meResult(c, session)
 }
 
 func (h *AuthHandler) MeUser(c echo.Context) error {
@@ -57,7 +55,26 @@ func (h *AuthHandler) MeUser(c echo.Context) error {
 	if err != nil {
 		return currentError(c, err)
 	}
-	return response.OK(c, userResult(session))
+	return h.meResult(c, session)
+}
+
+func (h *AuthHandler) SwitchWorkspace(c echo.Context) error {
+	session, ok := auth.SessionFrom(c)
+	if !ok {
+		return response.Fail(c, http.StatusUnauthorized, 40101, "unauthorized")
+	}
+	var req switchWorkspaceRequest
+	if err := c.Bind(&req); err != nil || req.WorkspaceID <= 0 {
+		return response.Fail(c, http.StatusBadRequest, 40001, "invalid request body")
+	}
+	updated, err := h.Service.SwitchWorkspace(c.Request().Context(), session.ID, req.WorkspaceID)
+	if err != nil {
+		if errors.Is(err, auth.ErrWorkspaceNotAccessible) {
+			return response.Fail(c, http.StatusForbidden, 40303, "workspace not accessible")
+		}
+		return currentError(c, err)
+	}
+	return h.meResult(c, updated)
 }
 
 func (h *AuthHandler) LogoutUser(c echo.Context) error {
@@ -149,12 +166,23 @@ func currentError(c echo.Context, err error) error {
 	return response.Fail(c, http.StatusServiceUnavailable, 50301, "session store unavailable")
 }
 
-func userResult(session *auth.Session) authUser {
-	return authUser{
-		ID:           session.UserID,
-		Username:     session.Username,
-		Email:        session.Email,
-		Nickname:     "",
-		WorkspaceIDs: session.WorkspaceIDs,
+func (h *AuthHandler) meResult(c echo.Context, session *auth.Session) error {
+	if h.Account != nil {
+		me, err := h.Account.Me(c.Request().Context(), session)
+		if err != nil {
+			return response.Fail(c, http.StatusInternalServerError, 50006, "load account failed")
+		}
+		return response.OK(c, me)
 	}
+	workspaces := make([]account.WorkspaceSummary, 0, len(session.WorkspaceIDs))
+	for _, id := range session.WorkspaceIDs {
+		workspaces = append(workspaces, account.WorkspaceSummary{ID: id})
+	}
+	return response.OK(c, account.Me{
+		ID:                 session.UserID,
+		Username:           session.Username,
+		Email:              session.Email,
+		CurrentWorkspaceID: session.CurrentWorkspaceID,
+		Workspaces:         workspaces,
+	})
 }

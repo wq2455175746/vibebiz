@@ -14,6 +14,12 @@ const prompt = ref('')
 const creating = ref(false)
 const error = ref('')
 const projects = ref<Project[]>([])
+const sidebarCollapsed = ref(localStorage.getItem('vibebiz:sidebar-collapsed') === '1')
+
+function toggleSidebar() {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+  localStorage.setItem('vibebiz:sidebar-collapsed', sidebarCollapsed.value ? '1' : '0')
+}
 
 async function create() {
   const text = prompt.value.trim()
@@ -32,23 +38,30 @@ async function create() {
   }
 }
 
-onMounted(async () => {
+async function loadProjects() {
   try {
-    projects.value = (await listProjects()).slice(0, 4)
+    projects.value = await listProjects()
   } catch {
     projects.value = []
   }
-})
+}
+
+onMounted(loadProjects)
 </script>
 
 <template>
-  <div class="home-shell">
-    <HomeSidebar :recent-projects="projects" />
+  <div class="home-shell" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
+    <HomeSidebar
+      :recent-projects="projects.slice(0, 4)"
+      :collapsed="sidebarCollapsed"
+      @toggle-collapse="toggleSidebar"
+      @workspace-changed="loadProjects"
+    />
 
     <main class="home-main">
       <div class="home-main-inner">
         <HomeHero v-model="prompt" :creating="creating" :error="error" @submit="create" />
-        <HomeDiscovery />
+        <HomeDiscovery :projects="projects" />
       </div>
     </main>
   </div>

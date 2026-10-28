@@ -60,6 +60,16 @@ func (s *routerSessionStore) Get(_ context.Context, realm auth.Realm, id string)
 	return &copied, nil
 }
 
+func (s *routerSessionStore) Update(_ context.Context, session *auth.Session) error {
+	key := routerSessionKey(session.Realm, session.ID)
+	if _, ok := s.items[key]; !ok {
+		return auth.ErrSessionNotFound
+	}
+	copied := *session
+	s.items[key] = &copied
+	return nil
+}
+
 func (s *routerSessionStore) Delete(_ context.Context, realm auth.Realm, id string) error {
 	delete(s.items, routerSessionKey(realm, id))
 	return nil
@@ -137,7 +147,7 @@ func newCP(t *testing.T, projects store.ProjectStore) (*echo.Echo, *observabilit
 	obs := newProvider(t, "cp")
 	authState := newRouterAuth(t)
 	e := server.New(config.Config{Plane: "cp", ServiceName: "vibebiz-cp"}, obs)
-	RegisterControl(e, admin.NewMemoryRepository(), projects, client.NewSandbox("http://127.0.0.1:1", obs), obs, authState.authn, authState.handler, authState.metas)
+	RegisterControl(e, admin.NewMemoryRepository(), projects, client.NewSandbox("http://127.0.0.1:1", obs), obs, authState.authn, authState.handler, &handler.SettingsHandler{}, &handler.StorageHandler{}, authState.metas)
 	return e, obs, authState
 }
 

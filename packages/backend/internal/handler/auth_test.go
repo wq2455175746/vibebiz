@@ -11,7 +11,9 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"vibebiz/internal/account"
 	"vibebiz/internal/auth"
+	"vibebiz/internal/dao"
 	"vibebiz/internal/dao/model"
 )
 
@@ -24,8 +26,18 @@ func (f *authUserFinder) FindUserByIdentifier(_ context.Context, _ string) (*mod
 	return f.user, nil
 }
 
-func (f *authUserFinder) WorkspaceIDs(_ context.Context, _ int64) ([]int64, error) {
-	return f.workspaceIDs, nil
+func (f *authUserFinder) Workspaces(_ context.Context, _ int64) ([]dao.WorkspaceMembership, error) {
+	out := make([]dao.WorkspaceMembership, 0, len(f.workspaceIDs))
+	for i, id := range f.workspaceIDs {
+		role := "editor"
+		owner := int64(0)
+		if i == 0 {
+			role = "owner"
+			owner = f.user.ID
+		}
+		out = append(out, dao.WorkspaceMembership{ID: id, Name: "workspace", OwnerUserID: owner, Role: role})
+	}
+	return out, nil
 }
 
 func (f *authUserFinder) TouchUserLogin(_ context.Context, _ int64, _ string, _ time.Time) error {
@@ -71,6 +83,16 @@ func (f *authSessionStore) Get(_ context.Context, realm auth.Realm, id string) (
 	return &copied, nil
 }
 
+func (f *authSessionStore) Update(_ context.Context, session *auth.Session) error {
+	key := f.key(session.Realm, session.ID)
+	if _, ok := f.items[key]; !ok {
+		return auth.ErrSessionNotFound
+	}
+	copied := *session
+	f.items[key] = &copied
+	return nil
+}
+
 func (f *authSessionStore) Delete(_ context.Context, realm auth.Realm, id string) error {
 	delete(f.items, f.key(realm, id))
 	return nil
@@ -97,8 +119,24 @@ func newAuthHandlerForTest(t *testing.T, user *model.User, workspaces []int64, o
 		OpsTTL:   12 * time.Hour,
 		Now:      func() time.Time { return time.Unix(1700000000, 0).UTC() },
 	}
+	repo := newFakeAccountRepo()
+	if user != nil {
+		repo.profile = &dao.UserProfile{ID: user.ID, Username: user.Username, Email: user.Email}
+		repo.usersByEmail[user.Email] = repo.profile
+	}
+	for i, id := range workspaces {
+		owner := int64(0)
+		role := "editor"
+		if i == 0 && user != nil {
+			owner = user.ID
+			role = "owner"
+		}
+		repo.memberships = append(repo.memberships, dao.WorkspaceMembership{ID: id, Name: "workspace", OwnerUserID: owner, Role: role})
+	}
+	accountService := account.NewService(repo, sessions, nil, 15*time.Minute)
 	handler := &AuthHandler{
 		Service:    service,
+		Account:    accountService,
 		UserCookie: auth.CookieManager{Name: "vibebiz_user", TTL: 168 * time.Hour, Now: time.Now},
 		OpsCookie:  auth.CookieManager{Name: "vibebiz_ops", TTL: 12 * time.Hour, Now: time.Now},
 	}
@@ -125,6 +163,16 @@ func authRouter(h *AuthHandler) *echo.Echo {
 	e.POST("/cp/api/v1/auth/login", h.LoginUser)
 	e.GET("/cp/api/v1/auth/me", h.MeUser)
 	e.POST("/cp/api/v1/auth/logout", h.LogoutUser)
+	e.PUT("/cp/api/v1/auth/workspace", h.SwitchWorkspace, func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			session, err := h.current(c, auth.RealmUser, h.UserCookie)
+			if err != nil {
+				return c.NoContent(http.StatusUnauthorized)
+			}
+			c.Set("auth.session", session)
+			return next(c)
+		}
+	})
 	e.POST("/cp/api/v1/admin/auth/login", h.LoginOps)
 	e.GET("/cp/api/v1/admin/auth/me", h.MeOps)
 	e.POST("/cp/api/v1/admin/auth/logout", h.LogoutOps)
@@ -175,18 +223,15 @@ func TestLoginUserSuccess(t *testing.T) {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
 	env := decodeAuthEnvelope(t, rec)
-	var user struct {
-		ID           int64   `json:"id"`
-		Username     string  `json:"username"`
-		Email        string  `json:"email"`
-		Nickname     string  `json:"nickname"`
-		WorkspaceIDs []int64 `json:"workspaceIds"`
-	}
+	var user account.Me
 	if err := json.Unmarshal(env.Result, &user); err != nil {
 		t.Fatalf("decode user: %v", err)
 	}
-	if user.ID != 1 || user.Username != "wanghg11" || user.Email != "wang@example.com" || len(user.WorkspaceIDs) != 1 || user.WorkspaceIDs[0] != 3 {
+	if user.ID != 1 || user.Username != "wanghg11" || user.Email != "wang@example.com" {
 		t.Fatalf("user = %+v", user)
+	}
+	if user.CurrentWorkspaceID != 3 || len(user.Workspaces) != 1 || user.Workspaces[0].ID != 3 || !user.Workspaces[0].IsOwner {
+		t.Fatalf("user workspaces = %+v", user)
 	}
 	cookies := rec.Result().Cookies()
 	if len(cookies) != 1 || cookies[0].Name != "vibebiz_user" || !cookies[0].HttpOnly {
@@ -249,16 +294,57 @@ func TestMeUser(t *testing.T) {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
 	env := decodeAuthEnvelope(t, rec)
-	var user struct {
-		ID       int64  `json:"id"`
-		Username string `json:"username"`
-		Email    string `json:"email"`
-	}
+	var user account.Me
 	if err := json.Unmarshal(env.Result, &user); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if user.ID != 1 || user.Username != "wanghg11" || user.Email != "wang@example.com" {
+	if user.ID != 1 || user.Username != "wanghg11" || user.Email != "wang@example.com" || user.CurrentWorkspaceID != 3 {
 		t.Fatalf("user = %+v", user)
+	}
+}
+
+func TestSwitchWorkspace(t *testing.T) {
+	h, sessions := newAuthHandlerForTest(t, &model.User{Base: model.Base{ID: 1}, Username: "wanghg11", Email: "wang@example.com", Status: 1}, []int64{3, 4}, nil)
+	cookie, _ := loginUser(t, h)
+	e := authRouter(h)
+
+	req := httptest.NewRequest(http.MethodPut, "/cp/api/v1/auth/workspace", strings.NewReader(`{"workspaceId":4}`))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var me account.Me
+	if err := json.Unmarshal(decodeAuthEnvelope(t, rec).Result, &me); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if me.CurrentWorkspaceID != 4 {
+		t.Fatalf("current workspace = %d, want 4", me.CurrentWorkspaceID)
+	}
+	for _, session := range sessions.items {
+		if session.CurrentWorkspaceID != 4 {
+			t.Fatalf("stored session = %+v", session)
+		}
+	}
+
+	req = httptest.NewRequest(http.MethodPut, "/cp/api/v1/auth/workspace", strings.NewReader(`{"workspaceId":99}`))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	req.AddCookie(cookie)
+	rec = httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("foreign status = %d, want 403", rec.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodPut, "/cp/api/v1/auth/workspace", strings.NewReader(`{}`))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	req.AddCookie(cookie)
+	rec = httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("empty status = %d, want 400", rec.Code)
 	}
 }
 

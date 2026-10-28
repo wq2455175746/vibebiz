@@ -8,6 +8,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
+	"vibebiz/internal/dao"
 	"vibebiz/internal/dao/model"
 )
 
@@ -15,6 +16,7 @@ type fakeUserFinder struct {
 	user           *model.User
 	findErr        error
 	workspaceIDs   []int64
+	memberships    []dao.WorkspaceMembership
 	workspaceErr   error
 	touchedID      int64
 	touchedIP      string
@@ -30,11 +32,18 @@ func (f *fakeUserFinder) FindUserByIdentifier(_ context.Context, _ string) (*mod
 	return f.user, nil
 }
 
-func (f *fakeUserFinder) WorkspaceIDs(_ context.Context, _ int64) ([]int64, error) {
+func (f *fakeUserFinder) Workspaces(_ context.Context, _ int64) ([]dao.WorkspaceMembership, error) {
 	if f.workspaceErr != nil {
 		return nil, f.workspaceErr
 	}
-	return f.workspaceIDs, nil
+	if f.memberships != nil {
+		return f.memberships, nil
+	}
+	out := make([]dao.WorkspaceMembership, 0, len(f.workspaceIDs))
+	for _, id := range f.workspaceIDs {
+		out = append(out, dao.WorkspaceMembership{ID: id, Role: "editor"})
+	}
+	return out, nil
 }
 
 func (f *fakeUserFinder) TouchUserLogin(_ context.Context, id int64, ip string, at time.Time) error {
@@ -103,6 +112,18 @@ func (f *fakeSessionStore) Get(_ context.Context, realm Realm, id string) (*Sess
 	return &copied, nil
 }
 
+func (f *fakeSessionStore) Update(_ context.Context, session *Session) error {
+	if f.err != nil {
+		return f.err
+	}
+	if _, ok := f.items[sessionKey(session.Realm, session.ID)]; !ok {
+		return ErrSessionNotFound
+	}
+	copied := *session
+	f.items[sessionKey(session.Realm, session.ID)] = &copied
+	return nil
+}
+
 func (f *fakeSessionStore) Delete(_ context.Context, realm Realm, id string) error {
 	if f.err != nil {
 		return f.err
@@ -156,6 +177,51 @@ func TestLoginUserByUsernameAndEmail(t *testing.T) {
 		if !users.touchedAt.Equal(session.CreatedAt) {
 			t.Fatalf("touch at = %v, session at = %v", users.touchedAt, session.CreatedAt)
 		}
+	}
+}
+
+func TestLoginUserDefaultsToOwnedWorkspace(t *testing.T) {
+	user := &model.User{Base: model.Base{ID: 7}, Username: "wanghg11", Email: "wang@example.com", Status: 1}
+	svc, users, _ := testService(t, user, nil)
+	users.memberships = []dao.WorkspaceMembership{
+		{ID: 2, Name: "team", OwnerUserID: 9, Role: "editor"},
+		{ID: 5, Name: "personal", OwnerUserID: 7, Role: "owner"},
+	}
+
+	session, err := svc.LoginUser(context.Background(), "wanghg11", "secret-pass", "")
+	if err != nil {
+		t.Fatalf("login: %v", err)
+	}
+	if session.CurrentWorkspaceID != 5 {
+		t.Fatalf("current workspace = %d, want 5", session.CurrentWorkspaceID)
+	}
+	if len(session.WorkspaceIDs) != 2 || session.WorkspaceIDs[0] != 2 || session.WorkspaceIDs[1] != 5 {
+		t.Fatalf("workspace ids = %v", session.WorkspaceIDs)
+	}
+}
+
+func TestSwitchWorkspace(t *testing.T) {
+	svc, users, sessions := testService(t, &model.User{Base: model.Base{ID: 7}, Username: "u", Email: "u@example.com", Status: 1}, nil)
+	users.memberships = []dao.WorkspaceMembership{{ID: 2, OwnerUserID: 9}, {ID: 5, OwnerUserID: 7, Role: "owner"}}
+	session, err := svc.LoginUser(context.Background(), "u", "secret-pass", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	switched, err := svc.SwitchWorkspace(context.Background(), session.ID, 2)
+	if err != nil {
+		t.Fatalf("switch: %v", err)
+	}
+	if switched.CurrentWorkspaceID != 2 {
+		t.Fatalf("current = %d, want 2", switched.CurrentWorkspaceID)
+	}
+	if stored := sessions.items[sessionKey(RealmUser, session.ID)]; stored == nil || stored.CurrentWorkspaceID != 2 {
+		t.Fatalf("stored session = %+v", stored)
+	}
+	if _, err := svc.SwitchWorkspace(context.Background(), session.ID, 99); !errors.Is(err, ErrWorkspaceNotAccessible) {
+		t.Fatalf("foreign err = %v, want ErrWorkspaceNotAccessible", err)
+	}
+	if _, err := svc.SwitchWorkspace(context.Background(), "missing", 2); !errors.Is(err, ErrSessionNotFound) {
+		t.Fatalf("missing err = %v, want ErrSessionNotFound", err)
 	}
 }
 

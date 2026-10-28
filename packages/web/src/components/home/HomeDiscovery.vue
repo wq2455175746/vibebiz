@@ -1,5 +1,25 @@
 <script setup lang="ts">
-const tabs = ['发现', '我的项目', '模板']
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+
+import type { Project } from '@/types'
+import { formatDateTime } from '@/utils/storage'
+
+defineProps<{ projects: Project[] }>()
+
+type DiscoveryTab = 'projects' | 'templates'
+
+const router = useRouter()
+const activeTab = ref<DiscoveryTab>('projects')
+
+const tabs: { key: DiscoveryTab; label: string }[] = [
+  { key: 'projects', label: '我的项目' },
+  { key: 'templates', label: '模板' },
+]
+
+function openProject(id: string) {
+  void router.push({ name: 'editor', params: { id } })
+}
 </script>
 
 <template>
@@ -7,34 +27,38 @@ const tabs = ['发现', '我的项目', '模板']
     <div class="discovery-head">
       <div class="discovery-tabs">
         <button
-          v-for="(tab, index) in tabs"
-          :key="tab"
+          v-for="tab in tabs"
+          :key="tab.key"
           class="discovery-tab"
-          :class="{ active: index === 0 }"
+          :class="{ active: activeTab === tab.key }"
           type="button"
+          @click="activeTab = tab.key"
         >
-          {{ tab }}
+          {{ tab.label }}
         </button>
       </div>
-      <button class="discovery-more" type="button">
-        查看全部
-        <i class="pi pi-angle-right" />
-      </button>
     </div>
 
-    <div class="discovery-grid">
-      <article v-for="index in 4" :key="index" class="discovery-card">
-        <div class="card-skeleton">
-          <span class="skeleton-chip" />
-          <span class="skeleton-bar wide" />
-          <span class="skeleton-bar" />
-          <span class="skeleton-block" />
-        </div>
-        <div class="card-caption">
-          <span class="skeleton-title" />
-          <span class="skeleton-meta">模板占位 {{ index }}</span>
-        </div>
-      </article>
-    </div>
+    <template v-if="activeTab === 'projects'">
+      <p v-if="projects.length === 0" class="discovery-empty">暂无项目</p>
+      <div v-else class="project-grid">
+        <button
+          v-for="project in projects"
+          :key="project.id"
+          class="project-card"
+          type="button"
+          @click="openProject(project.id)"
+        >
+          <span class="project-icon"><i class="pi pi-folder" /></span>
+          <span class="project-body">
+            <strong>{{ project.name }}</strong>
+            <span>{{ formatDateTime(project.createdAt) }}</span>
+          </span>
+          <i class="pi pi-angle-right project-arrow" />
+        </button>
+      </div>
+    </template>
+
+    <p v-else class="discovery-empty">暂无模板</p>
   </section>
 </template>

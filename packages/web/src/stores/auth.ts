@@ -43,6 +43,25 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  async function refresh(): Promise<AuthUser> {
+    const current = await authApi.me()
+    user.value = current
+    ready.value = true
+    return current
+  }
+
+  async function switchWorkspace(workspaceId: number): Promise<AuthUser> {
+    const current = await authApi.switchWorkspace(workspaceId)
+    user.value = current
+    ready.value = true
+    return current
+  }
+
+  function applyUser(current: AuthUser): void {
+    user.value = current
+    ready.value = true
+  }
+
   function clear(): void {
     user.value = null
     ready.value = true
@@ -58,5 +77,17 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  return { user, ready, loading, isAuthenticated, login, logout, ensure, clear }
+  return {
+    user,
+    ready,
+    loading,
+    isAuthenticated,
+    login,
+    logout,
+    ensure,
+    refresh,
+    switchWorkspace,
+    applyUser,
+    clear,
+  }
 })

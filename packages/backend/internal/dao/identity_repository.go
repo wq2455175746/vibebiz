@@ -63,6 +63,22 @@ func (r *IdentityRepository) WorkspaceIDs(ctx context.Context, userID int64) ([]
 	return ids, nil
 }
 
+func (r *IdentityRepository) Workspaces(ctx context.Context, userID int64) ([]WorkspaceMembership, error) {
+	memberships := make([]WorkspaceMembership, 0)
+	err := r.db.WithContext(ctx).
+		Table("workspace_user").
+		Select("workspace.id, workspace.name, workspace.owner_user_id, workspace_user.role").
+		Joins("JOIN workspace ON workspace.id = workspace_user.workspace_id").
+		Where("workspace_user.user_id = ? AND workspace_user.status = 1 AND workspace_user.deleted_at IS NULL", userID).
+		Where("workspace.status = 1 AND workspace.deleted_at IS NULL").
+		Order("workspace.id ASC").
+		Scan(&memberships).Error
+	if err != nil {
+		return nil, fmt.Errorf("workspaces: %w", err)
+	}
+	return memberships, nil
+}
+
 func (r *IdentityRepository) TouchUserLogin(ctx context.Context, id int64, ip string, at time.Time) error {
 	return r.touchLogin(ctx, &model.User{}, id, ip, at)
 }

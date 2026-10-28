@@ -21,13 +21,14 @@ func newTestRedisStore(t *testing.T) (*RedisStore, *miniredis.Miniredis) {
 func TestRedisStoreCreateGetDelete(t *testing.T) {
 	store, _ := newTestRedisStore(t)
 	s := &Session{
-		ID:           "sid-1",
-		Realm:        RealmUser,
-		UserID:       7,
-		Username:     "u",
-		Email:        "u@example.com",
-		WorkspaceIDs: []int64{1, 2},
-		CreatedAt:    time.Unix(1700000000, 0).UTC(),
+		ID:                 "sid-1",
+		Realm:              RealmUser,
+		UserID:             7,
+		Username:           "u",
+		Email:              "u@example.com",
+		WorkspaceIDs:       []int64{1, 2},
+		CurrentWorkspaceID: 2,
+		CreatedAt:          time.Unix(1700000000, 0).UTC(),
 	}
 
 	if err := store.Create(context.Background(), s, time.Hour); err != nil {
@@ -43,6 +44,9 @@ func TestRedisStoreCreateGetDelete(t *testing.T) {
 	if len(got.WorkspaceIDs) != 2 || got.WorkspaceIDs[0] != 1 || got.WorkspaceIDs[1] != 2 {
 		t.Fatalf("workspace ids = %v", got.WorkspaceIDs)
 	}
+	if got.CurrentWorkspaceID != 2 {
+		t.Fatalf("current workspace = %d, want 2", got.CurrentWorkspaceID)
+	}
 	if !got.CreatedAt.Equal(s.CreatedAt) {
 		t.Fatalf("created at = %v, want %v", got.CreatedAt, s.CreatedAt)
 	}
@@ -52,6 +56,37 @@ func TestRedisStoreCreateGetDelete(t *testing.T) {
 	}
 	if _, err := store.Get(context.Background(), RealmUser, "sid-1"); !errors.Is(err, ErrSessionNotFound) {
 		t.Fatalf("get deleted err = %v, want ErrSessionNotFound", err)
+	}
+}
+
+func TestRedisStoreUpdateKeepsTTL(t *testing.T) {
+	store, mr := newTestRedisStore(t)
+	s := &Session{ID: "sid-update", Realm: RealmUser, UserID: 1, CurrentWorkspaceID: 1}
+	if err := store.Create(context.Background(), s, time.Hour); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	s.CurrentWorkspaceID = 2
+	s.Username = "updated"
+	if err := store.Update(context.Background(), s); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	got, err := store.Get(context.Background(), RealmUser, "sid-update")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if got.CurrentWorkspaceID != 2 || got.Username != "updated" {
+		t.Fatalf("session = %+v", got)
+	}
+	if ttl := mr.TTL("test:session:user:sid-update"); ttl <= 0 || ttl > time.Hour {
+		t.Fatalf("ttl = %v, want remaining hour", ttl)
+	}
+}
+
+func TestRedisStoreUpdateMissingSession(t *testing.T) {
+	store, _ := newTestRedisStore(t)
+	err := store.Update(context.Background(), &Session{ID: "missing", Realm: RealmUser})
+	if !errors.Is(err, ErrSessionNotFound) {
+		t.Fatalf("err = %v, want ErrSessionNotFound", err)
 	}
 }
 

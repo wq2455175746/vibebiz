@@ -20,3 +20,9 @@ def init_project(project_id: str, request: Request) -> dict:
 def get_project(project_id: str, request: Request) -> dict:
     workspace: Workspace = request.app.state.workspace
     return envelope({"projectId": project_id, "exists": workspace.exists(project_id)})
+
+
+@router.get("/{project_id}/stats")
+def project_stats(project_id: str, request: Request) -> dict:
+    workspace: Workspace = request.app.state.workspace
+    return envelope(workspace.stats(project_id))

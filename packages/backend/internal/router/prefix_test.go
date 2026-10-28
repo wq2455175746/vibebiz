@@ -32,6 +32,9 @@ func TestDataDoesNotServeControlOrUnprefixedRoutes(t *testing.T) {
 		"/api/v1/projects/p1/files",
 		"/dp/api/v1/projects",
 		"/dp/api/v1/admin/overview",
+		"/dp/api/v1/me/profile",
+		"/dp/api/v1/workspaces/current",
+		"/dp/api/v1/storage",
 	} {
 		rec := serve(e, http.MethodGet, target)
 		if rec.Code != http.StatusNotFound {

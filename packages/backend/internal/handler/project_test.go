@@ -74,7 +74,11 @@ func newProjectHandlerForTest(projectStore store.ProjectStore, init *fakeInitial
 }
 
 func sessionForTest(workspaceIDs ...int64) *auth.Session {
-	return &auth.Session{ID: "sid", Realm: auth.RealmUser, UserID: 7, Username: "wanghg11", WorkspaceIDs: workspaceIDs}
+	session := &auth.Session{ID: "sid", Realm: auth.RealmUser, UserID: 7, Username: "wanghg11", WorkspaceIDs: workspaceIDs}
+	if len(workspaceIDs) > 0 {
+		session.CurrentWorkspaceID = workspaceIDs[0]
+	}
+	return session
 }
 
 func routeWithSession(e *echo.Echo, method, path string, h echo.HandlerFunc, session *auth.Session) {
@@ -125,7 +129,7 @@ func TestCreateProjectUsesSessionWorkspaceAndOwner(t *testing.T) {
 	}
 }
 
-func TestCreateProjectAcceptsRequestedWorkspace(t *testing.T) {
+func TestCreateProjectUsesCurrentWorkspace(t *testing.T) {
 	metas := newFakeMetaStore()
 	h := newProjectHandlerForTest(store.NewMemoryProjectStore(), &fakeInitializer{}, metas)
 
@@ -140,19 +144,21 @@ func TestCreateProjectAcceptsRequestedWorkspace(t *testing.T) {
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
-	if project := decodeProjectEnvelope(t, rec); project.WorkspaceID != 4 {
-		t.Fatalf("workspace = %d, want 4", project.WorkspaceID)
+	if project := decodeProjectEnvelope(t, rec); project.WorkspaceID != 3 {
+		t.Fatalf("workspace = %d, want current workspace 3", project.WorkspaceID)
 	}
 }
 
-func TestCreateProjectRejectsForeignWorkspace(t *testing.T) {
+func TestCreateProjectRejectsForeignCurrentWorkspace(t *testing.T) {
 	projectStore := store.NewMemoryProjectStore()
 	h := newProjectHandlerForTest(projectStore, &fakeInitializer{}, newFakeMetaStore())
 
+	session := sessionForTest(3)
+	session.CurrentWorkspaceID = 99
 	e := echo.New()
-	routeWithSession(e, http.MethodPost, "/cp/api/v1/projects", h.Create, sessionForTest(3))
+	routeWithSession(e, http.MethodPost, "/cp/api/v1/projects", h.Create, session)
 
-	req := httptest.NewRequest(http.MethodPost, "/cp/api/v1/projects", strings.NewReader(`{"prompt":"hello","workspaceId":99}`))
+	req := httptest.NewRequest(http.MethodPost, "/cp/api/v1/projects", strings.NewReader(`{"prompt":"hello"}`))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
@@ -232,7 +238,7 @@ func TestCreateProjectMetaFailureRollsBack(t *testing.T) {
 	}
 }
 
-func TestListProjectsFiltersBySessionWorkspaces(t *testing.T) {
+func TestListProjectsUsesCurrentWorkspace(t *testing.T) {
 	projectStore := store.NewMemoryProjectStore()
 	now := time.Now()
 	projectStore.Create(&model.Project{ID: "p1", WorkspaceID: 1, CreatedAt: now.Add(-time.Minute)})
@@ -257,7 +263,7 @@ func TestListProjectsFiltersBySessionWorkspaces(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if len(env.Result.Projects) != 2 || env.Result.Projects[0].ID != "p2" {
+	if len(env.Result.Projects) != 1 || env.Result.Projects[0].ID != "p1" {
 		t.Fatalf("projects = %+v", env.Result.Projects)
 	}
 }

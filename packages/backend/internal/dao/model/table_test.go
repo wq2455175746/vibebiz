@@ -12,6 +12,7 @@ func TestTableNames(t *testing.T) {
 		{&OpsAuditLog{}, "ops_audit_log"},
 		{&Workspace{}, "workspace"},
 		{&WorkspaceUser{}, "workspace_user"},
+		{&WorkspaceFolder{}, "workspace_folder"},
 		{&UserQuota{}, "user_quota"},
 		{&ProjectTopic{}, "project_topic"},
 		{&ProjectTemplate{}, "project_template"},

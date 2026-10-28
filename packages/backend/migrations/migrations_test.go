@@ -16,8 +16,8 @@ func TestEmbeddedMigrationsHaveUpAndDown(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) < 5 {
-		t.Fatalf("migration count = %d, want at least 5", len(entries))
+	if len(entries) < 6 {
+		t.Fatalf("migration count = %d, want at least 6", len(entries))
 	}
 	for _, entry := range entries {
 		if entry.IsDir() {
@@ -107,14 +107,48 @@ func TestDefaultUsersSeed(t *testing.T) {
 	}
 }
 
+func TestSettingsMigrationAddsWorkspaceAvatarsAndQuota(t *testing.T) {
+	body, err := fs.ReadFile(FS, "00006_settings.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	for _, want := range []string{
+		"ALTER TABLE `workspace`", "avatar_url", "avatar_s3_path",
+		"storage_quota_bytes = 10737418240", "wanghg11", "vistor",
+		"DROP COLUMN `avatar_s3_path`", "-- +goose Up", "-- +goose Down",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("settings migration missing %q", want)
+		}
+	}
+}
+
+func TestWorkspaceFolderMigration(t *testing.T) {
+	body, err := fs.ReadFile(FS, "00007_workspace_folder.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	for _, want := range []string{
+		"CREATE TABLE `workspace_folder`", "workspace_id", "parent_id", "created_by",
+		"uk_workspace_folder_name", "DROP TABLE IF EXISTS `workspace_folder`",
+		"-- +goose Up", "-- +goose Down",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("folder migration missing %q", want)
+		}
+	}
+}
+
 func TestGooseCanCollectMigrations(t *testing.T) {
 	goose.SetBaseFS(FS)
 	migs, err := goose.CollectMigrations(".", 0, int64(^uint(0)>>1))
 	if err != nil {
 		t.Fatalf("collect migrations: %v", err)
 	}
-	if len(migs) != 5 {
-		t.Fatalf("collected %d migrations, want 5", len(migs))
+	if len(migs) != 7 {
+		t.Fatalf("collected %d migrations, want 7", len(migs))
 	}
 	for i, mig := range migs {
 		want := int64(i + 1)

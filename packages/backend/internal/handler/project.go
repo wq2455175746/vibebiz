@@ -38,9 +38,8 @@ func NewProjectHandler(projectStore store.ProjectStore, sandbox ProjectInitializ
 }
 
 type createProjectRequest struct {
-	Prompt      string `json:"prompt"`
-	Name        string `json:"name"`
-	WorkspaceID int64  `json:"workspaceId"`
+	Prompt string `json:"prompt"`
+	Name   string `json:"name"`
 }
 
 func (h *ProjectHandler) Create(c echo.Context) error {
@@ -58,12 +57,9 @@ func (h *ProjectHandler) Create(c echo.Context) error {
 	if !ok {
 		return response.Fail(c, http.StatusUnauthorized, 40101, "unauthorized")
 	}
-	workspaceID := req.WorkspaceID
+	workspaceID := session.CurrentWorkspaceID
 	if workspaceID == 0 {
-		if len(session.WorkspaceIDs) == 0 {
-			return response.Fail(c, http.StatusForbidden, 40302, "no workspace available")
-		}
-		workspaceID = session.WorkspaceIDs[0]
+		return response.Fail(c, http.StatusForbidden, 40302, "no workspace available")
 	}
 	if !containsInt64(session.WorkspaceIDs, workspaceID) {
 		return response.Fail(c, http.StatusForbidden, 40303, "workspace not accessible")
@@ -136,7 +132,10 @@ func (h *ProjectHandler) List(c echo.Context) error {
 	if !ok {
 		return response.Fail(c, http.StatusUnauthorized, 40101, "unauthorized")
 	}
-	return response.OK(c, map[string]any{"projects": h.Store.ListByWorkspaces(session.WorkspaceIDs)})
+	if session.CurrentWorkspaceID == 0 {
+		return response.OK(c, map[string]any{"projects": []*model.Project{}})
+	}
+	return response.OK(c, map[string]any{"projects": h.Store.ListByWorkspaces([]int64{session.CurrentWorkspaceID})})
 }
 
 func (h *ProjectHandler) Get(c echo.Context) error {

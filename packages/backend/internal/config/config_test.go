@@ -86,6 +86,8 @@ func TestLoadBackendResourceConfig(t *testing.T) {
 	t.Setenv("S3_ENDPOINT", "http://s3:9000")
 	t.Setenv("S3_ACCESS_KEY", "ak")
 	t.Setenv("S3_SECRET_KEY", "sk")
+	t.Setenv("S3_FORCE_PATH_STYLE", "")
+	t.Setenv("S3_PRESIGN_EXPIRY_MINUTES", "20")
 
 	cfg := Load("cp")
 	if cfg.MySQLHost != "db:3306" || cfg.MySQLUsername != "u" || cfg.MySQLPassword != "p" || cfg.MySQLDatabase != "vibebiz" {
@@ -99,5 +101,25 @@ func TestLoadBackendResourceConfig(t *testing.T) {
 	}
 	if cfg.S3Bucket != "bucket" || cfg.S3Region != "default" || cfg.S3Endpoint != "http://s3:9000" || cfg.S3AccessKey != "ak" || cfg.S3SecretKey != "sk" {
 		t.Fatalf("s3 config = %+v", cfg)
+	}
+	if !cfg.S3ForcePathStyle {
+		t.Fatal("force path style = false, want true for custom endpoint")
+	}
+	if cfg.S3PresignExpiryMinutes != 20 || cfg.S3PresignExpiry() != 20*time.Minute {
+		t.Fatalf("presign expiry = %d/%v", cfg.S3PresignExpiryMinutes, cfg.S3PresignExpiry())
+	}
+}
+
+func TestLoadS3Defaults(t *testing.T) {
+	t.Setenv("S3_ENDPOINT", "")
+	t.Setenv("S3_FORCE_PATH_STYLE", "")
+	t.Setenv("S3_PRESIGN_EXPIRY_MINUTES", "")
+
+	cfg := Load("cp")
+	if cfg.S3ForcePathStyle {
+		t.Fatal("force path style = true, want false without endpoint")
+	}
+	if cfg.S3PresignExpiryMinutes != 15 || cfg.S3PresignExpiry() != 15*time.Minute {
+		t.Fatalf("presign expiry = %d/%v", cfg.S3PresignExpiryMinutes, cfg.S3PresignExpiry())
 	}
 }

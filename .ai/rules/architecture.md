@@ -1,5 +1,12 @@
 # Architecture Rules · Vibebiz
 
+## 0. 变更分级
+
+- 大任务：新子系统 / 新页面组 / 鉴权与权限 / 数据库 schema / 外部服务 / 跨 package 契约 / 多 agent 并行。必须先写 `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`，确认后再写实施计划。
+- 小修改：单点 bug、文案、样式、配置值、测试修复，且不改契约 / schema / 权限 / 依赖方向。直接开发，不写设计文档。
+- 不确定按大任务处理；时间紧可以写短设计，但不能跳过。
+
+
 ## 1. 分层与依赖方向
 
 ```
@@ -71,7 +78,13 @@
 | POST | `/auth/login` | 公开，用户登录 |
 | GET | `/auth/me` | 用户 Cookie |
 | POST | `/auth/logout` | 用户 Cookie |
-| POST | `/projects` | 用户登录 + 工作区；`POST /internal/projects/{id}/init` |
+| PUT | `/auth/workspace` | 切换当前工作区 |
+| GET/PUT | `/me/profile` | 当前用户资料 / 改用户名 |
+| POST/PUT | `/me/avatar/presign`, `/me/avatar` | 用户头像预签名上传 |
+| GET/PUT | `/workspaces/current` | 当前工作区 |
+| GET/POST | `/workspaces/current/members` | 成员列表 / 邀请 |
+| GET | `/storage` | 当前工作区磁盘统计 |
+| POST | `/projects` | 当前工作区；`POST /internal/projects/{id}/init` |
 | GET | `/projects` | 用户登录 + 工作区过滤 |
 | GET | `/projects/:id` | 用户登录 + 工作区过滤；读取 CP 内存 store |
 | DELETE | `/projects/:id` | 用户登录 + 工作区过滤 |
@@ -89,6 +102,7 @@
 
 | 方法 | 路径 | sandbox 内部路径 |
 |---|---|---|
+| GET | `/projects/:id/stats`（CP → sandbox） | `GET /internal/projects/{id}/stats` |
 | GET | `/projects/:id/files` | `GET /internal/projects/{id}/files` |
 | GET | `/projects/:id/file?path=` | `GET /internal/projects/{id}/file` |
 | PUT | `/projects/:id/file` | `PUT /internal/projects/{id}/file` |

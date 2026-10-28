@@ -93,6 +93,25 @@ func TestWorkspaceIDs(t *testing.T) {
 	}
 }
 
+func TestWorkspaces(t *testing.T) {
+	db, mock := newMockDB(t)
+	repo := NewIdentityRepository(db)
+
+	query := regexp.QuoteMeta("SELECT workspace.id, workspace.name, workspace.owner_user_id, workspace_user.role FROM `workspace_user` JOIN workspace ON workspace.id = workspace_user.workspace_id WHERE (workspace_user.user_id = ? AND workspace_user.status = 1 AND workspace_user.deleted_at IS NULL) AND (workspace.status = 1 AND workspace.deleted_at IS NULL) ORDER BY workspace.id ASC")
+	mock.ExpectQuery(query).
+		WithArgs(int64(7)).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "owner_user_id", "role"}).
+			AddRow(5, "personal", 7, "owner"))
+
+	memberships, err := repo.Workspaces(context.Background(), 7)
+	if err != nil {
+		t.Fatalf("workspaces: %v", err)
+	}
+	if len(memberships) != 1 || memberships[0].ID != 5 || memberships[0].OwnerUserID != 7 || memberships[0].Role != "owner" {
+		t.Fatalf("memberships = %+v", memberships)
+	}
+}
+
 func TestTouchUserLogin(t *testing.T) {
 	db, mock := newMockDB(t)
 	repo := NewIdentityRepository(db)

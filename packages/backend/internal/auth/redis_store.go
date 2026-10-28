@@ -45,6 +45,29 @@ func (s *RedisStore) Get(ctx context.Context, realm Realm, id string) (*Session,
 	return &session, nil
 }
 
+func (s *RedisStore) Update(ctx context.Context, session *Session) error {
+	payload, err := json.Marshal(session)
+	if err != nil {
+		return fmt.Errorf("marshal session: %w", err)
+	}
+	key := s.key(session.Realm, session.ID)
+	ttl, err := s.client.TTL(ctx, key).Result()
+	if err != nil {
+		return fmt.Errorf("session ttl: %w", err)
+	}
+	if ttl == -2*time.Nanosecond {
+		return ErrSessionNotFound
+	}
+	expiration := time.Duration(0)
+	if ttl > 0 {
+		expiration = ttl
+	}
+	if err := s.client.Set(ctx, key, payload, expiration).Err(); err != nil {
+		return fmt.Errorf("update session: %w", err)
+	}
+	return nil
+}
+
 func (s *RedisStore) Delete(ctx context.Context, realm Realm, id string) error {
 	if err := s.client.Del(ctx, s.key(realm, id)).Err(); err != nil {
 		return fmt.Errorf("delete session: %w", err)

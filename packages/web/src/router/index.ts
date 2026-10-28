@@ -5,11 +5,14 @@ import EditorView from '@/views/EditorView.vue'
 import HomeView from '@/views/HomeView.vue'
 import LoginView from '@/views/LoginView.vue'
 
+import { settingsRoute } from './settingsRoutes'
+
 const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/login', name: 'login', component: LoginView, meta: { public: true } },
     { path: '/', name: 'home', component: HomeView },
+    settingsRoute,
     { path: '/editor/:id', name: 'editor', component: EditorView },
   ],
 })
@@ -31,8 +34,15 @@ router.beforeEach(async (to) => {
 })
 
 router.afterEach((to) => {
+  const name = typeof to.name === 'string' ? to.name : ''
   document.title =
-    to.name === 'editor' ? 'Vibebiz · 编辑器' : to.name === 'login' ? 'Vibebiz · 登录' : 'Vibebiz'
+    name === 'editor'
+      ? 'Vibebiz · 编辑器'
+      : name === 'login'
+        ? 'Vibebiz · 登录'
+        : name.startsWith('settings')
+          ? 'Vibebiz · 设置'
+          : 'Vibebiz'
 })
 
 export default router

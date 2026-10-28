@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"vibebiz/internal/account"
 	"vibebiz/internal/admin"
 	"vibebiz/internal/auth"
 	"vibebiz/internal/client"
@@ -20,6 +21,7 @@ import (
 	"vibebiz/internal/handler"
 	"vibebiz/internal/observability"
 	"vibebiz/internal/router"
+	storages3 "vibebiz/internal/s3"
 	"vibebiz/internal/server"
 	"vibebiz/internal/store"
 )
@@ -78,14 +80,35 @@ func main() {
 	opsCookie := auth.CookieManager{Name: "vibebiz_ops", Secure: cfg.CookieSecure, TTL: cfg.SessionOpsTTL, Now: time.Now}
 	authService := auth.NewService(identity, identity, sessions, cfg.SessionUserTTL, cfg.SessionOpsTTL)
 	authn := auth.NewAuthenticator(authService, userCookie, opsCookie)
-	authHandler := &handler.AuthHandler{Service: authService, UserCookie: userCookie, OpsCookie: opsCookie}
 	metas := auth.NewProjectMetaStore(redisClient, redisPrefix)
+
+	var avatarPresigner account.Presigner
+	if cfg.S3Bucket != "" {
+		presigner, err := storages3.NewPresigner(ctx, storages3.Config{
+			Bucket:         cfg.S3Bucket,
+			Region:         cfg.S3Region,
+			Endpoint:       cfg.S3Endpoint,
+			AccessKey:      cfg.S3AccessKey,
+			SecretKey:      cfg.S3SecretKey,
+			ForcePathStyle: cfg.S3ForcePathStyle,
+		})
+		if err != nil {
+			obs.Logger.Error("s3 presigner init failed", "error", err)
+		} else {
+			avatarPresigner = presigner
+		}
+	}
+	settingsRepo := dao.NewSettingsRepository(db)
+	accountService := account.NewService(settingsRepo, sessions, avatarPresigner, cfg.S3PresignExpiry())
+	authHandler := &handler.AuthHandler{Service: authService, Account: accountService, UserCookie: userCookie, OpsCookie: opsCookie}
+	settingsHandler := handler.NewSettingsHandler(accountService, userCookie)
 
 	projectStore := store.NewMemoryProjectStore()
 	sandbox := client.NewSandbox(cfg.SandboxBaseURL, obs)
+	storageHandler := &handler.StorageHandler{Projects: projectStore, Sandbox: sandbox, Account: accountService}
 
 	e := server.New(cfg, obs)
-	router.RegisterControl(e, admin.NewMemoryRepository(), projectStore, sandbox, obs, authn, authHandler, metas)
+	router.RegisterControl(e, admin.NewMemoryRepository(), projectStore, sandbox, obs, authn, authHandler, settingsHandler, storageHandler, metas)
 
 	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
 	go func() {

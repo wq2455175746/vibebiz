@@ -8,18 +8,20 @@ import (
 	"fmt"
 	"time"
 
+	"vibebiz/internal/dao"
 	"vibebiz/internal/dao/model"
 )
 
 var (
-	ErrInvalidCredentials = errors.New("invalid credentials")
-	ErrAccountDisabled    = errors.New("account disabled")
-	ErrNoWorkspace        = errors.New("no workspace available")
+	ErrInvalidCredentials     = errors.New("invalid credentials")
+	ErrAccountDisabled        = errors.New("account disabled")
+	ErrNoWorkspace            = errors.New("no workspace available")
+	ErrWorkspaceNotAccessible = errors.New("workspace not accessible")
 )
 
 type UserFinder interface {
 	FindUserByIdentifier(ctx context.Context, identifier string) (*model.User, error)
-	WorkspaceIDs(ctx context.Context, userID int64) ([]int64, error)
+	Workspaces(ctx context.Context, userID int64) ([]dao.WorkspaceMembership, error)
 	TouchUserLogin(ctx context.Context, id int64, ip string, at time.Time) error
 }
 
@@ -60,12 +62,16 @@ func (s *Service) LoginUser(ctx context.Context, identifier, password, ip string
 		return nil, ErrAccountDisabled
 	}
 
-	workspaceIDs, err := s.Users.WorkspaceIDs(ctx, user.ID)
+	memberships, err := s.Users.Workspaces(ctx, user.ID)
 	if err != nil {
 		return nil, fmt.Errorf("load workspaces: %w", err)
 	}
-	if len(workspaceIDs) == 0 {
+	if len(memberships) == 0 {
 		return nil, ErrNoWorkspace
+	}
+	workspaceIDs := make([]int64, 0, len(memberships))
+	for _, membership := range memberships {
+		workspaceIDs = append(workspaceIDs, membership.ID)
 	}
 
 	sid, err := newSessionID()
@@ -75,13 +81,14 @@ func (s *Service) LoginUser(ctx context.Context, identifier, password, ip string
 
 	now := s.now()
 	session := &Session{
-		ID:           sid,
-		Realm:        RealmUser,
-		UserID:       user.ID,
-		Username:     user.Username,
-		Email:        user.Email,
-		WorkspaceIDs: workspaceIDs,
-		CreatedAt:    now,
+		ID:                 sid,
+		Realm:              RealmUser,
+		UserID:             user.ID,
+		Username:           user.Username,
+		Email:              user.Email,
+		WorkspaceIDs:       workspaceIDs,
+		CurrentWorkspaceID: defaultWorkspaceID(memberships, user.ID),
+		CreatedAt:          now,
 	}
 	if err := s.Sessions.Create(ctx, session, s.userTTL()); err != nil {
 		return nil, err
@@ -124,6 +131,24 @@ func (s *Service) LoginOps(ctx context.Context, identifier, password, ip string)
 	return session, nil
 }
 
+func (s *Service) SwitchWorkspace(ctx context.Context, sid string, workspaceID int64) (*Session, error) {
+	if workspaceID <= 0 {
+		return nil, ErrWorkspaceNotAccessible
+	}
+	session, err := s.Current(ctx, RealmUser, sid)
+	if err != nil {
+		return nil, err
+	}
+	if !containsInt64(session.WorkspaceIDs, workspaceID) {
+		return nil, ErrWorkspaceNotAccessible
+	}
+	session.CurrentWorkspaceID = workspaceID
+	if err := s.Sessions.Update(ctx, session); err != nil {
+		return nil, fmt.Errorf("update session: %w", err)
+	}
+	return session, nil
+}
+
 func (s *Service) Current(ctx context.Context, realm Realm, sid string) (*Session, error) {
 	if sid == "" {
 		return nil, ErrSessionNotFound
@@ -157,6 +182,27 @@ func (s *Service) opsTTL() time.Duration {
 		return s.OpsTTL
 	}
 	return 12 * time.Hour
+}
+
+func defaultWorkspaceID(memberships []dao.WorkspaceMembership, userID int64) int64 {
+	for _, membership := range memberships {
+		if membership.OwnerUserID == userID {
+			return membership.ID
+		}
+	}
+	if len(memberships) > 0 {
+		return memberships[0].ID
+	}
+	return 0
+}
+
+func containsInt64(ids []int64, target int64) bool {
+	for _, id := range ids {
+		if id == target {
+			return true
+		}
+	}
+	return false
 }
 
 func newSessionID() (string, error) {

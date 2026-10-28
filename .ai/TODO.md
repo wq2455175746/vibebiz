@@ -46,6 +46,9 @@
 
 ## M3 · 产品化
 
+- [x] 设置页：个人信息、磁盘空间、工作区设置、成员
+- [x] 工作区切换、头像 S3 预签名、10GB 默认配额
+
 - [x] 用户登录与会话（Redis Session + HttpOnly Cookie）
 - [x] DAO 基础层：20 张表 GORM model + 泛型 Repository + MySQL 连接 + sqlmock 测试
 - [x] goose 版本化 SQL 迁移：4 个迁移文件 + `cmd/migrate` + `make db-*` 命令
