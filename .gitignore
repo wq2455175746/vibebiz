@@ -5,6 +5,7 @@
 
 data/
 tmp/
+.superpowers/
 
 packages/web/node_modules/
 packages/web/dist/
