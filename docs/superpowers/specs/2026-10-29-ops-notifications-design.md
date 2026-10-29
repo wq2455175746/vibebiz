@@ -151,19 +151,20 @@ Key 前缀沿用 CP 的 `vibebiz`：
 
 删除：`DEL item`，`ZREM index id`。
 
-读取：
+读取（每次请求都做读时对账）：
 
-1. `ZREVRANGE index 0 -1` 得到 ID 列表。
-2. `MGET item:{id}`。
-3. 跳过 nil（已过期），并把 nil ID 从 ZSET 惰性 `ZREM`。
-4. 按 ZSET 倒序返回。
-5. 若索引 key 不存在，则从 MySQL 查询 `status=published AND expire_at > now`，回填 Redis 后再返回。该回填覆盖 Redis 被清空/首次部署场景。
+1. 查询 MySQL `status=published AND expire_at > now`，得到事实源列表。
+2. `ZREVRANGE index 0 -1` 得到 ID 列表，再 `MGET item:{id}`；跳过 nil（已过期）与非法 JSON，并把对应 ID 从 ZSET 惰性 `ZREM`。
+3. 若索引 key 不存在（`ErrIndexMissing`），用第 1 步的 DB 结果 `Rebuild` 缓存。该回填覆盖 Redis 被清空/首次部署场景。
+4. 若缓存存在，但其 ID 集合、`publishedAt` 或 `expireAt` 与 DB 结果不一致，用 DB 结果 `Rebuild` 缓存。这样能清除取消发布/删除时 Redis 清理失败留下的残留 item/index。
+5. 重建成功后直接返回由 DB 行派生的列表，不依赖第二次缓存读取；重建失败返回 `503`。
+6. 缓存读取出现非 `ErrIndexMissing` 错误时返回 `503`。
 
 失败处理：
 
 - 发布时 Redis 写入失败：不更新 DB，返回 `503`。
-- Redis 已写入但 DB 更新失败：删除刚写入的 Redis item 与 index 成员，返回 `500`。
-- 取消发布/删除时 Redis 失败：DB 状态已更新，记录错误日志并返回 `503`；下次读取仍会因 DB 回填逻辑纠正索引。客户端可重试。
+- Redis 已写入但 DB 更新失败：删除刚写入的 Redis item 与 index 成员；清理失败时记录 `notification_id`、`action` 与错误，返回 `500`。
+- 取消发布/删除时始终删除 Redis item 与 index 成员（不区分此前状态），不依赖“是否已发布”判断。Redis 失败时记录 `notification_id`、`action` 与错误并返回 `503`；DB 状态已更新，下一次 web 读取会通过读时对账清除残留。客户端可重试。
 
 ## 7. 后端接口
 
@@ -318,12 +319,12 @@ proxy_read_timeout 3600s;
 
 ### 11.1 后端
 
-- DAO：sqlmock 覆盖创建、更新、列表过滤、软删除、查询有效已发布。
-- Cache：miniredis 覆盖写入后 TTL、ZSET 顺序、过期后读取过滤、取消发布删除、索引缺失回填。
-- Service：状态机（草稿发布、重复发布、已发布编辑、过期发布、取消发布、删除已发布）、校验边界（30 天、链接协议、类型）。
-- Handler：httptest 覆盖 ops 权限、web 权限、参数错误、状态冲突、Redis 503。
-- Hub：httptest + gorilla dialer 覆盖连接、广播、断开；慢客户端丢弃逻辑用单元测试。
-- Router：CP 注册通知路由，DP 不注册。
+- DAO：sqlmock 覆盖创建、更新、列表过滤、软删除、查询有效已发布；`Update` / `UpdateStatus` 在 `RowsAffected=0` 时通过 `Get` 区分“行不存在”与“无字段变化”。
+- Cache：miniredis 覆盖写入后 TTL、ZSET 顺序、过期后读取过滤（同时包含一条存活与一条过期成员）、非法 JSON 清理、已过期 item 不写入、取消发布删除、索引缺失回填。
+- Service：状态机（草稿发布、重复发布、已发布编辑、过期发布、取消发布、删除已发布）、校验边界（30 天、标题/内容/版本长度、链接协议与 host、类型、inbox 清空版本）；读时对账覆盖“缓存有残留但 DB 没有”“DB 有但缓存缺失”“缓存读取失败”三类场景；取消发布/删除的缓存清理失败返回 503。
+- Handler：httptest 覆盖 ops 权限、web 权限、参数错误、状态冲突、Redis 503；WebSocket `CheckOrigin` 覆盖配置来源、同 Host、空 Origin 与拒绝场景，未登录升级返回 401，升级失败只记录日志不二次写响应。
+- Hub：httptest + gorilla dialer 覆盖连接、广播、断开；慢客户端发送缓冲占满后被移除用单元测试。
+- Router：CP 注册通知路由，DP 不注册；管理员 POST 通知缺少请求体返回 400，WS 路由未登录返回 401。
 
 ### 11.2 web
 

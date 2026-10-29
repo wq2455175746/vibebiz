@@ -3,6 +3,7 @@ package notification
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/url"
 	"strings"
 	"time"
@@ -127,10 +128,6 @@ func (s *Service) Update(ctx context.Context, id int64, input CreateInput) (View
 		return View{}, err
 	}
 	item.ID = current.ID
-	item.Status = current.Status
-	item.CreatedBy = current.CreatedBy
-	item.CreatedByName = current.CreatedByName
-	item.CreatedAt = current.CreatedAt
 	if err := s.Repo.Update(ctx, &item); err != nil {
 		return View{}, err
 	}
@@ -163,11 +160,15 @@ func (s *Service) Publish(ctx context.Context, id int64) (View, error) {
 		return View{}, ErrCacheUnavailable
 	}
 	if err := s.Repo.UpdateStatus(ctx, id, string(model.NotificationPublished), &publishedAt); err != nil {
-		_ = s.Cache.Remove(ctx, id)
+		_ = s.removeCache(ctx, id, "publish rollback")
 		return View{}, err
 	}
 	s.broadcast("published", id)
-	return s.view(*item), nil
+	stored, err := s.Repo.Get(ctx, id)
+	if err != nil {
+		return s.view(*item), nil
+	}
+	return s.view(*stored), nil
 }
 
 func (s *Service) Unpublish(ctx context.Context, id int64) (View, error) {
@@ -181,51 +182,95 @@ func (s *Service) Unpublish(ctx context.Context, id int64) (View, error) {
 	if err := s.Repo.UpdateStatus(ctx, id, string(model.NotificationUnpublished), nil); err != nil {
 		return View{}, err
 	}
-	if err := s.Cache.Remove(ctx, id); err != nil {
+	if err := s.removeCache(ctx, id, "unpublish"); err != nil {
 		return View{}, ErrCacheUnavailable
 	}
 	s.broadcast("unpublished", id)
-	item.Status = model.NotificationUnpublished
-	return s.view(*item), nil
+	stored, err := s.Repo.Get(ctx, id)
+	if err != nil {
+		item.Status = model.NotificationUnpublished
+		return s.view(*item), nil
+	}
+	return s.view(*stored), nil
 }
 
 func (s *Service) Delete(ctx context.Context, id int64) error {
-	item, err := s.Repo.Get(ctx, id)
-	if err != nil {
+	if _, err := s.Repo.Get(ctx, id); err != nil {
 		return err
 	}
 	if err := s.Repo.Delete(ctx, id); err != nil {
 		return err
 	}
-	if item.Status == model.NotificationPublished {
-		if err := s.Cache.Remove(ctx, id); err != nil {
-			return ErrCacheUnavailable
-		}
+	if err := s.removeCache(ctx, id, "delete"); err != nil {
+		return ErrCacheUnavailable
 	}
 	s.broadcast("deleted", id)
 	return nil
 }
 
 func (s *Service) Published(ctx context.Context) ([]Published, error) {
-	items, err := s.Cache.List(ctx)
-	if err == nil {
-		return items, nil
-	}
-	if !errors.Is(err, ErrIndexMissing) {
-		return nil, ErrCacheUnavailable
-	}
-	now := s.Now()
-	stored, err := s.Repo.Published(ctx, now)
+	stored, err := s.Repo.Published(ctx, s.Now())
 	if err != nil {
 		return nil, err
 	}
-	if len(stored) == 0 {
-		return []Published{}, nil
+	dbItems := make([]Published, 0, len(stored))
+	for _, item := range stored {
+		dbItems = append(dbItems, publishedFromModel(item))
 	}
-	if err := s.Cache.Rebuild(ctx, stored); err != nil {
-		return nil, ErrCacheUnavailable
+	cached, cacheErr := s.Cache.List(ctx)
+	if cacheErr != nil {
+		if !errors.Is(cacheErr, ErrIndexMissing) {
+			return nil, ErrCacheUnavailable
+		}
+		if len(dbItems) == 0 {
+			return []Published{}, nil
+		}
+		if err := s.Cache.Rebuild(ctx, stored); err != nil {
+			return nil, ErrCacheUnavailable
+		}
+		return dbItems, nil
 	}
-	return s.Cache.List(ctx)
+	if !samePublished(cached, dbItems) {
+		if err := s.Cache.Rebuild(ctx, stored); err != nil {
+			return nil, ErrCacheUnavailable
+		}
+	}
+	return dbItems, nil
+}
+
+func samePublished(cached, db []Published) bool {
+	if len(cached) != len(db) {
+		return false
+	}
+	byID := make(map[int64]Published, len(db))
+	for _, item := range db {
+		byID[item.ID] = item
+	}
+	for _, item := range cached {
+		expected, ok := byID[item.ID]
+		if !ok {
+			return false
+		}
+		if expected.PublishedAt.UnixMilli() != item.PublishedAt.UnixMilli() {
+			return false
+		}
+		if expected.ExpireAt.UnixMilli() != item.ExpireAt.UnixMilli() {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *Service) removeCache(ctx context.Context, id int64, action string) error {
+	if err := s.Cache.Remove(ctx, id); err != nil {
+		slog.Default().Error("notification cache remove failed",
+			"notification_id", id,
+			"action", action,
+			"error", err,
+		)
+		return err
+	}
+	return nil
 }
 
 func (s *Service) build(input CreateInput) (model.OpsNotification, error) {
@@ -249,8 +294,11 @@ func (s *Service) build(input CreateInput) (model.OpsNotification, error) {
 		return model.OpsNotification{}, ErrInvalid
 	}
 	if link != "" {
+		if len(link) > 1024 || (!strings.HasPrefix(link, "http://") && !strings.HasPrefix(link, "https://")) {
+			return model.OpsNotification{}, ErrInvalid
+		}
 		parsed, err := url.Parse(link)
-		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || len(link) > 1024 {
+		if err != nil || parsed.Host == "" || parsed.Opaque != "" {
 			return model.OpsNotification{}, ErrInvalid
 		}
 	}

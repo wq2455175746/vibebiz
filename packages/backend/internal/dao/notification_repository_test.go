@@ -91,9 +91,25 @@ func TestNotificationRepositoryUpdateStatus(t *testing.T) {
 		WithArgs(string(model.NotificationDraft), sqlmock.AnyArg(), int64(99)).
 		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectCommit()
+	mock.ExpectQuery("SELECT \\* FROM `ops_notification` WHERE `ops_notification`.`id` = \\? AND `ops_notification`.`deleted_at` IS NULL ORDER BY `ops_notification`.`id` LIMIT \\?").
+		WithArgs(int64(99), 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}))
 
 	if err := repo.UpdateStatus(context.Background(), 99, string(model.NotificationDraft), nil); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("err = %v, want ErrNotFound", err)
+	}
+
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE `ops_notification` SET `status`=\\?,`updated_at`=\\? WHERE id = \\? AND `ops_notification`.`deleted_at` IS NULL").
+		WithArgs(string(model.NotificationDraft), sqlmock.AnyArg(), int64(3)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectCommit()
+	mock.ExpectQuery("SELECT \\* FROM `ops_notification` WHERE `ops_notification`.`id` = \\? AND `ops_notification`.`deleted_at` IS NULL ORDER BY `ops_notification`.`id` LIMIT \\?").
+		WithArgs(int64(3), 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "status"}).AddRow(3, "draft"))
+
+	if err := repo.UpdateStatus(context.Background(), 3, string(model.NotificationDraft), nil); err != nil {
+		t.Fatalf("no-op update status: %v", err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
@@ -153,16 +169,22 @@ func TestNotificationRepositoryCreateUpdateDelete(t *testing.T) {
 
 	mock.ExpectBegin()
 	mock.ExpectExec("UPDATE `ops_notification` SET .*WHERE id = \\? AND `ops_notification`.`deleted_at` IS NULL").
-		WillReturnResult(sqlmock.NewResult(0, 1))
+		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectCommit()
+	mock.ExpectQuery("SELECT \\* FROM `ops_notification` WHERE `ops_notification`.`id` = \\? AND `ops_notification`.`deleted_at` IS NULL ORDER BY `ops_notification`.`id` LIMIT \\?").
+		WithArgs(int64(6), 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(6))
 	if err := repo.Update(context.Background(), &model.OpsNotification{Base: model.Base{ID: 6}}); err != nil {
-		t.Fatalf("update: %v", err)
+		t.Fatalf("no-op update: %v", err)
 	}
 
 	mock.ExpectBegin()
 	mock.ExpectExec("UPDATE `ops_notification` SET .*WHERE id = \\? AND `ops_notification`.`deleted_at` IS NULL").
 		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectCommit()
+	mock.ExpectQuery("SELECT \\* FROM `ops_notification` WHERE `ops_notification`.`id` = \\? AND `ops_notification`.`deleted_at` IS NULL ORDER BY `ops_notification`.`id` LIMIT \\?").
+		WithArgs(int64(7), 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}))
 	if err := repo.Update(context.Background(), &model.OpsNotification{Base: model.Base{ID: 7}}); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("update missing err = %v, want ErrNotFound", err)
 	}

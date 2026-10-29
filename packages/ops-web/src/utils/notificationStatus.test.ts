@@ -23,7 +23,7 @@ describe('notificationStatusLabel', () => {
 describe('notificationTypeLabel', () => {
   it('labels version release and inbox', () => {
     expect(notificationTypeLabel('version_release')).toBe('版本发布')
-    expect(notificationTypeLabel('inbox')).toBe('站内信')
+    expect(notificationTypeLabel('inbox')).toBe('收集箱')
   })
 })
 

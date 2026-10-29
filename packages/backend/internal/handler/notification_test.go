@@ -153,6 +153,7 @@ func notificationRouter(h *NotificationHandler, session *auth.Session) *echo.Ech
 	ops.POST("/notifications/:id/unpublish", h.AdminUnpublish)
 	ops.DELETE("/notifications/:id", h.AdminDelete)
 	e.GET("/notifications", h.WebList, sessionMiddleware(session), requireSession)
+	e.GET("/notifications/ws", h.Socket, sessionMiddleware(session), requireSession)
 	return e
 }
 
@@ -265,11 +266,67 @@ func TestNotificationWebListUnauthorizedEnvelope(t *testing.T) {
 	}
 }
 
+func TestNotificationHandlerCheckOrigin(t *testing.T) {
+	h := NewNotificationHandler(nil, nil, []string{"https://ops.example.com/"})
+	cases := []struct {
+		name   string
+		host   string
+		origin string
+		want   bool
+	}{
+		{name: "configured origin", host: "api.example.com", origin: "https://ops.example.com", want: true},
+		{name: "same http host", host: "api.example.com", origin: "http://api.example.com", want: true},
+		{name: "same https host", host: "api.example.com", origin: "https://api.example.com", want: true},
+		{name: "empty origin", host: "api.example.com", want: true},
+		{name: "disallowed origin", host: "api.example.com", origin: "https://evil.example.com", want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/notifications/ws", nil)
+			req.Host = tc.host
+			if tc.origin != "" {
+				req.Header.Set("Origin", tc.origin)
+			}
+			if got := h.Upgrader.CheckOrigin(req); got != tc.want {
+				t.Fatalf("CheckOrigin() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestNotificationSocketUnauthorized(t *testing.T) {
+	_, _, h, _ := notificationFixture(t)
+	e := notificationRouter(h, nil)
+
+	rec := notificationRequestRecorder(e, http.MethodGet, "/notifications/ws", "")
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestNotificationSocketUpgradeErrorDoesNotWriteEnvelope(t *testing.T) {
+	_, _, h, _ := notificationFixture(t)
+	e := notificationRouter(h, opsSession())
+
+	rec := notificationRequestRecorder(e, http.MethodGet, "/notifications/ws", "")
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), `"code"`) {
+		t.Fatalf("unexpected second response body = %s", rec.Body.String())
+	}
+}
+
 func TestNotificationWebListReturnsPublished(t *testing.T) {
-	_, cache, h, _ := notificationFixture(t)
+	repo, cache, h, _ := notificationFixture(t)
+	item := repo.add(model.OpsNotification{
+		Title: "Release", Content: "body", Type: model.NotificationInbox,
+		Status: model.NotificationPublished, PublishedAt: &notificationTestNow,
+		ExpireAt: notificationTestNow.Add(time.Hour),
+	})
 	cache.items = []notification.Published{{
-		ID: 3, Title: "Release", Content: "body", Type: model.NotificationInbox,
-		PublishedAt: notificationTestNow, ExpireAt: notificationTestNow.Add(time.Hour),
+		ID: item.ID, Title: item.Title, Content: item.Content, Type: item.Type,
+		PublishedAt: notificationTestNow, ExpireAt: item.ExpireAt,
 	}}
 	e := notificationRouter(h, opsSession())
 
@@ -284,7 +341,7 @@ func TestNotificationWebListReturnsPublished(t *testing.T) {
 	if err := json.Unmarshal(env.Result, &result); err != nil {
 		t.Fatalf("decode result: %v", err)
 	}
-	if len(result.Notifications) != 1 || result.Notifications[0].ID != 3 {
+	if len(result.Notifications) != 1 || result.Notifications[0].ID != item.ID {
 		t.Fatalf("unexpected notifications: %+v", result.Notifications)
 	}
 }

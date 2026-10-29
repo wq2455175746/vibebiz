@@ -68,7 +68,9 @@ func (r *NotificationRepository) Update(ctx context.Context, item *model.OpsNoti
 		return fmt.Errorf("update notification: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {
-		return ErrNotFound
+		if _, err := r.Get(ctx, item.ID); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -83,7 +85,9 @@ func (r *NotificationRepository) UpdateStatus(ctx context.Context, id int64, sta
 		return fmt.Errorf("update notification status: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {
-		return ErrNotFound
+		if _, err := r.Get(ctx, id); err != nil {
+			return err
+		}
 	}
 	return nil
 }

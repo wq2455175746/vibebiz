@@ -44,15 +44,22 @@ func (c *Cache) itemKey(id int64) string {
 	return fmt.Sprintf("%s%d", c.prefix, id)
 }
 
-func (c *Cache) Put(ctx context.Context, item model.OpsNotification) error {
+func publishedFromModel(item model.OpsNotification) Published {
 	publishedAt := item.CreatedAt
 	if item.PublishedAt != nil {
 		publishedAt = *item.PublishedAt
 	}
-	payload := Published{
+	return Published{
 		ID: item.ID, Title: item.Title, Content: item.Content, Type: item.Type,
 		Version: item.Version, Link: item.Link, PublishedAt: publishedAt, ExpireAt: item.ExpireAt,
 	}
+}
+
+func (c *Cache) Put(ctx context.Context, item model.OpsNotification) error {
+	if !item.ExpireAt.After(time.Now()) {
+		return nil
+	}
+	payload := publishedFromModel(item)
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("marshal notification: %w", err)
@@ -60,7 +67,7 @@ func (c *Cache) Put(ctx context.Context, item model.OpsNotification) error {
 	pipe := c.client.TxPipeline()
 	pipe.Set(ctx, c.itemKey(item.ID), data, 0)
 	pipe.ExpireAt(ctx, c.itemKey(item.ID), item.ExpireAt)
-	pipe.ZAdd(ctx, c.index, redis.Z{Score: float64(publishedAt.UnixMilli()), Member: item.ID})
+	pipe.ZAdd(ctx, c.index, redis.Z{Score: float64(payload.PublishedAt.UnixMilli()), Member: item.ID})
 	if _, err := pipe.Exec(ctx); err != nil {
 		return fmt.Errorf("cache notification: %w", err)
 	}
@@ -120,6 +127,7 @@ func (c *Cache) List(ctx context.Context) ([]Published, error) {
 		}
 		var item Published
 		if err := json.Unmarshal([]byte(raw), &item); err != nil {
+			stale = append(stale, members[i])
 			continue
 		}
 		out = append(out, item)

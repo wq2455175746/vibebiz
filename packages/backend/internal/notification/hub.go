@@ -58,7 +58,9 @@ func (h *Hub) Broadcast(event Event) {
 		default:
 			delete(h.clients, client)
 			close(client.send)
-			_ = client.conn.Close()
+			if client.conn != nil {
+				_ = client.conn.Close()
+			}
 		}
 	}
 }
@@ -82,7 +84,9 @@ func (h *Hub) Close() {
 	for client := range h.clients {
 		delete(h.clients, client)
 		close(client.send)
-		_ = client.conn.Close()
+		if client.conn != nil {
+			_ = client.conn.Close()
+		}
 	}
 }
 

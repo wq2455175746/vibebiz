@@ -1,7 +1,5 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue'
-import DOMPurify from 'dompurify'
-import { marked } from 'marked'
 import Dialog from 'primevue/dialog'
 import Tab from 'primevue/tab'
 import TabList from 'primevue/tablist'
@@ -11,6 +9,7 @@ import Tabs from 'primevue/tabs'
 
 import { useNotificationsStore } from '@/stores/notifications'
 import type { NotificationItem } from '@/types'
+import { renderMarkdown } from '@/utils/markdown'
 import { groupNotifications } from '@/utils/notificationGroups'
 import { safeNotificationLink } from '@/utils/notificationLink'
 import { formatDateTime } from '@/utils/storage'
@@ -26,14 +25,10 @@ watch(
   () => props.visible,
   (visible) => {
     if (visible) {
-      void store.load()
+      void store.load(store.items.length > 0)
     }
   },
 )
-
-function renderMarkdown(content: string): string {
-  return DOMPurify.sanitize(marked.parse(content, { async: false }) as string)
-}
 
 function linkFor(item: NotificationItem): string {
   return safeNotificationLink(item.link)

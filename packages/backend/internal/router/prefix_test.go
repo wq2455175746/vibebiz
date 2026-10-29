@@ -45,6 +45,20 @@ func TestDataDoesNotServeControlOrUnprefixedRoutes(t *testing.T) {
 	}
 }
 
+func TestControlNotificationAdminPostAndSocketRoute(t *testing.T) {
+	e, _, authState := newCP(t, store.NewMemoryProjectStore())
+
+	rec := serveWithAuth(e, http.MethodPost, "/cp/api/v1/admin/notifications", authState.opsCookie)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("admin notification post without body status = %d, want 400", rec.Code)
+	}
+
+	rec = serveWithAuth(e, http.MethodGet, "/cp/api/v1/notifications/ws", nil)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("notification ws without session status = %d, want 401", rec.Code)
+	}
+}
+
 func TestControlServesNotificationRoutes(t *testing.T) {
 	e, _, authState := newCP(t, store.NewMemoryProjectStore())
 

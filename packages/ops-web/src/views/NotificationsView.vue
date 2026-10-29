@@ -63,10 +63,10 @@ const columns: TableColumn[] = [
 
 const typeOptions = [
   { label: '版本发布', value: 'version_release' as NotificationType },
-  { label: '站内信', value: 'inbox' as NotificationType },
+  { label: '收集箱', value: 'inbox' as NotificationType },
 ]
 
-const dateBounds = notificationDateBounds()
+const dateBounds = ref(notificationDateBounds())
 const dialogVisible = ref(false)
 const editingId = ref<number | null>(null)
 const saving = ref(false)
@@ -100,6 +100,10 @@ function defaultExpireDate(): Date {
   return endOfDay(date)
 }
 
+function refreshDateBounds(): void {
+  dateBounds.value = notificationDateBounds()
+}
+
 function resetForm(): void {
   form.value = { title: '', content: '', type: 'version_release', version: '', link: '' }
   expireDate.value = defaultExpireDate()
@@ -118,6 +122,7 @@ function closeDialog(): void {
 function openCreate(): void {
   editingId.value = null
   clearFeedback()
+  refreshDateBounds()
   resetForm()
   dialogVisible.value = true
 }
@@ -125,6 +130,7 @@ function openCreate(): void {
 function openEdit(item: OpsNotification): void {
   editingId.value = item.id
   clearFeedback()
+  refreshDateBounds()
   form.value = {
     title: item.title,
     content: item.content,
@@ -229,7 +235,7 @@ function asNotification(row: TableRow): OpsNotification {
     <header class="page-head">
       <div>
         <h1>消息通知</h1>
-        <p class="page-desc">管理面向用户端的版本发布与站内信通知。</p>
+        <p class="page-desc">管理面向用户端的版本发布与收集箱通知。</p>
       </div>
       <div class="page-side">
         <Button label="刷新" icon="pi pi-refresh" severity="secondary" outlined @click="load" />
@@ -295,7 +301,7 @@ function asNotification(row: TableRow): OpsNotification {
       <div class="form">
         <label class="field">
           <span>标题</span>
-          <InputText v-model="form.title" maxlength="120" />
+          <InputText v-model="form.title" maxlength="200" />
         </label>
 
         <label class="field">

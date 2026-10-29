@@ -9,7 +9,7 @@ const statusLabels: Record<NotificationStatus, string> = {
 
 const typeLabels: Record<NotificationType, string> = {
   version_release: '版本发布',
-  inbox: '站内信',
+  inbox: '收集箱',
 }
 
 export function notificationStatusLabel(status: NotificationStatus): string {

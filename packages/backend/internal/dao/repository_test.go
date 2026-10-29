@@ -65,7 +65,7 @@ func TestRepositoryCountAndDelete(t *testing.T) {
 func TestNewRepositories(t *testing.T) {
 	db, _ := newMockDB(t)
 	repos := NewRepositories(db)
-	if repos.Users == nil || repos.Projects == nil || repos.ChatMessages == nil || repos.ProjectRAGs == nil {
+	if repos.Users == nil || repos.Projects == nil || repos.ChatMessages == nil || repos.ProjectRAGs == nil || repos.OpsNotifications == nil {
 		t.Fatal("repositories not initialized")
 	}
 }

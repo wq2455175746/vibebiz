@@ -3,6 +3,7 @@ package notification
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -76,6 +77,9 @@ func (r *fakeRepo) UpdateStatus(ctx context.Context, id int64, status string, pu
 	}
 	item.Status = model.NotificationStatus(status)
 	item.PublishedAt = publishedAt
+	if publishedAt != nil {
+		item.UpdatedAt = *publishedAt
+	}
 	r.items[id] = item
 	return nil
 }
@@ -206,6 +210,56 @@ func TestServiceCreateAccepts30DayBoundary(t *testing.T) {
 	}
 }
 
+func TestServiceCreateValidation(t *testing.T) {
+	valid := func() CreateInput {
+		return CreateInput{
+			Title: "发布", Content: "内容", Type: model.NotificationVersionRelease,
+			Version: "v1.0.0", ExpireAt: testNow.Add(time.Hour),
+		}
+	}
+	cases := []struct {
+		name        string
+		mutate      func(*CreateInput)
+		wantInvalid bool
+		wantVersion string
+	}{
+		{name: "valid version release", mutate: func(*CreateInput) {}, wantVersion: "v1.0.0"},
+		{name: "empty title", mutate: func(in *CreateInput) { in.Title = "   " }, wantInvalid: true},
+		{name: "overlong title", mutate: func(in *CreateInput) { in.Title = strings.Repeat("a", 201) }, wantInvalid: true},
+		{name: "empty content", mutate: func(in *CreateInput) { in.Content = "  " }, wantInvalid: true},
+		{name: "too large content", mutate: func(in *CreateInput) { in.Content = strings.Repeat("a", 512*1024+1) }, wantInvalid: true},
+		{name: "invalid type", mutate: func(in *CreateInput) { in.Type = "news" }, wantInvalid: true},
+		{name: "version too long", mutate: func(in *CreateInput) { in.Version = strings.Repeat("v", 65) }, wantInvalid: true},
+		{name: "inbox clears version", mutate: func(in *CreateInput) { in.Type = model.NotificationInbox }, wantVersion: ""},
+		{name: "valid http link", mutate: func(in *CreateInput) { in.Link = "http://example.com/release" }, wantVersion: "v1.0.0"},
+		{name: "valid https link", mutate: func(in *CreateInput) { in.Link = "https://example.com/release" }, wantVersion: "v1.0.0"},
+		{name: "javascript link", mutate: func(in *CreateInput) { in.Link = "javascript:alert(1)" }, wantInvalid: true},
+		{name: "opaque http link", mutate: func(in *CreateInput) { in.Link = "http:foo" }, wantInvalid: true},
+		{name: "empty host link", mutate: func(in *CreateInput) { in.Link = "http://" }, wantInvalid: true},
+		{name: "protocol relative link", mutate: func(in *CreateInput) { in.Link = "//example.com" }, wantInvalid: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			input := valid()
+			tc.mutate(&input)
+			svc := newTestServiceWith(newFakeRepo(), &fakeCache{}, &fakeHub{})
+			view, err := svc.Create(context.Background(), input, Creator{ID: 1, Name: "admin"})
+			if tc.wantInvalid {
+				if !errors.Is(err, ErrInvalid) {
+					t.Fatalf("err = %v, want ErrInvalid", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("err = %v, want nil", err)
+			}
+			if view.Version != tc.wantVersion {
+				t.Fatalf("version = %q, want %q", view.Version, tc.wantVersion)
+			}
+		})
+	}
+}
+
 func TestServicePublishWritesCacheAndBroadcasts(t *testing.T) {
 	repo := newFakeRepo()
 	cache := &fakeCache{}
@@ -218,6 +272,9 @@ func TestServicePublishWritesCacheAndBroadcasts(t *testing.T) {
 	}
 	if len(cache.puts) != 1 || hub.last.Action != "published" {
 		t.Fatalf("puts = %d, event = %+v", len(cache.puts), hub.last)
+	}
+	if !view.UpdatedAt.Equal(testNow) {
+		t.Fatalf("updatedAt = %v, want fresh %v", view.UpdatedAt, testNow)
 	}
 }
 
@@ -287,6 +344,38 @@ func TestServiceUnpublishRemovesCache(t *testing.T) {
 	}
 }
 
+func TestServiceUnpublishRemoveFailureReturnsUnavailable(t *testing.T) {
+	repo := newFakeRepo()
+	cache := &fakeCache{removeErr: errors.New("redis down")}
+	hub := &fakeHub{}
+	svc := newTestServiceWith(repo, cache, hub)
+	published := draftNotification(svc.Now())
+	published.Status = model.NotificationPublished
+	item := repo.add(published)
+
+	if _, err := svc.Unpublish(context.Background(), item.ID); !errors.Is(err, ErrCacheUnavailable) {
+		t.Fatalf("err = %v, want ErrCacheUnavailable", err)
+	}
+	if len(hub.events) != 0 {
+		t.Fatalf("events = %v, want none", hub.events)
+	}
+}
+
+func TestServiceDeleteDraftRemovesCache(t *testing.T) {
+	repo := newFakeRepo()
+	cache := &fakeCache{}
+	hub := &fakeHub{}
+	svc := newTestServiceWith(repo, cache, hub)
+	item := repo.add(draftNotification(svc.Now()))
+
+	if err := svc.Delete(context.Background(), item.ID); err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if len(cache.removes) != 1 || cache.removes[0] != item.ID || hub.last.Action != "deleted" {
+		t.Fatalf("removes = %v, event = %+v", cache.removes, hub.last)
+	}
+}
+
 func TestServiceDeletePublishedRemovesCache(t *testing.T) {
 	repo := newFakeRepo()
 	cache := &fakeCache{}
@@ -340,6 +429,81 @@ func TestServicePublishedNoRowsReturnsEmpty(t *testing.T) {
 	}
 	if len(cache.rebuilds) != 0 {
 		t.Fatalf("rebuilds = %d, want 0", len(cache.rebuilds))
+	}
+}
+
+func TestServicePublishedDropsStaleCacheItem(t *testing.T) {
+	repo := newFakeRepo()
+	cache := &fakeCache{}
+	svc := newTestServiceWith(repo, cache, &fakeHub{})
+	published := draftNotification(svc.Now())
+	published.Status = model.NotificationPublished
+	published.PublishedAt = &testNow
+	item := repo.add(published)
+	cache.items = []Published{
+		{ID: item.ID, Title: item.Title, Content: item.Content, Type: item.Type, PublishedAt: testNow, ExpireAt: item.ExpireAt},
+		{ID: 99, Title: "stale", Content: "stale", Type: model.NotificationInbox, PublishedAt: testNow, ExpireAt: item.ExpireAt},
+	}
+
+	items, err := svc.Published(context.Background())
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if len(items) != 1 || items[0].ID != item.ID {
+		t.Fatalf("items = %+v, want only id %d", items, item.ID)
+	}
+	if len(cache.rebuilds) != 1 || cache.rebuilds[0].ID != item.ID {
+		t.Fatalf("rebuilds = %+v, want db row %d", cache.rebuilds, item.ID)
+	}
+}
+
+func TestServicePublishedRestoresMissingCacheItem(t *testing.T) {
+	repo := newFakeRepo()
+	cache := &fakeCache{items: []Published{}}
+	svc := newTestServiceWith(repo, cache, &fakeHub{})
+	published := draftNotification(svc.Now())
+	published.Status = model.NotificationPublished
+	published.PublishedAt = &testNow
+	item := repo.add(published)
+
+	items, err := svc.Published(context.Background())
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if len(items) != 1 || items[0].ID != item.ID || !items[0].PublishedAt.Equal(testNow) {
+		t.Fatalf("items = %+v, want restored row %d", items, item.ID)
+	}
+	if len(cache.rebuilds) != 1 {
+		t.Fatalf("rebuilds = %d, want 1", len(cache.rebuilds))
+	}
+}
+
+func TestServicePublishedCacheFailureReturnsUnavailable(t *testing.T) {
+	repo := newFakeRepo()
+	cache := &fakeCache{listErr: errors.New("redis down")}
+	svc := newTestServiceWith(repo, cache, &fakeHub{})
+	item := draftNotification(svc.Now())
+	item.Status = model.NotificationPublished
+	item.PublishedAt = &testNow
+	repo.add(item)
+
+	if _, err := svc.Published(context.Background()); !errors.Is(err, ErrCacheUnavailable) {
+		t.Fatalf("err = %v, want ErrCacheUnavailable", err)
+	}
+}
+
+func TestServiceDeleteRemoveFailureReturnsUnavailable(t *testing.T) {
+	repo := newFakeRepo()
+	cache := &fakeCache{removeErr: errors.New("redis down")}
+	hub := &fakeHub{}
+	svc := newTestServiceWith(repo, cache, hub)
+	item := repo.add(draftNotification(svc.Now()))
+
+	if err := svc.Delete(context.Background(), item.ID); !errors.Is(err, ErrCacheUnavailable) {
+		t.Fatalf("err = %v, want ErrCacheUnavailable", err)
+	}
+	if len(hub.events) != 0 {
+		t.Fatalf("events = %v, want none", hub.events)
 	}
 }
 

@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -147,7 +148,8 @@ func (h *NotificationHandler) WebList(c echo.Context) error {
 func (h *NotificationHandler) Socket(c echo.Context) error {
 	conn, err := h.Upgrader.Upgrade(c.Response(), c.Request(), nil)
 	if err != nil {
-		return err
+		slog.Default().Error("notification websocket upgrade failed", "error", err)
+		return nil
 	}
 	h.Hub.Handle(conn)
 	return nil

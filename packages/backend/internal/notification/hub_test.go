@@ -47,6 +47,21 @@ func TestHubBroadcastToClient(t *testing.T) {
 	}
 }
 
+func TestHubBroadcastDropsSlowClient(t *testing.T) {
+	hub := NewHub()
+	client := &hubClient{send: make(chan []byte, maxSendBacklog)}
+	for i := 0; i < maxSendBacklog; i++ {
+		client.send <- []byte("queued")
+	}
+	hub.clients[client] = struct{}{}
+
+	hub.Broadcast(Event{Type: "notifications.changed", Action: "published", ID: 12})
+
+	if len(hub.clients) != 0 {
+		t.Fatalf("clients = %d, want slow client removed", len(hub.clients))
+	}
+}
+
 func TestHubCloseDropsClient(t *testing.T) {
 	hub := NewHub()
 	upgrader := websocket.Upgrader{}

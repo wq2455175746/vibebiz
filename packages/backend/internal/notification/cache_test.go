@@ -78,8 +78,12 @@ func TestCacheListNewestFirst(t *testing.T) {
 func TestCacheExpiredItemIsFiltered(t *testing.T) {
 	cache, mr := newTestCache(t)
 	now := time.Now().UTC().Truncate(time.Second)
-	item := publishedItem(5, now, now.Add(time.Hour))
-	if err := cache.Put(context.Background(), item); err != nil {
+	expired := publishedItem(5, now, now.Add(time.Hour))
+	live := publishedItem(6, now.Add(time.Minute), now.Add(6*time.Hour))
+	if err := cache.Put(context.Background(), expired); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.Put(context.Background(), live); err != nil {
 		t.Fatal(err)
 	}
 
@@ -89,11 +93,54 @@ func TestCacheExpiredItemIsFiltered(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(list) != 0 {
-		t.Fatalf("list = %+v, want empty", list)
+	if len(list) != 1 || list[0].ID != live.ID {
+		t.Fatalf("list = %+v, want live id %d only", list, live.ID)
 	}
 	if mr.Exists("vibebiz:notification:item:5") {
 		t.Fatal("expired item key still exists")
+	}
+	members, err := mr.ZMembers("vibebiz:notification:index")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(members) != 1 || members[0] != "6" {
+		t.Fatalf("index members = %v, want live id only", members)
+	}
+}
+
+func TestCachePutSkipsExpiredItem(t *testing.T) {
+	cache, mr := newTestCache(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	item := publishedItem(10, now, now.Add(-time.Minute))
+
+	if err := cache.Put(context.Background(), item); err != nil {
+		t.Fatalf("err = %v, want nil", err)
+	}
+	if mr.Exists("vibebiz:notification:item:10") {
+		t.Fatal("expired item key was written")
+	}
+	if mr.Exists("vibebiz:notification:index") {
+		t.Fatal("expired item was added to the index")
+	}
+}
+
+func TestCacheListRemovesMalformedItem(t *testing.T) {
+	cache, mr := newTestCache(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	item := publishedItem(9, now, now.Add(time.Hour))
+	if err := cache.Put(context.Background(), item); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.client.Set(context.Background(), "vibebiz:notification:item:9", "{bad", 0).Err(); err != nil {
+		t.Fatal(err)
+	}
+
+	list, err := cache.List(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 0 {
+		t.Fatalf("list = %+v, want empty", list)
 	}
 	if mr.Exists("vibebiz:notification:index") {
 		members, err := mr.ZMembers("vibebiz:notification:index")
@@ -101,7 +148,7 @@ func TestCacheExpiredItemIsFiltered(t *testing.T) {
 			t.Fatal(err)
 		}
 		if len(members) != 0 {
-			t.Fatalf("index members = %v, want stale id removed", members)
+			t.Fatalf("index members = %v, want malformed id removed", members)
 		}
 	}
 }
