@@ -85,6 +85,7 @@ type Repositories struct {
 	Users                    *Repository[model.User]
 	OpsUsers                 *Repository[model.OpsUser]
 	OpsAuditLogs             *Repository[model.OpsAuditLog]
+	OpsNotifications         *Repository[model.OpsNotification]
 	Workspaces               *Repository[model.Workspace]
 	WorkspaceUsers           *Repository[model.WorkspaceUser]
 	UserQuotas               *Repository[model.UserQuota]
@@ -109,6 +110,7 @@ func NewRepositories(db *gorm.DB) *Repositories {
 		Users:                    NewRepository[model.User](db),
 		OpsUsers:                 NewRepository[model.OpsUser](db),
 		OpsAuditLogs:             NewRepository[model.OpsAuditLog](db),
+		OpsNotifications:         NewRepository[model.OpsNotification](db),
 		Workspaces:               NewRepository[model.Workspace](db),
 		WorkspaceUsers:           NewRepository[model.WorkspaceUser](db),
 		UserQuotas:               NewRepository[model.UserQuota](db),

@@ -14,11 +14,70 @@ import (
 	"vibebiz/internal/auth"
 	"vibebiz/internal/client"
 	"vibebiz/internal/config"
+	"vibebiz/internal/dao"
+	"vibebiz/internal/dao/model"
 	"vibebiz/internal/handler"
+	"vibebiz/internal/notification"
 	"vibebiz/internal/observability"
 	"vibebiz/internal/server"
 	"vibebiz/internal/store"
 )
+
+type routerNotificationRepo struct{}
+
+func (routerNotificationRepo) List(context.Context, dao.NotificationFilter, int, int) ([]model.OpsNotification, int64, error) {
+	return nil, 0, nil
+}
+
+func (routerNotificationRepo) Get(context.Context, int64) (*model.OpsNotification, error) {
+	return nil, dao.ErrNotFound
+}
+
+func (routerNotificationRepo) Create(context.Context, *model.OpsNotification) error {
+	return nil
+}
+
+func (routerNotificationRepo) Update(context.Context, *model.OpsNotification) error {
+	return nil
+}
+
+func (routerNotificationRepo) UpdateStatus(context.Context, int64, string, *time.Time) error {
+	return nil
+}
+
+func (routerNotificationRepo) Delete(context.Context, int64) error {
+	return nil
+}
+
+func (routerNotificationRepo) Published(context.Context, time.Time) ([]model.OpsNotification, error) {
+	return nil, nil
+}
+
+type routerNotificationCache struct{}
+
+func (routerNotificationCache) Put(context.Context, model.OpsNotification) error {
+	return nil
+}
+
+func (routerNotificationCache) Remove(context.Context, int64) error {
+	return nil
+}
+
+func (routerNotificationCache) List(context.Context) ([]notification.Published, error) {
+	return []notification.Published{}, nil
+}
+
+func (routerNotificationCache) Rebuild(context.Context, []model.OpsNotification) error {
+	return nil
+}
+
+func newNotificationHandler(t *testing.T) *handler.NotificationHandler {
+	t.Helper()
+	hub := notification.NewHub()
+	t.Cleanup(hub.Close)
+	service := notification.NewService(routerNotificationRepo{}, routerNotificationCache{}, hub)
+	return handler.NewNotificationHandler(service, hub, nil)
+}
 
 func newProvider(t *testing.T, plane string) *observability.Provider {
 	t.Helper()
@@ -147,7 +206,7 @@ func newCP(t *testing.T, projects store.ProjectStore) (*echo.Echo, *observabilit
 	obs := newProvider(t, "cp")
 	authState := newRouterAuth(t)
 	e := server.New(config.Config{Plane: "cp", ServiceName: "vibebiz-cp"}, obs)
-	RegisterControl(e, admin.NewMemoryRepository(), projects, client.NewSandbox("http://127.0.0.1:1", obs), obs, authState.authn, authState.handler, &handler.SettingsHandler{}, &handler.StorageHandler{}, authState.metas)
+	RegisterControl(e, admin.NewMemoryRepository(), projects, client.NewSandbox("http://127.0.0.1:1", obs), obs, authState.authn, authState.handler, &handler.SettingsHandler{}, &handler.StorageHandler{}, authState.metas, newNotificationHandler(t))
 	return e, obs, authState
 }
 

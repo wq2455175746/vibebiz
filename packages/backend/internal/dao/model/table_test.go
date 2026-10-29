@@ -10,6 +10,7 @@ func TestTableNames(t *testing.T) {
 		{&User{}, "user"},
 		{&OpsUser{}, "ops_user"},
 		{&OpsAuditLog{}, "ops_audit_log"},
+		{&OpsNotification{}, "ops_notification"},
 		{&Workspace{}, "workspace"},
 		{&WorkspaceUser{}, "workspace_user"},
 		{&WorkspaceFolder{}, "workspace_folder"},

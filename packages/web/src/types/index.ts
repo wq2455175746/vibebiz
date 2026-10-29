@@ -122,3 +122,16 @@ export interface EditorLog {
   source: string
   message: string
 }
+
+export type NotificationType = 'version_release' | 'inbox'
+
+export interface NotificationItem {
+  id: number
+  title: string
+  content: string
+  type: NotificationType
+  version: string
+  link: string
+  publishedAt: string
+  expireAt: string
+}

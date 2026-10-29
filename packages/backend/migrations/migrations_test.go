@@ -141,14 +141,31 @@ func TestWorkspaceFolderMigration(t *testing.T) {
 	}
 }
 
+func TestOpsNotificationMigration(t *testing.T) {
+	body, err := fs.ReadFile(FS, "00008_ops_notification.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	for _, want := range []string{
+		"CREATE TABLE `ops_notification`", "title", "content", "expire_at", "published_at",
+		"created_by_name", "idx_ops_notification_published", "DROP TABLE IF EXISTS `ops_notification`",
+		"-- +goose Up", "-- +goose Down",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("notification migration missing %q", want)
+		}
+	}
+}
+
 func TestGooseCanCollectMigrations(t *testing.T) {
 	goose.SetBaseFS(FS)
 	migs, err := goose.CollectMigrations(".", 0, int64(^uint(0)>>1))
 	if err != nil {
 		t.Fatalf("collect migrations: %v", err)
 	}
-	if len(migs) != 7 {
-		t.Fatalf("collected %d migrations, want 7", len(migs))
+	if len(migs) != 8 {
+		t.Fatalf("collected %d migrations, want 8", len(migs))
 	}
 	for i, mig := range migs {
 		want := int64(i + 1)

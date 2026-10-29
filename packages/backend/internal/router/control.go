@@ -11,7 +11,7 @@ import (
 	"vibebiz/internal/store"
 )
 
-func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.ProjectStore, sandbox *client.Sandbox, obs *observability.Provider, authn *auth.Authenticator, authHandler *handler.AuthHandler, settingsHandler *handler.SettingsHandler, storageHandler *handler.StorageHandler, metas auth.ProjectMetaStore) {
+func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.ProjectStore, sandbox *client.Sandbox, obs *observability.Provider, authn *auth.Authenticator, authHandler *handler.AuthHandler, settingsHandler *handler.SettingsHandler, storageHandler *handler.StorageHandler, metas auth.ProjectMetaStore, notifications *handler.NotificationHandler) {
 	projectHandler := handler.NewProjectHandler(projects, sandbox, obs, metas)
 	adminHandler := handler.NewAdminHandler(repo, projects)
 
@@ -59,6 +59,17 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 	adminProtected.GET("/sandboxes", adminHandler.Sandboxes)
 	adminProtected.GET("/quotas", adminHandler.Quotas)
 	adminProtected.GET("/audit", adminHandler.Audit)
+
+	notificationsAPI := api.Group("/notifications", authn.RequireUser)
+	notificationsAPI.GET("", notifications.WebList)
+	notificationsAPI.GET("/ws", notifications.Socket)
+
+	adminProtected.GET("/notifications", notifications.AdminList)
+	adminProtected.POST("/notifications", notifications.AdminCreate)
+	adminProtected.PUT("/notifications/:id", notifications.AdminUpdate)
+	adminProtected.POST("/notifications/:id/publish", notifications.AdminPublish)
+	adminProtected.POST("/notifications/:id/unpublish", notifications.AdminUnpublish)
+	adminProtected.DELETE("/notifications/:id", notifications.AdminDelete)
 
 	registerErrorHandler(e)
 }

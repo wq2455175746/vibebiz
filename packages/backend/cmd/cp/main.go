@@ -19,6 +19,7 @@ import (
 	"vibebiz/internal/config"
 	"vibebiz/internal/dao"
 	"vibebiz/internal/handler"
+	"vibebiz/internal/notification"
 	"vibebiz/internal/observability"
 	"vibebiz/internal/router"
 	storages3 "vibebiz/internal/s3"
@@ -107,8 +108,26 @@ func main() {
 	sandbox := client.NewSandbox(cfg.SandboxBaseURL, obs)
 	storageHandler := &handler.StorageHandler{Projects: projectStore, Sandbox: sandbox, Account: accountService}
 
+	notificationRepo := dao.NewNotificationRepository(db)
+	notificationCache := notification.NewCache(redisClient, redisPrefix)
+	notificationHub := notification.NewHub()
+	notificationBus := notification.NewEventBus(redisClient, redisPrefix, notificationHub)
+	busCtx, busCancel := context.WithCancel(ctx)
+	go func() {
+		if err := notificationBus.Run(busCtx); err != nil && !errors.Is(err, context.Canceled) {
+			obs.Logger.Error("notification event bus stopped", "error", err)
+		}
+	}()
+	select {
+	case <-notificationBus.Ready():
+	case <-time.After(5 * time.Second):
+		obs.Logger.Error("notification event bus subscribe timeout")
+	}
+	notificationService := notification.NewService(notificationRepo, notificationCache, notificationBus)
+	notificationHandler := handler.NewNotificationHandler(notificationService, notificationHub, cfg.CorsOrigins)
+
 	e := server.New(cfg, obs)
-	router.RegisterControl(e, admin.NewMemoryRepository(), projectStore, sandbox, obs, authn, authHandler, settingsHandler, storageHandler, metas)
+	router.RegisterControl(e, admin.NewMemoryRepository(), projectStore, sandbox, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler)
 
 	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
 	go func() {
@@ -123,6 +142,8 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
+	busCancel()
+	notificationHub.Close()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := e.Shutdown(shutdownCtx); err != nil {

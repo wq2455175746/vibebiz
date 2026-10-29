@@ -66,14 +66,16 @@ function highlighted(row: TableRow, column: TableColumn): boolean {
         <tbody>
           <tr v-for="(row, index) in props.rows" :key="index">
             <td v-for="column in props.columns" :key="column.key">
-              <span
-                v-if="column.tag"
-                class="tag"
-                :class="{ 'tag-accent': highlighted(row, column) }"
-              >
-                {{ display(row, column) }}
-              </span>
-              <template v-else>{{ display(row, column) }}</template>
+              <slot :name="`cell-${column.key}`" :row="row" :value="raw(row, column.key)">
+                <span
+                  v-if="column.tag"
+                  class="tag"
+                  :class="{ 'tag-accent': highlighted(row, column) }"
+                >
+                  {{ display(row, column) }}
+                </span>
+                <template v-else>{{ display(row, column) }}</template>
+              </slot>
             </td>
           </tr>
         </tbody>

@@ -20,6 +20,7 @@ export default defineConfig(({ mode }) => {
         '/cp': {
           target: env.VITE_CP_PROXY_TARGET || 'http://vibebiz-dev.com:8080',
           changeOrigin: true,
+          ws: true,
         },
         '/dp': {
           target: env.VITE_DP_PROXY_TARGET || 'http://vibebiz-dev.com:8081',
