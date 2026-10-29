@@ -23,10 +23,21 @@ class ChatReference(BaseModel):
     path: str | None = None
 
 
+class AgentRoleInput(BaseModel):
+    id: int = 0
+    roleCode: str = ""
+    roleNameEn: str = ""
+    roleNameZh: str = ""
+    description: str = ""
+    systemPrompt: str = ""
+
+
 class ChatRequest(BaseModel):
     message: str = ""
     sessionId: str | None = None
     references: list[ChatReference] = []
+    agentRoles: list[AgentRoleInput] = []
+    teamMode: bool = False
 
 
 def _count(project_id: str, status: str) -> None:
@@ -54,7 +65,15 @@ async def chat(project_id: str, body: ChatRequest, request: Request) -> Streamin
         project_id, workspace, request.app.state.resources, body.references
     )
     try:
-        turn = await manager.start(project_id, message, workspace, body.sessionId, references)
+        turn = await manager.start(
+            project_id,
+            message,
+            workspace,
+            body.sessionId,
+            references,
+            [item.model_dump() for item in body.agentRoles],
+            body.teamMode,
+        )
     except TurnInProgress:
         _count(project_id, "409")
         raise

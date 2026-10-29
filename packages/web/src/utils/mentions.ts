@@ -20,6 +20,10 @@ export function findActiveMention(value: string, cursor: number): MentionMatch |
   return { start, end: cursor, query }
 }
 
+export function mentionQuery(value: string, start: number, end: number): string {
+  return value.slice(start + 1, end).toLowerCase()
+}
+
 export function applyMention(
   value: string,
   match: MentionMatch,

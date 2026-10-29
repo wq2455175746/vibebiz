@@ -1,12 +1,17 @@
 import { request } from './client'
 import { toEntity, toList } from './normalize'
 import type {
+  AdminAgentRole,
+  AdminLLMModel,
   AdminProject,
   AdminQuota,
   AdminSandbox,
   AdminUser,
   AuditEvent,
+  ModelInput,
   Overview,
+  RoleAvatarPresign,
+  RoleInput,
 } from '@/types'
 
 export async function getOverview(): Promise<Overview> {
@@ -55,4 +60,50 @@ export async function getAudit(): Promise<AuditEvent[]> {
     url: '/audit',
   })
   return toList(result, 'audit')
+}
+
+export async function getModels(): Promise<AdminLLMModel[]> {
+  const result = await request<AdminLLMModel[] | { models: AdminLLMModel[] }>({
+    method: 'get',
+    url: '/models',
+  })
+  return toList(result, 'models')
+}
+
+export async function createModel(input: ModelInput): Promise<AdminLLMModel> {
+  return request<AdminLLMModel>({ method: 'post', url: '/models', data: input })
+}
+
+export async function getRoles(): Promise<AdminAgentRole[]> {
+  const result = await request<AdminAgentRole[] | { roles: AdminAgentRole[] }>({
+    method: 'get',
+    url: '/roles',
+  })
+  return toList(result, 'roles')
+}
+
+export async function createRole(input: RoleInput): Promise<AdminAgentRole> {
+  return request<AdminAgentRole>({ method: 'post', url: '/roles', data: input })
+}
+
+export async function presignRoleAvatar(input: {
+  filename: string
+  contentType: string
+  size: number
+}): Promise<RoleAvatarPresign> {
+  return request<RoleAvatarPresign>({
+    method: 'post',
+    url: '/roles/avatar/presign',
+    data: input,
+  })
+}
+
+export async function uploadRoleAvatar(file: File): Promise<string> {
+  const result = await request<{ key: string }>({
+    method: 'post',
+    url: '/roles/avatar/upload',
+    data: file,
+    headers: { 'Content-Type': file.type },
+  })
+  return result.key
 }

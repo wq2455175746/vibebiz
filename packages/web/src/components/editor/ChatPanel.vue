@@ -1,14 +1,31 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
+import AgentRoleMenu from '@/components/AgentRoleMenu.vue'
 import ChatMessage from './ChatMessage.vue'
 import SkillsDialog from './SkillsDialog.vue'
 import SlashCommandMenu from '@/components/SlashCommandMenu.vue'
 import type { ChatReferenceInput } from '@/api/chat'
+import { updateProjectAgentRoles } from '@/api/projects'
+import { useAgentRolesStore } from '@/stores/agentRoles'
 import { useChatStore } from '@/stores/chat'
 import { useFileStore } from '@/stores/files'
+import { useProjectStore } from '@/stores/project'
 import { useResourceStore } from '@/stores/resources'
-import { applyMention, collectReferences, findActiveMention, mergeReferences } from '@/utils/mentions'
+import type { AgentRole } from '@/types'
+import {
+  consumeRoleTrigger,
+  filterRoleOptions,
+  findRoleTrigger,
+  toggleRoleSelection,
+} from '@/utils/agentRoles'
+import {
+  applyMention,
+  collectReferences,
+  findActiveMention,
+  mentionQuery,
+  mergeReferences,
+} from '@/utils/mentions'
 import {
   commandContextError,
   matchCommands,
@@ -21,6 +38,8 @@ const props = defineProps<{ projectId: string }>()
 const chat = useChatStore()
 const files = useFileStore()
 const resources = useResourceStore()
+const projectStore = useProjectStore()
+const agentRoles = useAgentRolesStore()
 const prompt = ref('')
 const composerNote = ref('')
 const resourceInput = ref<HTMLInputElement | null>(null)
@@ -30,10 +49,18 @@ const mentionOpen = ref(false)
 const scroller = ref<HTMLElement | null>(null)
 const mentionStart = ref(0)
 const mentionEnd = ref(0)
+const mentionIndex = ref(0)
 const menuIndex = ref(0)
 const showSkills = ref(false)
 const slashDismissed = ref(false)
+const selectedRoleIds = ref<number[]>([])
+const roleOpen = ref(false)
+const roleQuery = ref('')
+const roleIndex = ref(0)
+const roleSaving = ref(false)
+const roleError = ref('')
 let stickToBottom = true
+let roleRequestSeq = 0
 
 const candidates = computed(() => matchCommands(prompt.value, 'editor'))
 const menuOpen = computed(
@@ -49,8 +76,18 @@ const attached = computed(() =>
   resources.items.filter((item) => attachedIds.value.includes(item.id)),
 )
 
+const roleOptions = computed(() =>
+  filterRoleOptions(agentRoles.roles, roleQuery.value).slice(0, 10),
+)
+
+const selectedRoles = computed(() =>
+  selectedRoleIds.value
+    .map((id) => agentRoles.byId(id))
+    .filter((role): role is AgentRole => Boolean(role)),
+)
+
 const mentionOptions = computed(() => {
-  const query = prompt.value.slice(mentionStart.value, mentionEnd.value).toLowerCase()
+  const query = mentionQuery(prompt.value, mentionStart.value, mentionEnd.value)
   const resourceOptions = resources.items
     .filter((item) => item.displayName.toLowerCase().includes(query))
     .slice(0, 6)
@@ -70,6 +107,10 @@ const mentionOptions = computed(() => {
       insert: item.path,
     }))
   return [...resourceOptions, ...fileOptions].slice(0, 10)
+})
+
+watch(mentionOptions, () => {
+  mentionIndex.value = 0
 })
 
 function onScroll() {
@@ -93,6 +134,7 @@ function closeMention() {
 
 function onEscape() {
   closeMention()
+  roleOpen.value = false
   slashDismissed.value = true
 }
 
@@ -102,12 +144,101 @@ function updateMention() {
     closeMention()
     return
   }
-  const match = findActiveMention(prompt.value, target.selectionStart ?? prompt.value.length)
+  const cursor = target.selectionStart ?? target.value.length
+  const match = findActiveMention(target.value, cursor)
   mentionOpen.value = !!match
   if (match) {
     mentionStart.value = match.start
     mentionEnd.value = match.end
   }
+}
+
+function updateComposer(event: Event): void {
+  updateMention()
+  const target = event.target as HTMLTextAreaElement
+  const match = findRoleTrigger(target.value, target.selectionStart ?? target.value.length)
+  if (!match) {
+    roleOpen.value = false
+    return
+  }
+  const consumed = consumeRoleTrigger(target.value, match.start, match.end)
+  prompt.value = consumed.value
+  roleQuery.value = match.query
+  roleOpen.value = true
+  roleIndex.value = 0
+  void nextTick(() => {
+    textarea.value?.focus()
+    textarea.value?.setSelectionRange(consumed.cursor, consumed.cursor)
+  })
+}
+
+function syncRolesFromProject(): void {
+  selectedRoleIds.value = [...(projectStore.current?.agentRoleIds ?? [])]
+}
+
+async function persistRoles(next: number[]): Promise<void> {
+  const seq = ++roleRequestSeq
+  const previous = [...selectedRoleIds.value]
+  selectedRoleIds.value = next
+  roleSaving.value = true
+  roleError.value = ''
+  try {
+    const saved = await updateProjectAgentRoles(props.projectId, next)
+    if (seq !== roleRequestSeq) {
+      return
+    }
+    selectedRoleIds.value = saved
+    if (projectStore.current) {
+      projectStore.current.agentRoleIds = saved
+      projectStore.current.defaultAgentRoleId = saved[0] ?? null
+    }
+  } catch (err) {
+    if (seq !== roleRequestSeq) {
+      return
+    }
+    selectedRoleIds.value = previous
+    roleError.value = (err as Error).message
+  } finally {
+    if (seq === roleRequestSeq) {
+      roleSaving.value = false
+    }
+  }
+}
+
+async function toggleRole(role: { id: number }): Promise<void> {
+  const next = toggleRoleSelection(agentRoles.roles, selectedRoleIds.value, role.id)
+  await persistRoles(next)
+}
+
+async function removeRole(id: number): Promise<void> {
+  await persistRoles(selectedRoleIds.value.filter((item) => item !== id))
+}
+
+function toggleRoleMenu(): void {
+  roleQuery.value = ''
+  roleIndex.value = 0
+  roleOpen.value = !roleOpen.value
+}
+
+function onRoleEnter(): boolean {
+  if (!roleOpen.value || !roleOptions.value.length) {
+    return false
+  }
+  const role = roleOptions.value[roleIndex.value]
+  if (role) {
+    void toggleRole(role)
+  }
+  return true
+}
+
+function onRoleArrow(step: number, event: KeyboardEvent): boolean {
+  if (!roleOpen.value || !roleOptions.value.length) {
+    return false
+  }
+  event.preventDefault()
+  const total = roleOptions.value.length
+  roleIndex.value = (roleIndex.value + step + total) % total
+  return true
 }
 
 function selectMention(option: { insert: string }) {
@@ -163,6 +294,18 @@ function selectCommand(command: SlashCommand) {
 }
 
 function onEnter(event: KeyboardEvent) {
+  if (onRoleEnter()) {
+    event.preventDefault()
+    return
+  }
+  if (mentionOpen.value && mentionOptions.value.length) {
+    event.preventDefault()
+    const option = mentionOptions.value[mentionIndex.value]
+    if (option) {
+      selectMention(option)
+    }
+    return
+  }
   if (!menuOpen.value) {
     return
   }
@@ -174,6 +317,15 @@ function onEnter(event: KeyboardEvent) {
 }
 
 function onArrow(step: number, event: KeyboardEvent) {
+  if (onRoleArrow(step, event)) {
+    return
+  }
+  if (mentionOpen.value && mentionOptions.value.length) {
+    event.preventDefault()
+    const total = mentionOptions.value.length
+    mentionIndex.value = (mentionIndex.value + step + total) % total
+    return
+  }
   if (!menuOpen.value) {
     return
   }
@@ -220,6 +372,7 @@ function send() {
   prompt.value = ''
   attachedIds.value = []
   closeMention()
+  roleOpen.value = false
   void chat.send(props.projectId, text, references)
   stickToBottom = true
   void scrollToBottom()
@@ -229,16 +382,54 @@ function stop() {
   void chat.stop(props.projectId)
 }
 
+function onDocumentMousedown(event: MouseEvent) {
+  if (!roleOpen.value) {
+    return
+  }
+  const target = event.target
+  if (
+    target instanceof Element &&
+    target.closest('.agent-role-menu, .chat-role-chip')
+  ) {
+    return
+  }
+  roleOpen.value = false
+}
+
+function onDocumentKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    roleOpen.value = false
+  }
+}
+
 async function load() {
   attachedIds.value = []
   closeMention()
-  await resources.load(props.projectId)
+  await Promise.all([resources.load(props.projectId), agentRoles.load()])
+  syncRolesFromProject()
 }
 
-onMounted(load)
+onMounted(() => {
+  document.addEventListener('mousedown', onDocumentMousedown)
+  document.addEventListener('keydown', onDocumentKeydown)
+  void load()
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('mousedown', onDocumentMousedown)
+  document.removeEventListener('keydown', onDocumentKeydown)
+})
 watch(
   () => props.projectId,
-  () => void load(),
+  () => {
+    syncRolesFromProject()
+    void load()
+  },
+)
+watch(
+  () => projectStore.current?.agentRoleIds,
+  () => syncRolesFromProject(),
+  { deep: true },
 )
 watch(
   () => [chat.messages.length, chat.messages.at(-1)?.text, chat.messages.at(-1)?.pending],
@@ -264,6 +455,25 @@ watch(
     </div>
 
     <form class="chat-composer" @submit.prevent="send">
+      <div v-if="selectedRoles.length" class="chat-roles">
+        <span
+          v-for="role in selectedRoles"
+          :key="role.id"
+          class="chat-role-chip"
+          @click="toggleRoleMenu"
+        >
+          #{{ role.roleNameZh }}
+          <button
+            type="button"
+            aria-label="移除角色"
+            :disabled="roleSaving"
+            @click.stop="removeRole(role.id)"
+          >
+            <i class="pi pi-times" />
+          </button>
+        </span>
+      </div>
+      <p v-if="roleError" class="chat-note chat-composer-note">{{ roleError }}</p>
       <div v-if="attached.length" class="chat-attachments">
         <span v-for="item in attached" :key="item.id" class="chat-reference-chip">
           <i :class="item.kind === 'image' ? 'pi pi-image' : 'pi pi-file'" />
@@ -275,6 +485,13 @@ watch(
       </div>
       <p v-if="composerNote" class="chat-note chat-composer-note">{{ composerNote }}</p>
       <div class="chat-input-wrap">
+        <AgentRoleMenu
+          v-if="roleOpen && roleOptions.length"
+          :roles="roleOptions"
+          :selected="selectedRoleIds"
+          :active-index="roleIndex"
+          @toggle="toggleRole"
+        />
         <SlashCommandMenu
           v-if="menuOpen"
           :commands="candidates"
@@ -287,7 +504,7 @@ watch(
           rows="3"
           placeholder="描述你想实现或修改的内容… 输入 @ 引用文件"
           :disabled="chat.busy"
-          @input="updateMention"
+          @input="updateComposer"
           @click="updateMention"
           @keydown.enter.exact="onEnter"
           @keydown.down.exact="onArrow(1, $event)"
@@ -299,10 +516,11 @@ watch(
         />
         <div v-if="mentionOpen && mentionOptions.length" class="mention-menu">
           <button
-            v-for="option in mentionOptions"
+            v-for="(option, index) in mentionOptions"
             :key="option.key"
             type="button"
             class="mention-item"
+            :class="{ active: mentionIndex === index }"
             @mousedown.prevent="selectMention(option)"
           >
             <span>{{ option.label }}</span>

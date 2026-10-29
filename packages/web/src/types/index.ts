@@ -73,6 +73,17 @@ export interface Project {
   state: string
   createdAt: string
   updatedAt: string
+  defaultAgentRoleId?: number | null
+  agentRoleIds?: number[] | null
+}
+
+export interface AgentRole {
+  id: number
+  roleCode: string
+  roleNameEn: string
+  roleNameZh: string
+  description: string
+  avatarUrl: string
 }
 
 export interface FileEntry {

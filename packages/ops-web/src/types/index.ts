@@ -109,3 +109,66 @@ export interface TableColumn {
   highlight?: string[]
   format?: (value: unknown, row: TableRow) => string
 }
+
+export interface AdminLLMModel {
+  id: number
+  modelName: string
+  modelCode: string
+  apiUrl: string
+  providerCode: string
+  modelType: string
+  maxTokens: number
+  isDefault: boolean
+  status: number
+  hasApiKey: boolean
+  extraParams?: Record<string, unknown> | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ModelInput {
+  modelName: string
+  modelCode: string
+  apiUrl: string
+  apiKey: string
+  providerCode: string
+  modelType: string
+  maxTokens: number
+  isDefault: boolean
+  status: number
+  extraParams?: Record<string, unknown>
+}
+
+export interface AdminAgentRole {
+  id: number
+  roleCode: string
+  roleNameEn: string
+  roleNameZh: string
+  description: string
+  systemPrompt: string
+  avatarUrl: string
+  isBuiltin: boolean
+  status: number
+  sortOrder: number
+  version: number
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface RoleInput {
+  roleCode: string
+  roleNameEn: string
+  roleNameZh: string
+  description: string
+  systemPrompt: string
+  avatarKey?: string
+  sortOrder: number
+  status: number
+}
+
+export interface RoleAvatarPresign {
+  uploadUrl: string
+  key: string
+  headers: Record<string, string>
+}

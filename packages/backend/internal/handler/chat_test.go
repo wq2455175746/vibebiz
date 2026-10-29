@@ -13,7 +13,9 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"vibebiz/internal/agentrole"
 	"vibebiz/internal/observability"
+	"vibebiz/internal/role"
 )
 
 type fakeChat struct {
@@ -95,5 +97,102 @@ func TestChatStreamsSSE(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "data: [DONE]") {
 		t.Fatalf("missing DONE marker: %s", rec.Body.String())
+	}
+}
+
+type fakeRoleResolver struct {
+	context *role.Context
+	err     error
+}
+
+func (f fakeRoleResolver) Resolve(context.Context, string) (*role.Context, error) {
+	return f.context, f.err
+}
+
+type captureChat struct{ payload []byte }
+
+func (c *captureChat) Chat(_ context.Context, _ string, payload []byte) (io.ReadCloser, error) {
+	c.payload = append([]byte(nil), payload...)
+	return io.NopCloser(strings.NewReader("data: [DONE]\n\n")), nil
+}
+
+func TestChatInjectsProjectRolesAndOverridesClientPayload(t *testing.T) {
+	chat := &captureChat{}
+	h := NewChatHandler(chat, nil)
+	h.Roles = fakeRoleResolver{context: &role.Context{Roles: []agentrole.Role{{
+		ID: 1, RoleCode: "alex", RoleNameEN: "Alex", RoleNameZH: "全栈工程师",
+		Description: "code", SystemPrompt: "role prompt",
+	}}}}
+	e := echo.New()
+	e.POST("/dp/api/v1/projects/:id/chat", h.Chat)
+	req := httptest.NewRequest(http.MethodPost, "/dp/api/v1/projects/p1/chat",
+		strings.NewReader(`{"message":"hi","agentRoles":[{"systemPrompt":"hacked"}]}`))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if !strings.Contains(string(chat.payload), `"roleCode":"alex"`) {
+		t.Fatalf("payload = %s", chat.payload)
+	}
+	if strings.Contains(string(chat.payload), "hacked") {
+		t.Fatalf("client role leaked: %s", chat.payload)
+	}
+}
+
+func serveRoleChat(t *testing.T, h *ChatHandler, body string) (*echo.Echo, *httptest.ResponseRecorder) {
+	t.Helper()
+	e := echo.New()
+	e.POST("/dp/api/v1/projects/:id/chat", h.Chat)
+	req := httptest.NewRequest(http.MethodPost, "/dp/api/v1/projects/p1/chat", strings.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	return e, rec
+}
+
+func TestChatStripsClientRolesWhenNoRolesResolve(t *testing.T) {
+	chat := &captureChat{}
+	h := NewChatHandler(chat, nil)
+	h.Roles = fakeRoleResolver{context: &role.Context{}}
+	_, rec := serveRoleChat(t, h, `{"message":"hi","agentRoles":[{"systemPrompt":"hacked"}],"teamMode":true}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	if strings.Contains(string(chat.payload), "hacked") {
+		t.Fatalf("client role leaked: %s", chat.payload)
+	}
+	if strings.Contains(string(chat.payload), "teamMode") || strings.Contains(string(chat.payload), "agentRoles") {
+		t.Fatalf("client role fields leaked: %s", chat.payload)
+	}
+}
+
+func TestChatStripsClientRolesOnResolverError(t *testing.T) {
+	chat := &captureChat{}
+	h := NewChatHandler(chat, nil)
+	h.Roles = fakeRoleResolver{err: errors.New("role lookup failed")}
+	_, rec := serveRoleChat(t, h, `{"message":"hi","agentRoles":[{"systemPrompt":"hacked"}],"teamMode":true}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	if strings.Contains(string(chat.payload), "hacked") {
+		t.Fatalf("client role leaked: %s", chat.payload)
+	}
+	if strings.Contains(string(chat.payload), "teamMode") || strings.Contains(string(chat.payload), "agentRoles") {
+		t.Fatalf("client role fields leaked: %s", chat.payload)
+	}
+}
+
+func TestChatHandlesNullBody(t *testing.T) {
+	chat := &captureChat{}
+	h := NewChatHandler(chat, nil)
+	h.Roles = fakeRoleResolver{context: &role.Context{Roles: []agentrole.Role{{ID: 1, RoleCode: "alex"}}}}
+	_, rec := serveRoleChat(t, h, `null`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "data: [DONE]") {
+		t.Fatalf("missing DONE marker: %s", rec.Body.String())
+	}
+	if !strings.Contains(string(chat.payload), `"roleCode":"alex"`) {
+		t.Fatalf("roles not injected: %s", chat.payload)
 	}
 }

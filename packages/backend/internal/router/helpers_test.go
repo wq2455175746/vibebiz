@@ -11,12 +11,14 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"vibebiz/internal/admin"
+	"vibebiz/internal/agentrole"
 	"vibebiz/internal/auth"
 	"vibebiz/internal/client"
 	"vibebiz/internal/config"
 	"vibebiz/internal/dao"
 	"vibebiz/internal/dao/model"
 	"vibebiz/internal/handler"
+	"vibebiz/internal/llmmodel"
 	"vibebiz/internal/notification"
 	"vibebiz/internal/observability"
 	"vibebiz/internal/server"
@@ -229,7 +231,7 @@ func newCP(t *testing.T, projects store.ProjectStore) (*echo.Echo, *observabilit
 	obs := newProvider(t, "cp")
 	authState := newRouterAuth(t)
 	e := server.New(config.Config{Plane: "cp", ServiceName: "vibebiz-cp"}, obs)
-	RegisterControl(e, admin.NewMemoryRepository(), projects, staticProvisioner{id: 1}, obs, authState.authn, authState.handler, &handler.SettingsHandler{}, &handler.StorageHandler{}, authState.metas, newNotificationHandler(t), nil)
+	RegisterControl(e, admin.NewMemoryRepository(), projects, staticProvisioner{id: 1}, obs, authState.authn, authState.handler, &handler.SettingsHandler{}, &handler.StorageHandler{}, authState.metas, newNotificationHandler(t), nil, newModelHandler(t), newRoleHandler(t))
 	return e, obs, authState
 }
 
@@ -239,7 +241,7 @@ func newDP(t *testing.T, sandboxURL string) (*echo.Echo, *observability.Provider
 	authState := newRouterAuth(t)
 	authState.metas.items["p1"] = auth.ProjectMeta{WorkspaceID: 1, OwnerUserID: 7}
 	e := server.New(config.Config{Plane: "dp", ServiceName: "vibebiz-dp"}, obs)
-	RegisterData(e, client.NewRouter(singleResolver(sandboxURL), obs), obs, authState.authn, authState.metas, nil)
+	RegisterData(e, client.NewRouter(singleResolver(sandboxURL), obs), obs, authState.authn, authState.metas, nil, nil)
 	return e, obs, authState
 }
 
@@ -283,4 +285,14 @@ type mapResolver map[string]string
 
 func (m mapResolver) ResolveBaseURL(_ context.Context, projectID string) (string, error) {
 	return m[projectID], nil
+}
+
+func newModelHandler(t *testing.T) *handler.ModelHandler {
+	t.Helper()
+	return handler.NewModelHandler(llmmodel.NewService(llmmodel.NewMemoryRepository(), nil))
+}
+
+func newRoleHandler(t *testing.T) *handler.RoleHandler {
+	t.Helper()
+	return handler.NewRoleHandler(agentrole.NewService(agentrole.NewMemoryRepository(), nil, 0))
 }

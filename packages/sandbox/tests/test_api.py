@@ -20,6 +20,33 @@ def init_project(client: TestClient, project_id: str = "p1") -> None:
     assert response.status_code == 200, response.text
 
 
+class RecordingAgent:
+    mode = "recording"
+
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    async def run(
+        self,
+        project_id,
+        message,
+        workspace,
+        session_id=None,
+        agent_roles=None,
+        team_mode=False,
+    ):
+        self.calls.append(
+            {
+                "project_id": project_id,
+                "message": message,
+                "session_id": session_id,
+                "agent_roles": agent_roles,
+                "team_mode": team_mode,
+            }
+        )
+        yield {"type": "agent", "payload": {"type": "result", "subtype": "success"}}
+
+
 def test_health(tmp_path):
     response = make_client(tmp_path).get("/health")
     assert response.status_code == 200
@@ -263,3 +290,55 @@ def test_chat_rejects_missing_reference(tmp_path):
     )
 
     assert response.status_code == 400
+
+
+def test_chat_passes_agent_roles_and_team_mode_through_turn_to_agent(tmp_path):
+    client = make_client(tmp_path)
+    init_project(client)
+    recorder = RecordingAgent()
+    manager = client.app.state.chat_turns
+    manager.agent = recorder
+    original_start = manager.start
+    turns = []
+
+    async def recording_start(*args, **kwargs):
+        turn = await original_start(*args, **kwargs)
+        turns.append(turn)
+        return turn
+
+    manager.start = recording_start
+    agent_roles = [
+        {
+            "id": 1,
+            "roleCode": "team",
+            "roleNameEn": "Team",
+            "roleNameZh": "团队",
+            "description": "lead",
+            "systemPrompt": "你是团队协调者",
+        },
+        {
+            "id": 2,
+            "roleCode": "alex",
+            "roleNameEn": "Alex",
+            "roleNameZh": "全栈工程师",
+            "description": "code",
+            "systemPrompt": "你是 Alex",
+        },
+    ]
+
+    with client.stream(
+        "POST",
+        "/internal/projects/p1/chat",
+        json={"message": "组队实现页面", "agentRoles": agent_roles, "teamMode": True},
+    ) as response:
+        assert response.status_code == 200
+        body = "".join(response.iter_text())
+    assert "data: [DONE]" in body
+
+    assert len(turns) == 1
+    assert turns[0].agent_roles == agent_roles
+    assert turns[0].team_mode is True
+
+    assert len(recorder.calls) == 1
+    assert recorder.calls[0]["agent_roles"] == agent_roles
+    assert recorder.calls[0]["team_mode"] is True

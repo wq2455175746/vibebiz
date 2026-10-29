@@ -16,17 +16,18 @@ from claude_agent_sdk import (
 
 from app.config import Settings
 from app.observability import AGENT_RUNS, get_logger, get_tracer
+from app.services.agent_roles import ALLOWED_TOOLS, build_agent_definitions, build_role_prompt
 from app.services.workspace import Workspace
 
 logger = get_logger()
-
-ALLOWED_TOOLS = ["Read", "Write", "Edit", "Bash", "Glob", "Grep"]
 
 
 def build_options(
     settings: Settings,
     cwd: str | Path,
     session_id: str | None = None,
+    agent_roles: list[dict[str, Any]] | None = None,
+    team_mode: bool = False,
 ) -> ClaudeAgentOptions:
     env: dict[str, str] = {}
     if settings.anthropic_base_url:
@@ -50,16 +51,32 @@ def build_options(
         if path
     ]
 
+    role_prompt = build_role_prompt(agent_roles or [], team_mode)
+    agent_defs = build_agent_definitions(agent_roles or [], team_mode)
+    system_prompt = None
+    if role_prompt:
+        system_prompt = {
+            "type": "preset",
+            "preset": "claude_code",
+            "append": role_prompt,
+        }
+    allowed_tools = list(ALLOWED_TOOLS)
+    if agent_defs:
+        allowed_tools.append("Agent")
+
     return ClaudeAgentOptions(
         cwd=str(cwd),
         model=settings.agent_model,
         env=env,
         max_turns=settings.agent_max_turns,
         permission_mode="acceptEdits",
-        allowed_tools=ALLOWED_TOOLS,
+        allowed_tools=allowed_tools,
         setting_sources=["user", "project"],
         skills=skills,
         plugins=plugins,
+        system_prompt=system_prompt,
+        agents=agent_defs or None,
+        forward_subagent_text=False,
         resume=session_id,
     )
 
@@ -77,6 +94,8 @@ class ClaudeAgent:
         message: str,
         workspace: Workspace,
         session_id: str | None = None,
+        agent_roles: list[dict[str, Any]] | None = None,
+        team_mode: bool = False,
     ) -> AsyncIterator[dict]:
         tracer = get_tracer()
         with tracer.start_as_current_span("agent.run") as span:
@@ -94,7 +113,9 @@ class ClaudeAgent:
             )
             status = "error"
             try:
-                async for event in self._run(project_id, message, workspace, session_id):
+                async for event in self._run(
+                    project_id, message, workspace, session_id, agent_roles, team_mode
+                ):
                     yield event
                 status = "success"
             except Exception as exc:
@@ -128,10 +149,12 @@ class ClaudeAgent:
         message: str,
         workspace: Workspace,
         session_id: str | None = None,
+        agent_roles: list[dict[str, Any]] | None = None,
+        team_mode: bool = False,
     ) -> AsyncIterator[dict]:
         project_dir = workspace.project_dir(project_id)
         session = session_id or self._sessions.get(project_id)
-        options = build_options(self.settings, project_dir, session)
+        options = build_options(self.settings, project_dir, session, agent_roles, team_mode)
         async for sdk_message in query(prompt=message, options=options):
             if isinstance(sdk_message, ResultMessage) and sdk_message.session_id:
                 self._sessions[project_id] = sdk_message.session_id

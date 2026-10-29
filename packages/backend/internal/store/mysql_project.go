@@ -35,21 +35,27 @@ func (s *MySQLProjectStore) Create(ctx context.Context, project *model.Project) 
 	if status == "" {
 		status = model.ProjectStateReady
 	}
-	row := &daomodel.Project{
-		PublicID:    project.ID,
-		WorkspaceID: project.WorkspaceID,
-		UserID:      project.OwnerUserID,
-		Name:        project.Name,
-		Prompt:      project.Prompt,
-		SandboxID:   project.SandboxID,
-		TopicID:     s.commonTopicID,
-		Status:      status,
-		Base: daomodel.Base{
-			CreatedAt: project.CreatedAt,
-			UpdatedAt: project.UpdatedAt,
-		},
-	}
-	return s.db.WithContext(ctx).Create(row).Error
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		row := &daomodel.Project{
+			PublicID:           project.ID,
+			WorkspaceID:        project.WorkspaceID,
+			UserID:             project.OwnerUserID,
+			Name:               project.Name,
+			Prompt:             project.Prompt,
+			SandboxID:          project.SandboxID,
+			TopicID:            s.commonTopicID,
+			Status:             status,
+			DefaultAgentRoleID: project.DefaultAgentRoleID,
+			Base: daomodel.Base{
+				CreatedAt: project.CreatedAt,
+				UpdatedAt: project.UpdatedAt,
+			},
+		}
+		if err := tx.Create(row).Error; err != nil {
+			return err
+		}
+		return replaceProjectAgentRoles(tx, row.ID, project.AgentRoleIDs)
+	})
 }
 
 func (s *MySQLProjectStore) Get(ctx context.Context, id string) (*model.Project, error) {
@@ -61,7 +67,69 @@ func (s *MySQLProjectStore) Get(ctx context.Context, id string) (*model.Project,
 		}
 		return nil, fmt.Errorf("get project: %w", err)
 	}
-	return toProject(&row), nil
+	project := toProject(&row)
+	roleIDs, err := loadProjectAgentRoles(s.db.WithContext(ctx), row.ID)
+	if err != nil {
+		return nil, err
+	}
+	project.AgentRoleIDs = roleIDs
+	return project, nil
+}
+
+func (s *MySQLProjectStore) SetAgentRoles(ctx context.Context, id string, roleIDs []int64) error {
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var projectID int64
+		if err := tx.Table("project").Select("id").Where("public_id = ?", id).Take(&projectID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrNotFound
+			}
+			return err
+		}
+		var defaultID *int64
+		if len(roleIDs) > 0 {
+			first := roleIDs[0]
+			defaultID = &first
+		}
+		if err := tx.Table("project").Where("id = ?", projectID).
+			Update("default_agent_role_id", defaultID).Error; err != nil {
+			return err
+		}
+		return replaceProjectAgentRoles(tx, projectID, roleIDs)
+	})
+}
+
+func replaceProjectAgentRoles(tx *gorm.DB, projectID int64, roleIDs []int64) error {
+	if err := tx.Exec("DELETE FROM `project_agent_role` WHERE project_id = ?", projectID).Error; err != nil {
+		return err
+	}
+	if len(roleIDs) == 0 {
+		return nil
+	}
+	rows := make([]map[string]any, 0, len(roleIDs))
+	for index, roleID := range roleIDs {
+		rows = append(rows, map[string]any{
+			"project_id": projectID, "agent_role_id": roleID, "sort_order": index,
+		})
+	}
+	return tx.Table("project_agent_role").Create(&rows).Error
+}
+
+func loadProjectAgentRoles(tx *gorm.DB, projectID int64) ([]int64, error) {
+	var rows []struct {
+		AgentRoleID int64 `gorm:"column:agent_role_id"`
+	}
+	if err := tx.Table("project_agent_role").
+		Select("agent_role_id").
+		Where("project_id = ?", projectID).
+		Order("sort_order ASC,id ASC").
+		Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	ids := make([]int64, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.AgentRoleID)
+	}
+	return ids, nil
 }
 
 func (s *MySQLProjectStore) List(ctx context.Context) []*model.Project {
@@ -131,14 +199,15 @@ func (s *MySQLProjectStore) Delete(ctx context.Context, id string) error {
 
 func toProject(row *daomodel.Project) *model.Project {
 	return &model.Project{
-		ID:          row.PublicID,
-		Name:        row.Name,
-		Prompt:      row.Prompt,
-		State:       row.Status,
-		WorkspaceID: row.WorkspaceID,
-		OwnerUserID: row.UserID,
-		SandboxID:   row.SandboxID,
-		CreatedAt:   row.CreatedAt,
-		UpdatedAt:   row.UpdatedAt,
+		ID:                 row.PublicID,
+		Name:               row.Name,
+		Prompt:             row.Prompt,
+		State:              row.Status,
+		WorkspaceID:        row.WorkspaceID,
+		OwnerUserID:        row.UserID,
+		SandboxID:          row.SandboxID,
+		DefaultAgentRoleID: row.DefaultAgentRoleID,
+		CreatedAt:          row.CreatedAt,
+		UpdatedAt:          row.UpdatedAt,
 	}
 }

@@ -16,17 +16,20 @@ import (
 
 	"vibebiz/internal/account"
 	"vibebiz/internal/admin"
+	"vibebiz/internal/agentrole"
 	"vibebiz/internal/auth"
 	"vibebiz/internal/client"
 	"vibebiz/internal/config"
 	"vibebiz/internal/dao"
 	"vibebiz/internal/handler"
+	"vibebiz/internal/llmmodel"
 	"vibebiz/internal/notification"
 	"vibebiz/internal/observability"
 	"vibebiz/internal/requestcount"
 	"vibebiz/internal/router"
 	storages3 "vibebiz/internal/s3"
 	"vibebiz/internal/sandboxregistry"
+	"vibebiz/internal/secret"
 	"vibebiz/internal/server"
 	"vibebiz/internal/store"
 )
@@ -116,6 +119,18 @@ func main() {
 	}
 	requestCounter := requestcount.NewCounter(redisClient, redisPrefix)
 	adminRepo := admin.NewMySQLRepository(db, requestCounter)
+	var modelCipher *secret.Cipher
+	if cfg.ModelSecretKey != "" {
+		modelCipher, err = secret.NewCipher(cfg.ModelSecretKey)
+		if err != nil {
+			obs.Logger.Error("model secret key invalid", "error", err)
+			os.Exit(1)
+		}
+	}
+	modelService := llmmodel.NewService(llmmodel.NewMySQLRepository(db), modelCipher)
+	modelHandler := handler.NewModelHandler(modelService)
+	roleService := agentrole.NewService(agentrole.NewMySQLRepository(db), avatarPresigner, cfg.S3PresignExpiry())
+	roleHandler := handler.NewRoleHandler(roleService)
 	registryRepo := sandboxregistry.NewMySQLRepository(db)
 	selector := sandboxregistry.NewSelector(registryRepo, cfg.SandboxHeartbeatTTL, time.Now)
 	resolver := sandboxregistry.NewResolver(registryRepo, selector, cfg.SandboxHeartbeatTTL, time.Now)
@@ -166,7 +181,7 @@ func main() {
 
 	e := server.New(cfg, obs)
 	e.Use(requestCounter.Middleware())
-	router.RegisterControl(e, adminRepo, projectStore, provisioner, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler, registryHandler)
+	router.RegisterControl(e, adminRepo, projectStore, provisioner, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler, registryHandler, modelHandler, roleHandler)
 	router.RegisterChatHistory(e, handler.NewChatHistoryHandler(sandboxRouter, projectStore), authn)
 
 	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))

@@ -12,6 +12,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"vibebiz/internal/agentrole"
 	"vibebiz/internal/auth"
 	"vibebiz/internal/model"
 	"vibebiz/internal/sandboxregistry"
@@ -69,8 +70,25 @@ func (f *fakeMetaStore) Delete(_ context.Context, projectID string) error {
 	return nil
 }
 
-func newProjectHandlerForTest(projectStore store.ProjectStore, init *fakeInitializer, metas auth.ProjectMetaStore) *ProjectHandler {
-	h := NewProjectHandler(projectStore, init, nil, metas)
+type fakeAgentRoles struct {
+	roles []agentrole.Role
+}
+
+func (f *fakeAgentRoles) ListActive(context.Context) ([]agentrole.Role, error) {
+	return f.roles, nil
+}
+
+func (f *fakeAgentRoles) GetActive(_ context.Context, id int64) (agentrole.Role, error) {
+	for _, role := range f.roles {
+		if role.ID == id && role.Status == 1 {
+			return role, nil
+		}
+	}
+	return agentrole.Role{}, agentrole.ErrNotFound
+}
+
+func newProjectHandlerForTest(projectStore store.ProjectStore, init *fakeInitializer, metas auth.ProjectMetaStore, roles AgentRoleStore) *ProjectHandler {
+	h := NewProjectHandler(projectStore, init, nil, metas, roles)
 	h.Now = func() time.Time { return time.Unix(1700000000, 0).UTC() }
 	return h
 }
@@ -106,7 +124,7 @@ func TestCreateProjectUsesSessionWorkspaceAndOwner(t *testing.T) {
 	projectStore := store.NewMemoryProjectStore()
 	init := &fakeInitializer{sandboxID: 42}
 	metas := newFakeMetaStore()
-	h := newProjectHandlerForTest(projectStore, init, metas)
+	h := newProjectHandlerForTest(projectStore, init, metas, &fakeAgentRoles{})
 
 	e := echo.New()
 	routeWithSession(e, http.MethodPost, "/cp/api/v1/projects", h.Create, sessionForTest(3, 4))
@@ -136,7 +154,7 @@ func TestCreateProjectUsesSessionWorkspaceAndOwner(t *testing.T) {
 
 func TestCreateProjectUsesCurrentWorkspace(t *testing.T) {
 	metas := newFakeMetaStore()
-	h := newProjectHandlerForTest(store.NewMemoryProjectStore(), &fakeInitializer{}, metas)
+	h := newProjectHandlerForTest(store.NewMemoryProjectStore(), &fakeInitializer{}, metas, &fakeAgentRoles{})
 
 	e := echo.New()
 	routeWithSession(e, http.MethodPost, "/cp/api/v1/projects", h.Create, sessionForTest(3, 4))
@@ -156,7 +174,7 @@ func TestCreateProjectUsesCurrentWorkspace(t *testing.T) {
 
 func TestCreateProjectRejectsForeignCurrentWorkspace(t *testing.T) {
 	projectStore := store.NewMemoryProjectStore()
-	h := newProjectHandlerForTest(projectStore, &fakeInitializer{}, newFakeMetaStore())
+	h := newProjectHandlerForTest(projectStore, &fakeInitializer{}, newFakeMetaStore(), &fakeAgentRoles{})
 
 	session := sessionForTest(3)
 	session.CurrentWorkspaceID = 99
@@ -177,7 +195,7 @@ func TestCreateProjectRejectsForeignCurrentWorkspace(t *testing.T) {
 }
 
 func TestCreateProjectRequiresPrompt(t *testing.T) {
-	h := newProjectHandlerForTest(store.NewMemoryProjectStore(), &fakeInitializer{}, newFakeMetaStore())
+	h := newProjectHandlerForTest(store.NewMemoryProjectStore(), &fakeInitializer{}, newFakeMetaStore(), &fakeAgentRoles{})
 	e := echo.New()
 	routeWithSession(e, http.MethodPost, "/cp/api/v1/projects", h.Create, sessionForTest(3))
 
@@ -193,7 +211,7 @@ func TestCreateProjectRequiresPrompt(t *testing.T) {
 
 func TestCreateProjectSandboxFailure(t *testing.T) {
 	projectStore := store.NewMemoryProjectStore()
-	h := newProjectHandlerForTest(projectStore, &fakeInitializer{err: errors.New("boom")}, newFakeMetaStore())
+	h := newProjectHandlerForTest(projectStore, &fakeInitializer{err: errors.New("boom")}, newFakeMetaStore(), &fakeAgentRoles{})
 	e := echo.New()
 	routeWithSession(e, http.MethodPost, "/cp/api/v1/projects", h.Create, sessionForTest(3))
 
@@ -224,7 +242,7 @@ func TestCreateProjectSandboxFailure(t *testing.T) {
 
 func TestCreateProjectNoSandboxReturns503(t *testing.T) {
 	projectStore := store.NewMemoryProjectStore()
-	h := newProjectHandlerForTest(projectStore, &fakeInitializer{err: sandboxregistry.ErrNoHealthySandbox}, newFakeMetaStore())
+	h := newProjectHandlerForTest(projectStore, &fakeInitializer{err: sandboxregistry.ErrNoHealthySandbox}, newFakeMetaStore(), &fakeAgentRoles{})
 	e := echo.New()
 	routeWithSession(e, http.MethodPost, "/cp/api/v1/projects", h.Create, sessionForTest(3))
 
@@ -245,7 +263,7 @@ func TestCreateProjectMetaFailureRollsBack(t *testing.T) {
 	projectStore := store.NewMemoryProjectStore()
 	metas := newFakeMetaStore()
 	metas.setErr = errors.New("redis down")
-	h := newProjectHandlerForTest(projectStore, &fakeInitializer{}, metas)
+	h := newProjectHandlerForTest(projectStore, &fakeInitializer{}, metas, &fakeAgentRoles{})
 	e := echo.New()
 	routeWithSession(e, http.MethodPost, "/cp/api/v1/projects", h.Create, sessionForTest(3))
 
@@ -269,7 +287,7 @@ func TestListProjectsUsesCurrentWorkspace(t *testing.T) {
 	projectStore.Create(context.Background(), &model.Project{ID: "p2", WorkspaceID: 2, CreatedAt: now})
 	projectStore.Create(context.Background(), &model.Project{ID: "p3", WorkspaceID: 3, CreatedAt: now})
 
-	h := newProjectHandlerForTest(projectStore, &fakeInitializer{}, newFakeMetaStore())
+	h := newProjectHandlerForTest(projectStore, &fakeInitializer{}, newFakeMetaStore(), &fakeAgentRoles{})
 	e := echo.New()
 	routeWithSession(e, http.MethodGet, "/cp/api/v1/projects", h.List, sessionForTest(1, 2))
 
@@ -296,7 +314,7 @@ func TestGetProjectCrossWorkspaceNotFound(t *testing.T) {
 	projectStore := store.NewMemoryProjectStore()
 	projectStore.Create(context.Background(), &model.Project{ID: "p2", WorkspaceID: 2})
 
-	h := newProjectHandlerForTest(projectStore, &fakeInitializer{}, newFakeMetaStore())
+	h := newProjectHandlerForTest(projectStore, &fakeInitializer{}, newFakeMetaStore(), &fakeAgentRoles{})
 	e := echo.New()
 	routeWithSession(e, http.MethodGet, "/cp/api/v1/projects/:id", h.Get, sessionForTest(1))
 
@@ -311,7 +329,7 @@ func TestGetProjectOwnWorkspace(t *testing.T) {
 	projectStore := store.NewMemoryProjectStore()
 	projectStore.Create(context.Background(), &model.Project{ID: "p1", WorkspaceID: 1})
 
-	h := newProjectHandlerForTest(projectStore, &fakeInitializer{}, newFakeMetaStore())
+	h := newProjectHandlerForTest(projectStore, &fakeInitializer{}, newFakeMetaStore(), &fakeAgentRoles{})
 	e := echo.New()
 	routeWithSession(e, http.MethodGet, "/cp/api/v1/projects/:id", h.Get, sessionForTest(1))
 
@@ -326,7 +344,7 @@ func TestDeleteProjectCrossWorkspaceNotFound(t *testing.T) {
 	projectStore := store.NewMemoryProjectStore()
 	projectStore.Create(context.Background(), &model.Project{ID: "p2", WorkspaceID: 2})
 
-	h := newProjectHandlerForTest(projectStore, &fakeInitializer{}, newFakeMetaStore())
+	h := newProjectHandlerForTest(projectStore, &fakeInitializer{}, newFakeMetaStore(), &fakeAgentRoles{})
 	e := echo.New()
 	routeWithSession(e, http.MethodDelete, "/cp/api/v1/projects/:id", h.Delete, sessionForTest(1))
 
@@ -346,7 +364,7 @@ func TestDeleteProjectDeletesStoreAndMeta(t *testing.T) {
 	metas := newFakeMetaStore()
 	metas.items["p1"] = auth.ProjectMeta{WorkspaceID: 1, OwnerUserID: 7}
 
-	h := newProjectHandlerForTest(projectStore, &fakeInitializer{}, metas)
+	h := newProjectHandlerForTest(projectStore, &fakeInitializer{}, metas, &fakeAgentRoles{})
 	e := echo.New()
 	routeWithSession(e, http.MethodDelete, "/cp/api/v1/projects/:id", h.Delete, sessionForTest(1))
 
@@ -360,5 +378,51 @@ func TestDeleteProjectDeletesStoreAndMeta(t *testing.T) {
 	}
 	if len(metas.deleted) != 1 || metas.deleted[0] != "p1" {
 		t.Fatalf("meta not deleted: %v", metas.deleted)
+	}
+}
+
+func TestCreateProjectStoresAgentRoles(t *testing.T) {
+	projectStore := store.NewMemoryProjectStore()
+	roles := &fakeAgentRoles{roles: []agentrole.Role{
+		{ID: 2, RoleCode: "alex", RoleNameZH: "全栈工程师", Status: 1},
+		{ID: 4, RoleCode: "emma", RoleNameZH: "产品经理", Status: 1},
+	}}
+	h := NewProjectHandler(projectStore, &fakeInitializer{sandboxID: 42}, nil, newFakeMetaStore(), roles)
+	h.Now = func() time.Time { return time.Unix(1700000000, 0).UTC() }
+	e := echo.New()
+	routeWithSession(e, http.MethodPost, "/cp/api/v1/projects", h.Create, sessionForTest(3))
+	req := httptest.NewRequest(http.MethodPost, "/cp/api/v1/projects", strings.NewReader(`{"prompt":"hello","agentRoleIds":[2,4]}`))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	got, _ := projectStore.Get(context.Background(), decodeProjectEnvelope(t, rec).ID)
+	if len(got.AgentRoleIDs) != 2 || *got.DefaultAgentRoleID != 2 {
+		t.Fatalf("roles = %+v", got)
+	}
+}
+
+func TestUpdateProjectAgentRolesNormalizesTeam(t *testing.T) {
+	projectStore := store.NewMemoryProjectStore()
+	_ = projectStore.Create(context.Background(), &model.Project{ID: "p1", WorkspaceID: 3})
+	roles := &fakeAgentRoles{roles: []agentrole.Role{
+		{ID: 6, RoleCode: "team", RoleNameZH: "团队", Status: 1},
+		{ID: 2, RoleCode: "alex", RoleNameZH: "全栈工程师", Status: 1},
+	}}
+	h := NewProjectHandler(projectStore, &fakeInitializer{}, nil, newFakeMetaStore(), roles)
+	e := echo.New()
+	routeWithSession(e, http.MethodPut, "/cp/api/v1/projects/:id/agent-roles", h.UpdateAgentRoles, sessionForTest(3))
+	req := httptest.NewRequest(http.MethodPut, "/cp/api/v1/projects/p1/agent-roles", strings.NewReader(`{"agentRoleIds":[2,6]}`))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	got, _ := projectStore.Get(context.Background(), "p1")
+	if len(got.AgentRoleIDs) != 1 || got.AgentRoleIDs[0] != 6 {
+		t.Fatalf("team not normalized: %+v", got.AgentRoleIDs)
 	}
 }

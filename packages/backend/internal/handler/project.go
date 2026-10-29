@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
+	"vibebiz/internal/agentrole"
 	"vibebiz/internal/auth"
 	"vibebiz/internal/model"
 	"vibebiz/internal/observability"
@@ -26,21 +27,58 @@ type ProjectInitializer interface {
 	InitProject(ctx context.Context, id string) (int64, error)
 }
 
+const maxProjectAgentRoles = 5
+
+var errInvalidAgentRole = errors.New("invalid agent role")
+
+type AgentRoleStore interface {
+	ListActive(ctx context.Context) ([]agentrole.Role, error)
+	GetActive(ctx context.Context, id int64) (agentrole.Role, error)
+}
+
 type ProjectHandler struct {
 	Store   store.ProjectStore
 	Sandbox ProjectInitializer
 	Metas   auth.ProjectMetaStore
+	Roles   AgentRoleStore
 	Obs     *observability.Provider
 	Now     func() time.Time
 }
 
-func NewProjectHandler(projectStore store.ProjectStore, sandbox ProjectInitializer, obs *observability.Provider, metas auth.ProjectMetaStore) *ProjectHandler {
-	return &ProjectHandler{Store: projectStore, Sandbox: sandbox, Metas: metas, Obs: obs, Now: time.Now}
+func NewProjectHandler(projectStore store.ProjectStore, sandbox ProjectInitializer, obs *observability.Provider, metas auth.ProjectMetaStore, roles AgentRoleStore) *ProjectHandler {
+	return &ProjectHandler{Store: projectStore, Sandbox: sandbox, Metas: metas, Roles: roles, Obs: obs, Now: time.Now}
 }
 
 type createProjectRequest struct {
-	Prompt string `json:"prompt"`
-	Name   string `json:"name"`
+	Prompt       string  `json:"prompt"`
+	Name         string  `json:"name"`
+	AgentRoleIDs []int64 `json:"agentRoleIds"`
+}
+
+func (h *ProjectHandler) normalizeAgentRoles(ctx context.Context, ids []int64) ([]int64, error) {
+	seen := make(map[int64]struct{}, len(ids))
+	result := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if id <= 0 {
+			return nil, errInvalidAgentRole
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		role, err := h.Roles.GetActive(ctx, id)
+		if err != nil {
+			return nil, errInvalidAgentRole
+		}
+		seen[id] = struct{}{}
+		if role.RoleCode == "team" {
+			return []int64{role.ID}, nil
+		}
+		result = append(result, role.ID)
+	}
+	if len(result) > maxProjectAgentRoles {
+		return nil, errInvalidAgentRole
+	}
+	return result, nil
 }
 
 func (h *ProjectHandler) Create(c echo.Context) error {
@@ -52,6 +90,16 @@ func (h *ProjectHandler) Create(c echo.Context) error {
 	prompt := strings.TrimSpace(req.Prompt)
 	if prompt == "" {
 		return response.Fail(c, http.StatusBadRequest, 40002, "prompt is required")
+	}
+
+	roleIDs, err := h.normalizeAgentRoles(c.Request().Context(), req.AgentRoleIDs)
+	if err != nil {
+		return response.Fail(c, http.StatusBadRequest, 40007, "invalid agent roles")
+	}
+	var defaultRoleID *int64
+	if len(roleIDs) > 0 {
+		first := roleIDs[0]
+		defaultRoleID = &first
 	}
 
 	session, ok := auth.SessionFrom(c)
@@ -74,14 +122,16 @@ func (h *ProjectHandler) Create(c echo.Context) error {
 
 	now := h.Now().UTC()
 	project := &model.Project{
-		ID:          id,
-		Name:        name,
-		Prompt:      prompt,
-		State:       model.ProjectStateReady,
-		WorkspaceID: workspaceID,
-		OwnerUserID: session.UserID,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ID:                 id,
+		Name:               name,
+		Prompt:             prompt,
+		State:              model.ProjectStateReady,
+		WorkspaceID:        workspaceID,
+		OwnerUserID:        session.UserID,
+		DefaultAgentRoleID: defaultRoleID,
+		AgentRoleIDs:       roleIDs,
+		CreatedAt:          now,
+		UpdatedAt:          now,
 	}
 
 	ctx := c.Request().Context()
@@ -131,6 +181,36 @@ func (h *ProjectHandler) Create(c echo.Context) error {
 	}
 
 	return response.Created(c, project)
+}
+
+type updateAgentRolesRequest struct {
+	AgentRoleIDs []int64 `json:"agentRoleIds"`
+}
+
+func (h *ProjectHandler) UpdateAgentRoles(c echo.Context) error {
+	session, ok := auth.SessionFrom(c)
+	if !ok {
+		return response.Fail(c, http.StatusUnauthorized, 40101, "unauthorized")
+	}
+	var req updateAgentRolesRequest
+	if err := c.Bind(&req); err != nil {
+		return response.Fail(c, http.StatusBadRequest, 40001, "invalid request body")
+	}
+	project, err := h.Store.Get(c.Request().Context(), c.Param("id"))
+	if err != nil {
+		return response.Fail(c, http.StatusNotFound, 40401, "project not found")
+	}
+	if !containsInt64(session.WorkspaceIDs, project.WorkspaceID) {
+		return response.Fail(c, http.StatusNotFound, 40401, "project not found")
+	}
+	roleIDs, err := h.normalizeAgentRoles(c.Request().Context(), req.AgentRoleIDs)
+	if err != nil {
+		return response.Fail(c, http.StatusBadRequest, 40007, "invalid agent roles")
+	}
+	if err := h.Store.SetAgentRoles(c.Request().Context(), project.ID, roleIDs); err != nil {
+		return response.Fail(c, http.StatusInternalServerError, 50011, "update agent roles failed")
+	}
+	return response.OK(c, map[string]any{"agentRoleIds": roleIDs})
 }
 
 func (h *ProjectHandler) List(c echo.Context) error {

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -7,6 +8,8 @@ import re
 import sys
 import time
 import uuid
+import zipfile
+from collections.abc import Callable
 from contextvars import ContextVar
 from datetime import UTC, datetime
 
@@ -107,17 +110,120 @@ class _StdoutHandler(logging.StreamHandler):
         super().emit(record)
 
 
+def _coroutine_id() -> str:
+    try:
+        task = asyncio.current_task()
+        return str(id(task.get_coro())) if task else "-"
+    except RuntimeError:
+        return "-"
+
+
+class PlainFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        timestamp = datetime.fromtimestamp(record.created).strftime("%Y-%m-%d %H:%M:%S")
+        line = (
+            f"{timestamp}.{int(record.msecs):03d} | {record.levelname} | "
+            f"{record.threadName} | {record.thread} | "
+            f"{_request_id.get() or '-'} | {_coroutine_id()} | {record.getMessage()}"
+        )
+        if record.exc_info:
+            line += "\n" + self.formatException(record.exc_info)
+        return line
+
+
+class DailyZipFileHandler(logging.Handler):
+    def __init__(
+        self,
+        log_dir: str,
+        prefix: str = "sandbox",
+        retention_days: int = 180,
+        now: Callable[[], datetime] | None = None,
+    ) -> None:
+        super().__init__()
+        self.log_dir = log_dir
+        self.prefix = prefix
+        self.retention_days = retention_days
+        self._now = now or datetime.now
+        self._day = ""
+        self._stream = None
+        os.makedirs(log_dir, exist_ok=True)
+        self._open(self._day_of(self._now()))
+
+    def _day_of(self, value: datetime) -> str:
+        return value.strftime("%Y-%m-%d")
+
+    def _path(self, day: str) -> str:
+        return os.path.join(self.log_dir, f"{self.prefix}_{day}.log")
+
+    def _open(self, day: str) -> None:
+        self._stream = open(self._path(day), "a", encoding="utf-8")  # noqa: SIM115
+        self._day = day
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            day = self._day_of(self._now())
+            if day != self._day:
+                self._rotate(day)
+            if self._stream is None:
+                self._open(day)
+            self._stream.write(self.format(record) + "\n")
+            self._stream.flush()
+        except Exception:
+            self.handleError(record)
+
+    def _rotate(self, day: str) -> None:
+        if self._stream is not None:
+            self._stream.close()
+            self._stream = None
+        if self._day:
+            path = self._path(self._day)
+            if os.path.exists(path):
+                with zipfile.ZipFile(path + ".zip", "w", zipfile.ZIP_DEFLATED) as archive:
+                    archive.write(path, arcname=os.path.basename(path))
+                os.remove(path)
+        self._cleanup()
+        self._open(day)
+
+    def _cleanup(self) -> None:
+        cutoff = self._now().timestamp() - self.retention_days * 86400
+        for name in os.listdir(self.log_dir):
+            if not name.endswith(".zip"):
+                continue
+            path = os.path.join(self.log_dir, name)
+            try:
+                if os.path.getmtime(path) < cutoff:
+                    os.remove(path)
+            except OSError:
+                continue
+
+    def close(self) -> None:
+        if self._stream is not None:
+            self._stream.close()
+            self._stream = None
+        super().close()
+
+
 def configure_logging() -> None:
     level_name = os.getenv("LOG_LEVEL", "info").upper()
     _logger.setLevel(getattr(logging, level_name, logging.INFO))
     _logger.propagate = False
-    if any(getattr(handler, "_vibebiz_json", False) for handler in _logger.handlers):
-        return
+    if not any(getattr(handler, "_vibebiz_json", False) for handler in _logger.handlers):
+        handler = _StdoutHandler()
+        handler._vibebiz_json = True
+        handler.setFormatter(JsonFormatter())
+        _logger.addHandler(handler)
 
-    handler = _StdoutHandler()
-    handler._vibebiz_json = True
-    handler.setFormatter(JsonFormatter())
-    _logger.addHandler(handler)
+    log_dir = os.getenv("LOG_DIR", "").strip()
+    if log_dir and not any(
+        getattr(handler, "_vibebiz_file", False) for handler in _logger.handlers
+    ):
+        try:
+            file_handler = DailyZipFileHandler(log_dir)
+            file_handler._vibebiz_file = True
+            file_handler.setFormatter(PlainFormatter())
+            _logger.addHandler(file_handler)
+        except OSError as exc:
+            _logger.warning("file logging disabled: %s", exc)
 
 
 def get_logger() -> logging.Logger:

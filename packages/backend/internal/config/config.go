@@ -45,6 +45,7 @@ type Config struct {
 	S3RemoteDirPrefix      string
 	S3ForcePathStyle       bool
 	S3PresignExpiryMinutes int
+	ModelSecretKey         string
 }
 
 func Load(plane string) Config {
@@ -87,6 +88,7 @@ func Load(plane string) Config {
 		S3RemoteDirPrefix:      getString("S3_REMOTE_DIR_PREFIX", ""),
 		S3ForcePathStyle:       getBool("S3_FORCE_PATH_STYLE", getString("S3_ENDPOINT", "") != ""),
 		S3PresignExpiryMinutes: getInt("S3_PRESIGN_EXPIRY_MINUTES", 15),
+		ModelSecretKey:         getString("MODEL_SECRET_KEY", ""),
 	}
 }
 

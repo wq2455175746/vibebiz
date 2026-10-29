@@ -74,7 +74,7 @@ func TestMemoryProjectStoreListByWorkspaces(t *testing.T) {
 	now := time.Now()
 	s.Create(context.Background(), &model.Project{ID: "w1-old", WorkspaceID: 1, OwnerUserID: 7, CreatedAt: now.Add(-time.Hour)})
 	s.Create(context.Background(), &model.Project{ID: "w1-new", WorkspaceID: 1, OwnerUserID: 8, CreatedAt: now})
-	s.Create(context.Background(), &model.Project{ID: "w2", WorkspaceID: 2, OwnerUserID: 9, CreatedAt: now})
+	s.Create(context.Background(), &model.Project{ID: "w2", WorkspaceID: 2, OwnerUserID: 9, CreatedAt: now.Add(-2 * time.Hour)})
 	s.Create(context.Background(), &model.Project{ID: "legacy", CreatedAt: now})
 
 	list := s.ListByWorkspaces(context.Background(), []int64{1})
@@ -92,6 +92,42 @@ func TestMemoryProjectStoreListByWorkspaces(t *testing.T) {
 
 	if list := s.ListByWorkspaces(context.Background(), nil); len(list) != 0 {
 		t.Fatalf("empty workspace ids returned %+v", list)
+	}
+}
+
+func TestMemoryProjectStoreSetAndGetAgentRoles(t *testing.T) {
+	s := NewMemoryProjectStore()
+	project := &model.Project{ID: "p1", Name: "demo", WorkspaceID: 1}
+	if err := s.Create(context.Background(), project); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetAgentRoles(context.Background(), "p1", []int64{2, 4}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Get(context.Background(), "p1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.AgentRoleIDs) != 2 || got.AgentRoleIDs[0] != 2 || got.AgentRoleIDs[1] != 4 {
+		t.Fatalf("role ids = %v", got.AgentRoleIDs)
+	}
+	if got.DefaultAgentRoleID == nil || *got.DefaultAgentRoleID != 2 {
+		t.Fatalf("default role = %v", got.DefaultAgentRoleID)
+	}
+}
+
+func TestMemoryProjectStoreClearAgentRoles(t *testing.T) {
+	s := NewMemoryProjectStore()
+	project := &model.Project{ID: "p1", Name: "demo", WorkspaceID: 1, AgentRoleIDs: []int64{2}}
+	if err := s.Create(context.Background(), project); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetAgentRoles(context.Background(), "p1", nil); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := s.Get(context.Background(), "p1")
+	if len(got.AgentRoleIDs) != 0 || got.DefaultAgentRoleID != nil {
+		t.Fatalf("roles not cleared: %+v", got)
 	}
 }
 

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { applyMention, collectReferences, findActiveMention, mergeReferences } from './mentions'
+import {
+  applyMention,
+  collectReferences,
+  findActiveMention,
+  mentionQuery,
+  mergeReferences,
+} from './mentions'
 import type { FileEntry, ProjectResource } from '@/types'
 
 const resource: ProjectResource = {
@@ -25,6 +31,10 @@ describe('mentions', () => {
       value: '参考 @需求.pdf ',
       cursor: 11,
     })
+  })
+
+  it('queries without the leading @', () => {
+    expect(mentionQuery('参考 @需求.pdf', 3, 10)).toBe('需求.pdf')
   })
 
   it('resolves resources and project files', () => {

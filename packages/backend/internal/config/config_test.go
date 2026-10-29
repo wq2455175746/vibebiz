@@ -164,3 +164,10 @@ func TestLoadSandboxRegistryDefaults(t *testing.T) {
 		t.Fatalf("asynq = %d/%d", cfg.AsynqRedisDB, cfg.AsynqConcurrency)
 	}
 }
+
+func TestLoadModelSecretKey(t *testing.T) {
+	t.Setenv("MODEL_SECRET_KEY", "abc")
+	if cfg := Load("cp"); cfg.ModelSecretKey != "abc" {
+		t.Fatalf("model secret key = %q", cfg.ModelSecretKey)
+	}
+}

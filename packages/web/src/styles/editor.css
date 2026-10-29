@@ -945,6 +945,34 @@ button.file-row {
   color: var(--ink);
 }
 
+.chat-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chat-role-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.chat-role-chip button {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+}
+
 .mention-menu {
   position: absolute;
   z-index: 5;
@@ -977,7 +1005,8 @@ button.file-row {
   cursor: pointer;
 }
 
-.mention-item:hover {
+.mention-item:hover,
+.mention-item.active {
   background: var(--soft);
 }
 

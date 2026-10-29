@@ -18,6 +18,7 @@ type ProjectStore interface {
 	ListByWorkspaces(ctx context.Context, workspaceIDs []int64) []*model.Project
 	Update(ctx context.Context, project *model.Project) error
 	Delete(ctx context.Context, id string) error
+	SetAgentRoles(ctx context.Context, id string, roleIDs []int64) error
 }
 
 type MemoryProjectStore struct {
@@ -106,7 +107,25 @@ func (s *MemoryProjectStore) Update(_ context.Context, project *model.Project) e
 	return nil
 }
 
+func (s *MemoryProjectStore) SetAgentRoles(_ context.Context, id string, roleIDs []int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	project, ok := s.items[id]
+	if !ok {
+		return ErrNotFound
+	}
+	project.AgentRoleIDs = append([]int64(nil), roleIDs...)
+	if len(roleIDs) == 0 {
+		project.DefaultAgentRoleID = nil
+	} else {
+		first := roleIDs[0]
+		project.DefaultAgentRoleID = &first
+	}
+	return nil
+}
+
 func clone(project *model.Project) *model.Project {
 	copied := *project
+	copied.AgentRoleIDs = append([]int64(nil), project.AgentRoleIDs...)
 	return &copied
 }

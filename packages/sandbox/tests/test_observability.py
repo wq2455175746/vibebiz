@@ -1,4 +1,6 @@
 import json
+import logging
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -12,7 +14,12 @@ from opentelemetry.trace import SpanKind
 
 from app.config import Settings
 from app.main import create_app
-from app.observability import _build_provider, build_sampler
+from app.observability import (
+    DailyZipFileHandler,
+    PlainFormatter,
+    _build_provider,
+    build_sampler,
+)
 
 
 def make_client(tmp_path: Path, tracer_provider: TracerProvider | None = None) -> TestClient:
@@ -248,3 +255,24 @@ def test_agent_failure_logs_error_context(tmp_path, capsys):
         assert record["span_id"]
     assert agent_error["mode"] == "stub"
     assert end["status"] == "error"
+
+
+def test_daily_file_handler_writes_text_and_zips_previous_day(tmp_path):
+    log_dir = tmp_path / "logs"
+    current = datetime(2026, 10, 29, 12, 0, 0)
+    handler = DailyZipFileHandler(str(log_dir), now=lambda: current)
+    handler.setFormatter(PlainFormatter())
+    record = logging.LogRecord(
+        "vibebiz.sandbox", logging.INFO, __file__, 1, "hello file log", None, None
+    )
+
+    handler.emit(record)
+    current = datetime(2026, 10, 30, 12, 0, 0)
+    handler.emit(record)
+    handler.close()
+
+    assert (log_dir / "sandbox_2026-10-29.log.zip").exists()
+    assert not (log_dir / "sandbox_2026-10-29.log").exists()
+    content = (log_dir / "sandbox_2026-10-30.log").read_text(encoding="utf-8")
+    assert "hello file log" in content
+    assert "INFO" in content

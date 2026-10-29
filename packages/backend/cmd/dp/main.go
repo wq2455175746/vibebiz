@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"vibebiz/internal/agentrole"
 	"vibebiz/internal/auth"
 	"vibebiz/internal/client"
 	"vibebiz/internal/config"
@@ -19,10 +20,12 @@ import (
 	"vibebiz/internal/handler"
 	"vibebiz/internal/observability"
 	"vibebiz/internal/resource"
+	"vibebiz/internal/role"
 	"vibebiz/internal/router"
 	storages3 "vibebiz/internal/s3"
 	"vibebiz/internal/sandboxregistry"
 	"vibebiz/internal/server"
+	"vibebiz/internal/store"
 )
 
 const redisPrefix = "vibebiz"
@@ -105,8 +108,16 @@ func main() {
 	resourceService.Expiry = cfg.S3PresignExpiry()
 	resourceHandler := handler.NewResourceHandler(resourceService, obs)
 
+	projectStore, err := store.NewMySQLProjectStore(ctx, db)
+	if err != nil {
+		obs.Logger.Error("project store init failed", "error", err)
+		os.Exit(1)
+	}
+	roleService := agentrole.NewService(agentrole.NewMySQLRepository(db), nil, 0)
+	roleResolver := role.NewResolver(projectStore, roleService)
+
 	e := server.New(cfg, obs)
-	router.RegisterData(e, sandbox, obs, authn, metas, resourceHandler)
+	router.RegisterData(e, sandbox, obs, authn, metas, resourceHandler, roleResolver)
 
 	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
 	go func() {

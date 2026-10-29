@@ -9,6 +9,7 @@ VITE_CP_BASE ?= /cp/api/v1
 VITE_DP_BASE ?= /dp/api/v1
 VITE_OPS_API_BASE ?= /cp/api/v1/admin
 VITE_DEMO_LOGIN ?= true
+CONTAINER_ENGINE ?= docker
 export VITE_CP_BASE VITE_DP_BASE VITE_OPS_API_BASE VITE_DEMO_LOGIN
 
 .PHONY: help init install install-web install-ops-web install-backend install-sandbox \
@@ -17,7 +18,10 @@ export VITE_CP_BASE VITE_DP_BASE VITE_OPS_API_BASE VITE_DEMO_LOGIN
 	lint quality validate validate-web validate-ops-web validate-backend validate-sandbox \
 	checkpoint memory-add harness-update harness-failure deps-check \
 	db-create db-migrate-up db-migrate-down db-migrate-status db-migrate-version db-migrate-redo \
-	build docker-build docker-build-split docker-build-all docker-up docker-down clean
+	build docker-build docker-build-split docker-build-all \
+	podman-build podman-build-split podman-build-all \
+	container-build container-build-split container-build-all \
+	docker-up docker-down clean
 
 help:
 	@echo "vibebiz harness"
@@ -42,8 +46,11 @@ help:
 	@echo "  make db-create       - 创建 MySQL database（如不存在）"
 	@echo "  make db-migrate-up   - 执行所有待执行迁移"
 	@echo "  make db-migrate-status - 查看迁移状态"
-	@echo "  make docker-build    - 构建合并版 backend + sandbox + web + ops-web"
-	@echo "  make docker-build-split - 构建独立 cp / dp 镜像（后续多容器模式）"
+	@echo "  make docker-build    - 使用 docker 构建合并版 backend + sandbox + web + ops-web"
+	@echo "  make docker-build-split - 使用 docker 构建独立 cp / dp 镜像"
+	@echo "  make podman-build    - 使用 podman 构建合并版 backend + sandbox + web + ops-web"
+	@echo "  make podman-build-split - 使用 podman 构建独立 cp / dp 镜像"
+	@echo "  make podman-build-all - 使用 podman 构建全部镜像"
 	@echo "  make docker-up       - docker compose 启动"
 	@echo "  make docker-down     - docker compose 停止"
 	@echo "  make clean           - 清理构建产物与本地数据"
@@ -181,24 +188,40 @@ build:
 	@$(MAKE) --no-print-directory -C $(WEB) build
 	@$(MAKE) --no-print-directory -C $(OPS_WEB) build
 
-docker-build: init
-	@docker build -t vibebiz/backend:local --target combined $(BACKEND)
-	@docker build -t vibebiz/sandbox:local $(SANDBOX)
-	@docker build -t vibebiz/web:local \
+container-build: init
+	@$(CONTAINER_ENGINE) build -t vibebiz/backend:local --target combined $(BACKEND)
+	@$(CONTAINER_ENGINE) build -t vibebiz/sandbox:local $(SANDBOX)
+	@$(CONTAINER_ENGINE) build -t vibebiz/web:local \
 		--build-arg VITE_CP_BASE=$(VITE_CP_BASE) \
 		--build-arg VITE_DP_BASE=$(VITE_DP_BASE) \
 		--build-arg VITE_DEMO_LOGIN=$(VITE_DEMO_LOGIN) \
 		$(WEB)
-	@docker build -t vibebiz/ops-web:local \
+	@$(CONTAINER_ENGINE) build -t vibebiz/ops-web:local \
 		--build-arg VITE_OPS_API_BASE=$(VITE_OPS_API_BASE) \
 		--build-arg VITE_DEMO_LOGIN=$(VITE_DEMO_LOGIN) \
 		$(OPS_WEB)
 
-docker-build-split: init
-	@docker build -t vibebiz/cp:local --target cp $(BACKEND)
-	@docker build -t vibebiz/dp:local --target dp $(BACKEND)
+container-build-split: init
+	@$(CONTAINER_ENGINE) build -t vibebiz/cp:local --target cp $(BACKEND)
+	@$(CONTAINER_ENGINE) build -t vibebiz/dp:local --target dp $(BACKEND)
+
+container-build-all: container-build container-build-split
+
+docker-build: CONTAINER_ENGINE=docker
+docker-build: container-build
+
+docker-build-split: CONTAINER_ENGINE=docker
+docker-build-split: container-build-split
 
 docker-build-all: docker-build docker-build-split
+
+podman-build: CONTAINER_ENGINE=podman
+podman-build: container-build
+
+podman-build-split: CONTAINER_ENGINE=podman
+podman-build-split: container-build-split
+
+podman-build-all: podman-build podman-build-split
 
 docker-up: init
 	@docker compose up --build -d

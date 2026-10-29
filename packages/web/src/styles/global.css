@@ -226,3 +226,53 @@ input {
   font-size: 12px;
   line-height: 1.5;
 }
+
+.agent-role-menu {
+  position: absolute;
+  z-index: 20;
+  right: 0;
+  bottom: calc(100% + 6px);
+  left: 0;
+  display: flex;
+  max-height: 260px;
+  flex-direction: column;
+  overflow: auto;
+  padding: 5px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(17, 17, 17, 0.12);
+}
+
+.agent-role-item {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 4px 8px;
+  padding: 8px;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.agent-role-item:hover,
+.agent-role-item.active,
+.agent-role-item.selected {
+  background: var(--soft);
+}
+
+.agent-role-name {
+  font-size: 11px;
+}
+
+.agent-role-name small,
+.agent-role-desc {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.agent-role-desc {
+  grid-column: 2;
+}

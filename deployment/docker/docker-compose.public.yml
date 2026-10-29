@@ -1,0 +1,71 @@
+name: vibebiz
+
+services:
+  logs-init:
+    image: alpine:3.20
+    command: ["sh", "-c", "mkdir -p /logs/backend /logs/sandbox && chmod 0777 /logs/backend /logs/sandbox"]
+    volumes:
+      - ./logs:/logs
+    restart: "no"
+
+  sandbox:
+    build:
+      context: ../../packages/sandbox
+    image: vibebiz/sandbox:local
+    env_file:
+      - .env
+    volumes:
+      - workspaces:/data/workspaces
+      - ./logs/sandbox:/app/logs
+    depends_on:
+      logs-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ../../packages/backend
+      target: combined
+    image: vibebiz/backend:local
+    env_file:
+      - .env
+    volumes:
+      - ./logs/backend:/app/logs
+    depends_on:
+      sandbox:
+        condition: service_started
+      logs-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ../../packages/web
+      args:
+        VITE_CP_BASE: ${VITE_CP_BASE:-/cp/api/v1}
+        VITE_DP_BASE: ${VITE_DP_BASE:-/dp/api/v1}
+        VITE_DEMO_LOGIN: ${VITE_DEMO_LOGIN:-false}
+    image: vibebiz/web:local
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-5173}:80"
+    restart: unless-stopped
+
+  ops-web:
+    build:
+      context: ../../packages/ops-web
+      args:
+        VITE_OPS_API_BASE: ${VITE_OPS_API_BASE:-/cp/api/v1/admin}
+        VITE_DEMO_LOGIN: ${VITE_DEMO_LOGIN:-false}
+    image: vibebiz/ops-web:local
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${OPS_WEB_PORT:-5174}:80"
+    restart: unless-stopped
+
+volumes:
+  workspaces:

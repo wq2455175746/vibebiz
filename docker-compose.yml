@@ -1,6 +1,13 @@
 name: vibebiz
 
 services:
+  logs-init:
+    image: alpine:3.20
+    command: ["sh", "-c", "mkdir -p /logs/backend /logs/sandbox && chmod 0777 /logs/backend /logs/sandbox"]
+    volumes:
+      - ./logs:/logs
+    restart: "no"
+
   sandbox:
     build:
       context: ./packages/sandbox
@@ -20,6 +27,7 @@ services:
       LLM_BASE_URL: ${LLM_BASE_URL:-https://api.deepseek.com}
       LLM_MODEL_NAME: ${LLM_MODEL_NAME:-deepseek-chat}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_DIR: /app/logs
       OTEL_SERVICE_NAME: vibebiz-sandbox
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       OTEL_EXPORTER_OTLP_PROTOCOL: ${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}
@@ -27,6 +35,10 @@ services:
       OTEL_TRACES_SAMPLER: ${OTEL_TRACES_SAMPLER:-parentbased_always_on}
     volumes:
       - workspaces:/data/workspaces
+      - ./logs/sandbox:/app/logs
+    depends_on:
+      logs-init:
+        condition: service_completed_successfully
     ports:
       - "127.0.0.1:8000:8000"
     restart: unless-stopped
@@ -45,12 +57,18 @@ services:
       SANDBOX_REGISTRY_TOKEN: ${SANDBOX_REGISTRY_TOKEN:-change-me}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://vibebiz-dev.com:5173,http://vibebiz-dev-ops.com:5174}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_DIR: /app/logs
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       OTEL_EXPORTER_OTLP_PROTOCOL: ${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}
       OTEL_RESOURCE_ATTRIBUTES: ${OTEL_RESOURCE_ATTRIBUTES:-deployment.environment=local,service.namespace=vibebiz}
       OTEL_TRACES_SAMPLER: ${OTEL_TRACES_SAMPLER:-parentbased_always_on}
+    volumes:
+      - ./logs/backend:/app/logs
     depends_on:
-      - sandbox
+      sandbox:
+        condition: service_started
+      logs-init:
+        condition: service_completed_successfully
     ports:
       - "127.0.0.1:8080:8080"
       - "127.0.0.1:8081:8081"

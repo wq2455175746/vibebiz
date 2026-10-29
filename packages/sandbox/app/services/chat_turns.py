@@ -32,6 +32,8 @@ class Turn:
     message: str
     references: list[dict[str, Any]]
     queue: asyncio.Queue[dict[str, Any] | None]
+    agent_roles: list[dict[str, Any]] = field(default_factory=list)
+    team_mode: bool = False
     task: asyncio.Task | None = None
     subscribers: set[asyncio.Queue[dict[str, Any] | None]] = field(default_factory=set)
 
@@ -146,6 +148,8 @@ class ChatTurnManager:
         workspace: Workspace,
         session_id: str | None = None,
         references: list[dict[str, Any]] | None = None,
+        agent_roles: list[dict[str, Any]] | None = None,
+        team_mode: bool = False,
     ) -> Turn:
         async with self._lock:
             if project_id in self._active:
@@ -157,6 +161,8 @@ class ChatTurnManager:
                 project_id=project_id,
                 message=message,
                 references=references or [],
+                agent_roles=agent_roles or [],
+                team_mode=team_mode,
                 queue=asyncio.Queue(),
             )
             turn.subscribers.add(turn.queue)
@@ -199,6 +205,8 @@ class ChatTurnManager:
                     build_prompt(turn.message, turn.references),
                     workspace,
                     session_id,
+                    turn.agent_roles,
+                    turn.team_mode,
                 ):
                     collector.consume(event)
                     self._broadcast(turn, event)

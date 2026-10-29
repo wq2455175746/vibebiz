@@ -201,13 +201,51 @@ func TestGooseCanCollectMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("collect migrations: %v", err)
 	}
-	if len(migs) != 11 {
-		t.Fatalf("collected %d migrations, want 11", len(migs))
+	if len(migs) != 13 {
+		t.Fatalf("collected %d migrations, want 13", len(migs))
 	}
 	for i, mig := range migs {
 		want := int64(i + 1)
 		if mig.Version != want {
 			t.Errorf("migration %d version = %d, want %d", i, mig.Version, want)
+		}
+	}
+}
+
+func TestProjectAgentRoleMigration(t *testing.T) {
+	body, err := fs.ReadFile(FS, "00012_project_agent_role.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	for _, want := range []string{
+		"CREATE TABLE `project_agent_role`",
+		"`project_id` bigint UNSIGNED NOT NULL",
+		"`agent_role_id` bigint UNSIGNED NOT NULL",
+		"UNIQUE KEY `uk_project_agent_role` (`project_id`, `agent_role_id`)",
+		"DROP TABLE IF EXISTS `project_agent_role`",
+		"-- +goose Up",
+		"-- +goose Down",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("project agent role migration missing %q", want)
+		}
+	}
+}
+
+func TestTeamRoleSeedMigration(t *testing.T) {
+	body, err := fs.ReadFile(FS, "00013_seed_team_role.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	for _, want := range []string{
+		"'team'", "'Team'", "'团队'",
+		"全部内置角色", "拆分", "子 Agent",
+		"ON DUPLICATE KEY UPDATE", "-- +goose Up", "-- +goose Down",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("team seed migration missing %q", want)
 		}
 	}
 }

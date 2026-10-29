@@ -639,6 +639,34 @@
   display: none;
 }
 
+.composer-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.composer-role-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.composer-role-chip button {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+}
+
 .composer-files {
   display: flex;
   flex-wrap: wrap;
@@ -1080,4 +1108,35 @@
 .project-option span {
   color: var(--muted);
   font-size: 11px;
+}
+
+.composer-attach-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 150px;
+}
+
+.composer-attach-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.composer-attach-menu button:hover {
+  background: var(--soft);
+}
+
+.composer-attach-menu i {
+  color: var(--muted);
+  font-size: 12px;
 }

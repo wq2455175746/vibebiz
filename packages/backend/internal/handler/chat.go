@@ -15,16 +15,23 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
+	"vibebiz/internal/agentrole"
 	"vibebiz/internal/observability"
 	"vibebiz/internal/response"
+	"vibebiz/internal/role"
 )
 
 type ChatClient interface {
 	Chat(ctx context.Context, id string, payload []byte) (io.ReadCloser, error)
 }
 
+type ProjectRoleResolver interface {
+	Resolve(ctx context.Context, projectID string) (*role.Context, error)
+}
+
 type ChatHandler struct {
 	Sandbox ChatClient
+	Roles   ProjectRoleResolver
 	Obs     *observability.Provider
 }
 
@@ -51,6 +58,8 @@ func (h *ChatHandler) Chat(c echo.Context) error {
 		defer span.End()
 		h.Obs.Log(ctx, slog.LevelInfo, "chat.start", "project_id", projectID)
 	}
+
+	payload = h.withAgentRoles(ctx, projectID, payload)
 
 	stream, err := h.Sandbox.Chat(ctx, projectID, payload)
 	if err != nil {
@@ -101,6 +110,56 @@ func (h *ChatHandler) Chat(c echo.Context) error {
 			return nil
 		}
 	}
+}
+
+func roleIDsForLog(roles []agentrole.Role) []int64 {
+	ids := make([]int64, 0, len(roles))
+	for _, role := range roles {
+		ids = append(ids, role.ID)
+	}
+	return ids
+}
+
+func (h *ChatHandler) withAgentRoles(ctx context.Context, projectID string, payload []byte) []byte {
+	var body map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &body); err != nil {
+		return payload
+	}
+	if body == nil {
+		body = make(map[string]json.RawMessage)
+	}
+	var resolved *role.Context
+	var resolveErr error
+	if h.Roles != nil {
+		resolved, resolveErr = h.Roles.Resolve(ctx, projectID)
+	}
+	if resolveErr != nil && h.Obs != nil {
+		h.Obs.Log(ctx, slog.LevelWarn, "chat.roles", "project_id", projectID, "status", "fallback", "error", resolveErr.Error())
+	}
+	if resolveErr == nil && resolved != nil && len(resolved.Roles) > 0 {
+		if h.Obs != nil {
+			h.Obs.Log(ctx, slog.LevelInfo, "chat.roles", "project_id", projectID,
+				"agent_role_ids", roleIDsForLog(resolved.Roles), "team_mode", resolved.TeamMode)
+		}
+		rolesJSON, err := json.Marshal(resolved.Roles)
+		if err != nil {
+			return payload
+		}
+		teamModeJSON, err := json.Marshal(resolved.TeamMode)
+		if err != nil {
+			return payload
+		}
+		body["agentRoles"] = rolesJSON
+		body["teamMode"] = teamModeJSON
+	} else {
+		delete(body, "agentRoles")
+		delete(body, "teamMode")
+	}
+	out, err := json.Marshal(body)
+	if err != nil {
+		return payload
+	}
+	return out
 }
 
 func sseEventType(line string) string {

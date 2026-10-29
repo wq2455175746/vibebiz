@@ -46,6 +46,7 @@ const notificationsOpen = ref(false)
 const switching = ref(false)
 const workspaceError = ref('')
 
+const showFolders = false
 const folders = ref<WorkspaceFolder[]>([])
 const folderFormOpen = ref(false)
 const folderName = ref('')
@@ -60,6 +61,9 @@ function openProject(id: string) {
 }
 
 async function loadFolders() {
+  if (!showFolders) {
+    return
+  }
   try {
     folders.value = await listFolders()
   } catch {
@@ -161,11 +165,13 @@ async function logout() {
 }
 
 const navigation = [
-  { label: '首页', icon: 'pi pi-home', active: true },
-  { label: '资源', icon: 'pi pi-book', active: false },
-  { label: '我的项目', icon: 'pi pi-folder', active: false },
-  { label: '定时任务', icon: 'pi pi-clock', active: false },
+  { label: '首页', icon: 'pi pi-home', active: true, visible: true },
+  { label: '资源', icon: 'pi pi-book', active: false, visible: true },
+  { label: '我的项目', icon: 'pi pi-folder', active: false, visible: false },
+  { label: '定时任务', icon: 'pi pi-clock', active: false, visible: true },
 ]
+
+const visibleNavigation = computed(() => navigation.filter((item) => item.visible !== false))
 </script>
 
 <template>
@@ -212,7 +218,7 @@ const navigation = [
 
       <nav class="sidebar-nav" aria-label="主导航">
         <button
-          v-for="item in navigation"
+          v-for="item in visibleNavigation"
           :key="item.label"
           class="sidebar-nav-item"
           :class="{ active: item.active }"
@@ -225,7 +231,7 @@ const navigation = [
         </button>
       </nav>
 
-      <section class="sidebar-group">
+      <section v-if="showFolders" class="sidebar-group">
         <div class="sidebar-group-head">
           <p class="sidebar-group-title">文件夹</p>
           <button

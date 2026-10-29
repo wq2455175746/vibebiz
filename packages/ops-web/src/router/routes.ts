@@ -1,6 +1,8 @@
 import type { RouteRecordRaw } from 'vue-router'
 
 import AuditView from '@/views/AuditView.vue'
+import ModelsView from '@/views/ModelsView.vue'
+import RolesView from '@/views/RolesView.vue'
 import NotificationsView from '@/views/NotificationsView.vue'
 import OverviewView from '@/views/OverviewView.vue'
 import ProjectsView from '@/views/ProjectsView.vue'
@@ -19,6 +21,8 @@ export const childRoutes: RouteRecordRaw[] = [
     component: SandboxesView,
     meta: { title: '沙箱节点' },
   },
+  { path: 'models', name: 'models', component: ModelsView, meta: { title: '模型管理' } },
+  { path: 'roles', name: 'roles', component: RolesView, meta: { title: '角色管理' } },
   { path: 'quotas', name: 'quotas', component: QuotasView, meta: { title: '配额' } },
   { path: 'audit', name: 'audit', component: AuditView, meta: { title: '审计日志' } },
   {

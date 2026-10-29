@@ -148,3 +148,67 @@ def test_claude_agent_reuses_session_between_turns(tmp_path, monkeypatch):
     asyncio.run(run_turn())
 
     assert seen == [None, "session-1"]
+
+
+def test_build_options_without_roles_keeps_defaults(tmp_path):
+    options = build_options(settings(tmp_path), tmp_path / "project", None)
+
+    assert options.system_prompt is None
+    assert options.agents is None
+    assert "Agent" not in options.allowed_tools
+
+
+def test_build_options_appends_single_role_prompt(tmp_path):
+    options = build_options(
+        settings(tmp_path),
+        tmp_path / "project",
+        None,
+        agent_roles=[
+            {
+                "roleCode": "alex",
+                "roleNameEn": "Alex",
+                "roleNameZh": "全栈工程师",
+                "description": "code",
+                "systemPrompt": "你是 Alex",
+            }
+        ],
+        team_mode=False,
+    )
+    assert isinstance(options.system_prompt, dict)
+    assert "你是 Alex" in options.system_prompt["append"]
+    assert options.agents is None
+
+
+def test_build_options_registers_team_subagents(tmp_path):
+    options = build_options(
+        settings(tmp_path),
+        tmp_path / "project",
+        None,
+        agent_roles=[
+            {
+                "roleCode": "team",
+                "roleNameEn": "Team",
+                "roleNameZh": "团队",
+                "description": "lead",
+                "systemPrompt": "你是团队协调者",
+            },
+            {
+                "roleCode": "alex",
+                "roleNameEn": "Alex",
+                "roleNameZh": "全栈工程师",
+                "description": "code",
+                "systemPrompt": "你是 Alex",
+            },
+            {
+                "roleCode": "emma",
+                "roleNameEn": "Emma",
+                "roleNameZh": "产品经理",
+                "description": "product",
+                "systemPrompt": "你是 Emma",
+            },
+        ],
+        team_mode=True,
+    )
+    assert set(options.agents) == {"alex", "emma"}
+    assert "Agent" in options.allowed_tools
+    assert "团队协调者" in options.system_prompt["append"]

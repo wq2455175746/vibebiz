@@ -8,13 +8,15 @@ const (
 )
 
 type Project struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	Prompt      string    `json:"prompt"`
-	State       string    `json:"state"`
-	WorkspaceID int64     `json:"workspaceId"`
-	OwnerUserID int64     `json:"ownerUserId"`
-	SandboxID   *int64    `json:"sandboxId,omitempty"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	ID                 string    `json:"id"`
+	Name               string    `json:"name"`
+	Prompt             string    `json:"prompt"`
+	State              string    `json:"state"`
+	WorkspaceID        int64     `json:"workspaceId"`
+	OwnerUserID        int64     `json:"ownerUserId"`
+	SandboxID          *int64    `json:"sandboxId,omitempty"`
+	DefaultAgentRoleID *int64    `json:"defaultAgentRoleId,omitempty"`
+	AgentRoleIDs       []int64   `json:"agentRoleIds"`
+	CreatedAt          time.Time `json:"createdAt"`
+	UpdatedAt          time.Time `json:"updatedAt"`
 }

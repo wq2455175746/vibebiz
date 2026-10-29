@@ -2,6 +2,8 @@
 .env
 .env.local
 *.log
+*.log.zip
+logs/
 
 data/
 tmp/

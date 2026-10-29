@@ -49,7 +49,7 @@
 | `workspace_user.role` | `owner` / `admin` / `editor` / `viewer` |
 | `project.status` | `draft` / `active` / `archived` |
 | `llm_model.scope` | `platform` / `user` |
-| `llm_model.model_type` | `LLM` / `EMBEDDING` / `RERANK` / `OCR` / `OTHER` |
+| `llm_model.model_type` | `LLM` / `EMBEDDING` / `RERANK` / `OCR` / `ASR` / `TTS` / `OTHER` |
 | `scheduled_task.task_type` | `agent` / `webhook` / `cleanup` |
 | `chat_conversation.status` | `active` / `archived`（删除由 `deleted_at` 表达） |
 | `chat_message.role` | `user` / `assistant` / `system` / `tool` |
@@ -461,7 +461,7 @@ CREATE TABLE `llm_model` (
   `api_url` varchar(512) NOT NULL COMMENT 'API URL',
   `api_key_cipher` varchar(2048) NOT NULL COMMENT '加密后的 API Key',
   `provider_code` varchar(32) NOT NULL DEFAULT 'Other' COMMENT 'OpenAI/DeepSeek/Anthropic/Qwen/Other',
-  `model_type` varchar(32) NOT NULL DEFAULT 'LLM' COMMENT 'LLM/EMBEDDING/RERANK/OCR/OTHER',
+  `model_type` varchar(32) NOT NULL DEFAULT 'LLM' COMMENT 'LLM/EMBEDDING/RERANK/OCR/ASR/TTS/OTHER',
   `max_tokens` int NOT NULL DEFAULT 4096 COMMENT '最大输出 token',
   `context_window` int UNSIGNED DEFAULT NULL COMMENT '上下文窗口',
   `is_small_model` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否小模型',

@@ -50,7 +50,7 @@ function toggleSidebar() {
   localStorage.setItem('vibebiz:sidebar-collapsed', sidebarCollapsed.value ? '1' : '0')
 }
 
-async function create(files: File[] = []) {
+async function create(files: File[] = [], agentRoleIds: number[] = []) {
   const text = prompt.value.trim()
   if (!text || creating.value) {
     return
@@ -97,7 +97,7 @@ async function create(files: File[] = []) {
     for (const file of files) {
       staged.push(await resources.stage(file))
     }
-    const project = await createProject(text)
+    const project = await createProject(text, agentRoleIds)
     projectId = project.id
     const references = []
     for (const resourceId of staged) {
