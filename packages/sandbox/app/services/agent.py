@@ -10,7 +10,11 @@ from app.services.workspace import Workspace
 logger = get_logger()
 
 
-def build_agent(settings: Settings) -> "StubAgent":
+def build_agent(settings: Settings):
+    if settings.agent_mode == "claude":
+        from app.services.claude_agent import ClaudeAgent
+
+        return ClaudeAgent(settings)
     llm_ready = bool(settings.llm_api_key) and settings.agent_mode == "llm"
     return StubAgent(llm_ready=llm_ready, mode="llm" if llm_ready else "stub")
 

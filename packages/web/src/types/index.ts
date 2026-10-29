@@ -111,3 +111,14 @@ export interface ChatMessage {
   tools: ToolState[]
   pending: boolean
 }
+
+export type LogLevel = 'info' | 'warn' | 'error'
+
+export interface EditorLog {
+  id: string
+  seq: number
+  ts: string
+  level: LogLevel
+  source: string
+  message: string
+}

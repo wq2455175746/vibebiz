@@ -166,6 +166,15 @@ make -C packages/ops-web dev
 - 默认存储额度 10GB；磁盘统计来自 sandbox 项目目录扫描。
 - 首页左侧工作区下拉切换当前工作区；邀请成员后对方重新登录/刷新可看到共享工作区。
 - 首页左侧“文件夹”支持在当前工作区创建一级文件夹；文件夹是工作区下的逻辑目录节点，后续用于归档项目。
+- 编辑页采用两栏工作台：左侧任务对话，右侧“应用查看器 / 代码”与可展开执行日志；当前聊天和日志使用 mock adapter，项目/文件/预览走真实 CP/DP API。
+
+## Sandbox Agent SDK
+
+- `AGENT_MODE=stub` 仍使用确定性 StubAgent；`AGENT_MODE=claude` 使用官方 `claude-agent-sdk`。
+- 开发默认模型：`AGENT_MODEL=deepseek-chat`，通过 `ANTHROPIC_BASE_URL` 指向 LiteLLM/Anthropic 兼容网关。
+- `ANTHROPIC_AUTH_TOKEN` 只放 sandbox/网关配置，不进入前端或项目目录。
+- `AGENT_SKILLS=all` 或逗号分隔技能名；`AGENT_PLUGINS` 为逗号分隔本地插件目录。
+- 切换真实模型前先启动 LiteLLM 网关并配置 DeepSeek key；未配置时保持 `AGENT_MODE=stub`。
 
 ## 数据库迁移
 

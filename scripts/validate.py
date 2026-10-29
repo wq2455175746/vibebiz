@@ -431,7 +431,7 @@ def validate_contracts() -> None:
     require_contains("packages/sandbox/app/routers/chat.py", ["StreamingResponse"])
     require_contains("packages/web/src/utils/sse.ts", ["splitSSE"])
     require_contains("packages/web/src/api/client.ts", ["unwrapEnvelope", "ApiError"])
-    require_contains("packages/web/src/views/EditorView.vue", ["PreviewPanel", "CodePanel"])
+    require_contains("packages/web/src/views/EditorView.vue", ["ChatPanel", "PreviewPane", "CodePane", "LogConsole"])
     require_contains("packages/web/package.json", ["\"lint\"", "eslint"])
     require_contains("packages/sandbox/pyproject.toml", ["[tool.ruff]", "select"])
     require_contains("templates/architecture-schema.json", ["packages/web", "packages/backend", "packages/sandbox"])

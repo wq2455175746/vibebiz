@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
 import { streamChat, type StreamEvent } from '@/api/chat'
+import { useLogStore } from '@/stores/logs'
+import { buildMockChatSteps } from '@/utils/editorMock'
 import type { ChatMessage } from '@/types'
 
 interface AgentPayload {
@@ -23,10 +25,19 @@ export const useChatStore = defineStore('chat', () => {
   const streaming = ref(false)
   const revision = ref(0)
   let controller: AbortController | null = null
+  let mockRun = 0
+  let mockTimers: ReturnType<typeof setTimeout>[] = []
+
+  function clearMockTimers() {
+    mockTimers.forEach((timer) => clearTimeout(timer))
+    mockTimers = []
+    mockRun += 1
+  }
 
   function reset() {
     controller?.abort()
     controller = null
+    clearMockTimers()
     messages.value = [
       {
         id: nextId(),
@@ -37,6 +48,66 @@ export const useChatStore = defineStore('chat', () => {
       },
     ]
     streaming.value = false
+  }
+
+  function sendMock(projectId: string, text: string) {
+    void projectId
+    if (streaming.value) {
+      return
+    }
+    clearMockTimers()
+    messages.value.push({
+      id: nextId(),
+      role: 'user',
+      text,
+      tools: [],
+      pending: false,
+    })
+    messages.value.push({
+      id: nextId(),
+      role: 'assistant',
+      text: '',
+      tools: [],
+      pending: true,
+    })
+
+    const assistant = messages.value[messages.value.length - 1]
+    const run = mockRun
+    const logs = useLogStore()
+    const steps = buildMockChatSteps(text)
+    let elapsed = 0
+    streaming.value = true
+
+    steps.forEach((step, index) => {
+      elapsed += step.delay
+      mockTimers.push(
+        setTimeout(() => {
+          if (run !== mockRun) {
+            return
+          }
+          if (step.text) {
+            assistant.text = assistant.text ? `${assistant.text}\n\n${step.text}` : step.text
+          }
+          if (step.tool) {
+            assistant.tools.push({ ...step.tool })
+          }
+          if (step.toolDone) {
+            const tool = assistant.tools.find((item) => item.id === step.toolDone)
+            if (tool) {
+              tool.status = 'done'
+            }
+          }
+          if (step.log) {
+            logs.append(step.log)
+          }
+          if (index === steps.length - 1) {
+            assistant.pending = false
+            streaming.value = false
+            revision.value += 1
+          }
+        }, elapsed),
+      )
+    })
   }
 
   async function send(projectId: string, text: string) {
@@ -124,7 +195,14 @@ export const useChatStore = defineStore('chat', () => {
 
   function stop() {
     controller?.abort()
+    clearMockTimers()
+    const pending = messages.value.find((message) => message.pending)
+    if (pending) {
+      pending.pending = false
+    }
+    streaming.value = false
+    revision.value += 1
   }
 
-  return { messages, streaming, revision, reset, send, stop }
+  return { messages, streaming, revision, reset, send, sendMock, stop }
 })

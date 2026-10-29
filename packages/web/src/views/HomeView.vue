@@ -30,7 +30,12 @@ async function create() {
   error.value = ''
   try {
     const project = await createProject(text)
-    router.push({ name: 'editor', params: { id: project.id } })
+    sessionStorage.setItem(`vibebiz:initial-prompt:${project.id}`, text)
+    void router.push({
+      name: 'editor',
+      params: { id: project.id },
+      state: { initialPrompt: text },
+    })
   } catch (err) {
     error.value = (err as Error).message
   } finally {
