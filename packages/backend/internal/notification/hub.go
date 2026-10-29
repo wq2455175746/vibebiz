@@ -1,6 +1,7 @@
 package notification
 
 import (
+	"context"
 	"encoding/json"
 	"sync"
 	"time"
@@ -43,6 +44,11 @@ func (h *Hub) Handle(conn *websocket.Conn) {
 
 	go client.writeLoop()
 	client.readLoop(h)
+}
+
+func (h *Hub) Publish(_ context.Context, event Event) error {
+	h.Broadcast(event)
+	return nil
 }
 
 func (h *Hub) Broadcast(event Event) {

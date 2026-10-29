@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import Button from 'primevue/button'
 import DatePicker from 'primevue/datepicker'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
+import Paginator from 'primevue/paginator'
 import Select from 'primevue/select'
 import Textarea from 'primevue/textarea'
 
@@ -16,7 +17,6 @@ import {
   updateNotification,
 } from '@/api/notifications'
 import DataTable from '@/components/DataTable.vue'
-import { useAdminList } from '@/composables/useAdminList'
 import type {
   NotificationInput,
   NotificationStatus,
@@ -36,7 +36,36 @@ import {
   resolveExpireAt,
 } from '@/utils/notificationStatus'
 
-const { rows, loading, error, load } = useAdminList(listNotifications)
+const rows = ref<OpsNotification[]>([])
+const loading = ref(false)
+const error = ref('')
+const page = ref(1)
+const pageSize = ref(20)
+const total = ref(0)
+
+async function load(): Promise<void> {
+  loading.value = true
+  error.value = ''
+  try {
+    const result = await listNotifications({ page: page.value, pageSize: pageSize.value })
+    rows.value = result.notifications
+    total.value = result.total
+    page.value = result.page
+    pageSize.value = result.pageSize
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : '加载失败'
+  } finally {
+    loading.value = false
+  }
+}
+
+function onPage(event: { page: number; rows: number }): void {
+  page.value = event.page + 1
+  pageSize.value = event.rows
+  void load()
+}
+
+onMounted(load)
 
 const columns: TableColumn[] = [
   { key: 'title', label: '标题', width: '200px' },
@@ -178,6 +207,7 @@ async function submit(): Promise<void> {
     if (editingId.value === null) {
       await createNotification(input)
       notice.value = '消息已创建'
+      page.value = 1
     } else {
       await updateNotification(editingId.value, input)
       notice.value = '消息已更新'
@@ -202,6 +232,9 @@ async function runAction(
   try {
     await action()
     notice.value = message
+    if (rows.value.length === 1 && page.value > 1) {
+      page.value -= 1
+    }
     await load()
   } catch (err) {
     actionError.value = err instanceof Error ? err.message : '操作失败'
@@ -290,6 +323,14 @@ function asNotification(row: TableRow): OpsNotification {
         </div>
       </template>
     </DataTable>
+
+    <Paginator
+      :rows="pageSize"
+      :total-records="total"
+      :first="(page - 1) * pageSize"
+      :rows-per-page-options="[10, 20, 50]"
+      @page="onPage"
+    />
 
     <Dialog
       v-model:visible="dialogVisible"

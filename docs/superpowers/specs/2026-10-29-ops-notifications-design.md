@@ -27,7 +27,7 @@ web 首页左侧栏底部已有“帮助”和“通知”两个占位按钮，�
 - 不做未读角标、已读状态、消息回执或按用户/工作区定向。
 - 不做用户提交反馈；收集箱与版本发布一样是运营群发通知。
 - 不做消息多语言、定时发布、草稿协作或审批流。
-- 不做多 CP 实例 WebSocket 广播；本轮以单 CP 实例为前提，后续可替换为 Redis Pub/Sub。
+- 不做跨集群消息总线或消息持久化；多实例广播使用 Redis Pub/Sub，订阅端断线期间的即时事件不补发，由下次拉取兜底。
 - 不改动 DP、sandbox 的文件/SSE/预览契约。
 - 不引入统一站内信中心或独立消息服务。
 
@@ -43,7 +43,7 @@ web 首页左侧栏底部已有“帮助”和“通知”两个占位按钮，�
 | D6 | 过期时间在创建/编辑时选绝对日期，范围 `(now, now+30d]` | 用户确认按日期选择；后端统一校验上限 |
 | D7 | 消息全体广播，不建用户消息关系表 | 当前需求是全员公告 |
 | D8 | WebSocket 使用 Cookie 鉴权，复用 `RequireUser` | 与现有 web 登录态一致，不引入额外 token |
-| D9 | 单 CP 实例进程内 Hub 广播 | 当前部署单实例；保持实现最小 |
+| D9 | CP 进程内 Hub + Redis Pub/Sub 跨实例广播 | 多实例部署时所有 CP 都能收到变更事件；Redis 不可用时降级为仅本实例广播 |
 | D10 | 帮助按钮使用普通外链，新窗口打开 | 静态外链，无需后端 |
 
 ## 4. 目标架构
@@ -56,6 +56,7 @@ ops-web (:5174)
 CP (:8080) ── internal/notification.Service
   │   ├─ MySQL: ops_notification（事实源）
   │   ├─ Redis: index ZSET + item JSON，EXPIREAT expireAt
+  │   ├─ Redis Pub/Sub: notification:events 跨实例事件
   │   └─ Hub: 进程内 WebSocket 客户端集合
   │
   └─ /cp/api/v1/notifications      (RequireUser, 读 Redis)
@@ -72,7 +73,7 @@ web (:5173)
 1. ops-web 调用 `POST /admin/notifications/:id/publish`。
 2. CP 校验状态与过期时间。
 3. CP 写入 Redis（item key + index），再更新 MySQL 状态为 `published`。
-4. 两步都成功后，Hub 广播 `notifications.changed`。
+4. 两步都成功后，Service 将 `notifications.changed` 发布到 Redis Pub/Sub；各 CP 实例订阅后通过本地 Hub 广播给 WebSocket 客户端。Redis 发布失败时降级为仅本实例 Hub 广播，并记录日志。
 5. web 收到事件，重新拉取 `/notifications`。
 
 取消发布/删除链路：更新 MySQL → 删除 Redis item 与 index 成员 → 广播变更事件。
@@ -174,14 +175,25 @@ Key 前缀沿用 CP 的 `vibebiz`：
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/cp/api/v1/admin/notifications` | 列表，支持 `type`、`status` 查询参数；默认按 `created_at DESC` |
+| GET | `/cp/api/v1/admin/notifications` | 分页列表，支持 `type`、`status`、`page`、`pageSize`；默认 `page=1`、`pageSize=20`，最大 100；按 `created_at DESC` |
 | POST | `/cp/api/v1/admin/notifications` | 创建草稿 |
 | PUT | `/cp/api/v1/admin/notifications/:id` | 编辑，仅 `draft` / `unpublished` |
 | POST | `/cp/api/v1/admin/notifications/:id/publish` | 发布 |
 | POST | `/cp/api/v1/admin/notifications/:id/unpublish` | 取消发布 |
 | DELETE | `/cp/api/v1/admin/notifications/:id` | 软删除；已发布先清 Redis |
 
-返回对象：
+列表响应：
+
+```json
+{
+  "notifications": [],
+  "total": 42,
+  "page": 1,
+  "pageSize": 20
+}
+```
+
+单条返回对象：
 
 ```json
 {
@@ -255,11 +267,12 @@ Key 前缀沿用 CP 的 `vibebiz`：
 | `internal/dao/model/notification.go` | GORM 模型 `OpsNotification` |
 | `internal/dao/notification_repository.go` | 列表、详情、创建、更新、状态变更、软删除、查询有效已发布消息 |
 | `internal/notification/cache.go` | Redis 读写、索引回填、TTL |
-| `internal/notification/hub.go` | WebSocket 客户端注册、广播、心跳、关闭 |
+| `internal/notification/hub.go` | WebSocket 客户端注册、本地广播、心跳、关闭 |
+| `internal/notification/events.go` | Redis Pub/Sub 事件发布与订阅 |
 | `internal/notification/service.go` | 状态机、校验、发布/取消发布/删除编排 |
 | `internal/handler/notification.go` | ops 与 web HTTP handler、WS 升级 |
 | `internal/router/control.go` | 注册 admin 与 web 通知路由 |
-| `cmd/cp/main.go` | 装配 repository、cache、service、hub、handler |
+| `cmd/cp/main.go` | 装配 repository、cache、event bus、service、hub、handler；启动订阅协程并在 shutdown 时取消 |
 
 复用现有 `dao.OpenMySQL`、`auth.NewRedisClient`、`auth.RequireUser`、`auth.RequireOps`、`response.OK/Fail`。WS 关闭时由 `cmd/cp` 的 shutdown 流程调用 `hub.Close()`。
 
@@ -324,6 +337,8 @@ proxy_read_timeout 3600s;
 - Service：状态机（草稿发布、重复发布、已发布编辑、过期发布、取消发布、删除已发布）、校验边界（30 天、标题/内容/版本长度、链接协议与 host、类型、inbox 清空版本）；读时对账覆盖“缓存有残留但 DB 没有”“DB 有但缓存缺失”“缓存读取失败”三类场景；取消发布/删除的缓存清理失败返回 503。
 - Handler：httptest 覆盖 ops 权限、web 权限、参数错误、状态冲突、Redis 503；WebSocket `CheckOrigin` 覆盖配置来源、同 Host、空 Origin 与拒绝场景，未登录升级返回 401，升级失败只记录日志不二次写响应。
 - Hub：httptest + gorilla dialer 覆盖连接、广播、断开；慢客户端发送缓冲占满后被移除用单元测试。
+- EventBus：miniredis 覆盖跨实例订阅投递、Redis 不可用时的本地降级。
+- 分页：DAO count + limit/offset、Service 参数归一化、handler 分页响应与前端 API/Paginator。
 - Router：CP 注册通知路由，DP 不注册；管理员 POST 通知缺少请求体返回 400，WS 路由未登录返回 401。
 
 ### 11.2 web
@@ -353,7 +368,8 @@ proxy_read_timeout 3600s;
 
 ## 12. 风险与后续
 
-- 单实例 Hub 无法跨 CP 实例广播；多实例时改用 Redis Pub/Sub 或消息队列。
+- 多实例广播依赖 Redis Pub/Sub；订阅端断线期间遗漏的事件不补发，依赖用户下次打开弹窗或重新拉取。
+- Pub/Sub 发布失败时仅本实例收到事件；通知正文仍以 HTTP 拉取为准。
 - WS 依赖反向代理正确透传 `Upgrade`；已在本轮修改 Vite 与 nginx。
 - Markdown 渲染必须经过 DOMPurify，禁止直接 `v-html` 原始内容。
 - 过期消息不自动清理 DB 行；如需归档策略，后续增加定时任务或运营筛选。

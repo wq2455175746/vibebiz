@@ -69,13 +69,23 @@ func (r notificationRequest) input() (notification.CreateInput, error) {
 }
 
 func (h *NotificationHandler) AdminList(c echo.Context) error {
-	items, err := h.Service.List(c.Request().Context(), dao.NotificationFilter{
+	page := queryInt(c, "page", 1)
+	pageSize := queryInt(c, "pageSize", 20)
+	result, err := h.Service.List(c.Request().Context(), dao.NotificationFilter{
 		Type: c.QueryParam("type"), Status: c.QueryParam("status"),
-	})
+	}, page, pageSize)
 	if err != nil {
 		return notificationError(c, err)
 	}
-	return response.OK(c, map[string]any{"notifications": items})
+	return response.OK(c, result)
+}
+
+func queryInt(c echo.Context, name string, fallback int) int {
+	value, err := strconv.Atoi(c.QueryParam(name))
+	if err != nil || value <= 0 {
+		return fallback
+	}
+	return value
 }
 
 func (h *NotificationHandler) AdminCreate(c echo.Context) error {

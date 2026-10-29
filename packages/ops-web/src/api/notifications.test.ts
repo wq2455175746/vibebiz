@@ -39,11 +39,31 @@ beforeEach(() => {
 })
 
 describe('listNotifications', () => {
-  it('unwraps the notifications keyed list', async () => {
-    mockedRequest.mockResolvedValueOnce({ notifications: [entity] })
+  it('unwraps the paginated notification list', async () => {
+    mockedRequest.mockResolvedValueOnce({ notifications: [entity], total: 41, page: 2, pageSize: 20 })
 
-    await expect(listNotifications()).resolves.toEqual([entity])
-    expect(mockedRequest).toHaveBeenCalledWith({ method: 'get', url: '/notifications' })
+    await expect(listNotifications({ page: 2, pageSize: 20 })).resolves.toEqual({
+      notifications: [entity],
+      total: 41,
+      page: 2,
+      pageSize: 20,
+    })
+    expect(mockedRequest).toHaveBeenCalledWith({
+      method: 'get',
+      url: '/notifications',
+      params: { page: 2, pageSize: 20 },
+    })
+  })
+
+  it('defaults to the first page', async () => {
+    mockedRequest.mockResolvedValueOnce({ notifications: [], total: 0, page: 1, pageSize: 20 })
+
+    await listNotifications()
+    expect(mockedRequest).toHaveBeenCalledWith({
+      method: 'get',
+      url: '/notifications',
+      params: { page: 1, pageSize: 20 },
+    })
   })
 })
 

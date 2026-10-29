@@ -25,8 +25,8 @@ import (
 
 type routerNotificationRepo struct{}
 
-func (routerNotificationRepo) List(context.Context, dao.NotificationFilter) ([]model.OpsNotification, error) {
-	return nil, nil
+func (routerNotificationRepo) List(context.Context, dao.NotificationFilter, int, int) ([]model.OpsNotification, int64, error) {
+	return nil, 0, nil
 }
 
 func (routerNotificationRepo) Get(context.Context, int64) (*model.OpsNotification, error) {

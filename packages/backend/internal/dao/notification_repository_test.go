@@ -17,21 +17,24 @@ func TestNotificationRepositoryListFilters(t *testing.T) {
 	repo := NewNotificationRepository(db)
 
 	now := time.Unix(1700000000, 0).UTC()
-	query := "SELECT \\* FROM `ops_notification` WHERE type = \\? AND status = \\? AND `ops_notification`.`deleted_at` IS NULL ORDER BY created_at DESC, id DESC"
-	mock.ExpectQuery(query).
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `ops_notification` WHERE type = \\? AND status = \\? AND `ops_notification`.`deleted_at` IS NULL").
 		WithArgs(model.NotificationVersionRelease, model.NotificationPublished).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	query := "SELECT \\* FROM `ops_notification` WHERE type = \\? AND status = \\? AND `ops_notification`.`deleted_at` IS NULL ORDER BY created_at DESC, id DESC LIMIT \\? OFFSET \\?"
+	mock.ExpectQuery(query).
+		WithArgs(model.NotificationVersionRelease, model.NotificationPublished, 20, 20).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "title", "type", "status", "expire_at", "created_at"}).
 			AddRow(1, "v1.2.0", "version_release", "published", now, now))
 
-	items, err := repo.List(context.Background(), NotificationFilter{
+	items, total, err := repo.List(context.Background(), NotificationFilter{
 		Type:   string(model.NotificationVersionRelease),
 		Status: string(model.NotificationPublished),
-	})
+	}, 20, 20)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
-	if len(items) != 1 || items[0].ID != 1 || items[0].Title != "v1.2.0" {
-		t.Fatalf("items = %+v", items)
+	if total != 1 || len(items) != 1 || items[0].ID != 1 || items[0].Title != "v1.2.0" {
+		t.Fatalf("items = %+v, total = %d", items, total)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
@@ -42,16 +45,19 @@ func TestNotificationRepositoryListWithoutFilters(t *testing.T) {
 	db, mock := newMockDB(t)
 	repo := NewNotificationRepository(db)
 
-	mock.ExpectQuery("SELECT \\* FROM `ops_notification` WHERE `ops_notification`.`deleted_at` IS NULL ORDER BY created_at DESC, id DESC").
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `ops_notification` WHERE `ops_notification`.`deleted_at` IS NULL").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
+	mock.ExpectQuery("SELECT \\* FROM `ops_notification` WHERE `ops_notification`.`deleted_at` IS NULL ORDER BY created_at DESC, id DESC LIMIT \\?").
+		WithArgs(20).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "title"}).
 			AddRow(2, "inbox"))
 
-	items, err := repo.List(context.Background(), NotificationFilter{})
+	items, total, err := repo.List(context.Background(), NotificationFilter{}, 0, 20)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
-	if len(items) != 1 || items[0].ID != 2 {
-		t.Fatalf("items = %+v", items)
+	if total != 2 || len(items) != 1 || items[0].ID != 2 {
+		t.Fatalf("items = %+v, total = %d", items, total)
 	}
 }
 

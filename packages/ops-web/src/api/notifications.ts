@@ -1,13 +1,20 @@
 import { request } from './client'
-import { toList } from './normalize'
-import type { NotificationInput, OpsNotification } from '@/types'
+import type { NotificationInput, NotificationPage, NotificationQuery, OpsNotification } from '@/types'
 
-export async function listNotifications(): Promise<OpsNotification[]> {
-  const result = await request<OpsNotification[] | { notifications: OpsNotification[] }>({
+export async function listNotifications(query: NotificationQuery = {}): Promise<NotificationPage> {
+  const page = query.page ?? 1
+  const pageSize = query.pageSize ?? 20
+  const result = await request<NotificationPage>({
     method: 'get',
     url: '/notifications',
+    params: { page, pageSize },
   })
-  return toList(result, 'notifications')
+  return {
+    notifications: result.notifications ?? [],
+    total: result.total ?? 0,
+    page: result.page ?? page,
+    pageSize: result.pageSize ?? pageSize,
+  }
 }
 
 export function createNotification(input: NotificationInput): Promise<OpsNotification> {

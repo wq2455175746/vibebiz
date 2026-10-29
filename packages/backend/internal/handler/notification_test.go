@@ -35,7 +35,7 @@ func (r *notificationRepo) add(item model.OpsNotification) model.OpsNotification
 	return item
 }
 
-func (r *notificationRepo) List(_ context.Context, filter dao.NotificationFilter) ([]model.OpsNotification, error) {
+func (r *notificationRepo) List(_ context.Context, filter dao.NotificationFilter, offset, limit int) ([]model.OpsNotification, int64, error) {
 	out := make([]model.OpsNotification, 0, len(r.items))
 	for _, item := range r.items {
 		if filter.Type != "" && string(item.Type) != filter.Type {
@@ -46,7 +46,15 @@ func (r *notificationRepo) List(_ context.Context, filter dao.NotificationFilter
 		}
 		out = append(out, item)
 	}
-	return out, nil
+	total := int64(len(out))
+	if offset >= len(out) {
+		return []model.OpsNotification{}, total, nil
+	}
+	end := offset + limit
+	if end > len(out) {
+		end = len(out)
+	}
+	return out[offset:end], total, nil
 }
 
 func (r *notificationRepo) Get(_ context.Context, id int64) (*model.OpsNotification, error) {
@@ -250,6 +258,31 @@ func TestNotificationAdminPublishConflict(t *testing.T) {
 	}
 	if env := decodeAuthEnvelope(t, rec); env.Code != 40901 {
 		t.Fatalf("code = %d, want 40901", env.Code)
+	}
+}
+
+func TestNotificationAdminListPaginates(t *testing.T) {
+	repo, _, h, _ := notificationFixture(t)
+	for i := 0; i < 5; i++ {
+		repo.add(model.OpsNotification{Title: "item", Content: "body", Type: model.NotificationInbox, Status: model.NotificationDraft, ExpireAt: notificationTestNow.Add(time.Hour)})
+	}
+	e := notificationRouter(h, opsSession())
+
+	rec := notificationRequestRecorder(e, http.MethodGet, "/admin/notifications?page=2&pageSize=2", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var result struct {
+		Notifications []notification.View `json:"notifications"`
+		Total         int64               `json:"total"`
+		Page          int                 `json:"page"`
+		PageSize      int                 `json:"pageSize"`
+	}
+	if err := json.Unmarshal(decodeAuthEnvelope(t, rec).Result, &result); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if result.Total != 5 || len(result.Notifications) != 2 || result.Page != 2 || result.PageSize != 2 {
+		t.Fatalf("result = %+v", result)
 	}
 }
 

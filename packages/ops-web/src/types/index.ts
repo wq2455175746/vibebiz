@@ -72,6 +72,18 @@ export interface OpsNotification {
   updatedAt: string
 }
 
+export interface NotificationPage {
+  notifications: OpsNotification[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+export interface NotificationQuery {
+  page?: number
+  pageSize?: number
+}
+
 export interface NotificationInput {
   title: string
   content: string

@@ -111,7 +111,19 @@ func main() {
 	notificationRepo := dao.NewNotificationRepository(db)
 	notificationCache := notification.NewCache(redisClient, redisPrefix)
 	notificationHub := notification.NewHub()
-	notificationService := notification.NewService(notificationRepo, notificationCache, notificationHub)
+	notificationBus := notification.NewEventBus(redisClient, redisPrefix, notificationHub)
+	busCtx, busCancel := context.WithCancel(ctx)
+	go func() {
+		if err := notificationBus.Run(busCtx); err != nil && !errors.Is(err, context.Canceled) {
+			obs.Logger.Error("notification event bus stopped", "error", err)
+		}
+	}()
+	select {
+	case <-notificationBus.Ready():
+	case <-time.After(5 * time.Second):
+		obs.Logger.Error("notification event bus subscribe timeout")
+	}
+	notificationService := notification.NewService(notificationRepo, notificationCache, notificationBus)
 	notificationHandler := handler.NewNotificationHandler(notificationService, notificationHub, cfg.CorsOrigins)
 
 	e := server.New(cfg, obs)
@@ -130,6 +142,7 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
+	busCancel()
 	notificationHub.Close()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

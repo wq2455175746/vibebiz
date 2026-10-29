@@ -24,7 +24,7 @@ func NewNotificationRepository(db *gorm.DB) *NotificationRepository {
 	return &NotificationRepository{db: db}
 }
 
-func (r *NotificationRepository) List(ctx context.Context, filter NotificationFilter) ([]model.OpsNotification, error) {
+func (r *NotificationRepository) List(ctx context.Context, filter NotificationFilter, offset, limit int) ([]model.OpsNotification, int64, error) {
 	query := r.db.WithContext(ctx).Model(&model.OpsNotification{})
 	if filter.Type != "" {
 		query = query.Where("type = ?", filter.Type)
@@ -32,11 +32,15 @@ func (r *NotificationRepository) List(ctx context.Context, filter NotificationFi
 	if filter.Status != "" {
 		query = query.Where("status = ?", filter.Status)
 	}
-	items := make([]model.OpsNotification, 0)
-	if err := query.Order("created_at DESC, id DESC").Find(&items).Error; err != nil {
-		return nil, fmt.Errorf("list notifications: %w", err)
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("count notifications: %w", err)
 	}
-	return items, nil
+	items := make([]model.OpsNotification, 0)
+	if err := query.Order("created_at DESC, id DESC").Offset(offset).Limit(limit).Find(&items).Error; err != nil {
+		return nil, 0, fmt.Errorf("list notifications: %w", err)
+	}
+	return items, total, nil
 }
 
 func (r *NotificationRepository) Get(ctx context.Context, id int64) (*model.OpsNotification, error) {

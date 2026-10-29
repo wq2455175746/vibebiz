@@ -3,6 +3,7 @@ package notification
 import (
 	"context"
 	"errors"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -30,9 +31,9 @@ func (r *fakeRepo) add(item model.OpsNotification) model.OpsNotification {
 	return item
 }
 
-func (r *fakeRepo) List(ctx context.Context, filter dao.NotificationFilter) ([]model.OpsNotification, error) {
+func (r *fakeRepo) List(ctx context.Context, filter dao.NotificationFilter, offset, limit int) ([]model.OpsNotification, int64, error) {
 	if r.listErr != nil {
-		return nil, r.listErr
+		return nil, 0, r.listErr
 	}
 	out := make([]model.OpsNotification, 0, len(r.items))
 	for _, item := range r.items {
@@ -44,7 +45,16 @@ func (r *fakeRepo) List(ctx context.Context, filter dao.NotificationFilter) ([]m
 		}
 		out = append(out, item)
 	}
-	return out, nil
+	sort.Slice(out, func(i, j int) bool { return out[i].ID > out[j].ID })
+	total := int64(len(out))
+	if offset >= len(out) {
+		return []model.OpsNotification{}, total, nil
+	}
+	end := offset + limit
+	if end > len(out) {
+		end = len(out)
+	}
+	return out[offset:end], total, nil
 }
 
 func (r *fakeRepo) Get(ctx context.Context, id int64) (*model.OpsNotification, error) {
@@ -160,6 +170,11 @@ type fakeHub struct {
 func (h *fakeHub) Broadcast(event Event) {
 	h.last = event
 	h.events = append(h.events, event)
+}
+
+func (h *fakeHub) Publish(_ context.Context, event Event) error {
+	h.Broadcast(event)
+	return nil
 }
 
 func newTestServiceWith(repo Repository, cache CacheStore, hub Broadcaster) *Service {
@@ -539,6 +554,22 @@ func TestServicePublishReturnsCacheUnavailable(t *testing.T) {
 	}
 }
 
+func TestServiceListPaginates(t *testing.T) {
+	repo := newFakeRepo()
+	svc := newTestServiceWith(repo, &fakeCache{}, &fakeHub{})
+	for i := 0; i < 25; i++ {
+		repo.add(draftNotification(svc.Now()))
+	}
+
+	page, err := svc.List(context.Background(), dao.NotificationFilter{}, 2, 10)
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if page.Total != 25 || page.Page != 2 || page.PageSize != 10 || len(page.Items) != 10 {
+		t.Fatalf("page = %+v", page)
+	}
+}
+
 func TestServiceViewDerivesExpiredStatus(t *testing.T) {
 	repo := newFakeRepo()
 	cache := &fakeCache{}
@@ -549,12 +580,12 @@ func TestServiceViewDerivesExpiredStatus(t *testing.T) {
 	published.ExpireAt = svc.Now().Add(-time.Hour)
 	repo.add(published)
 
-	items, err := svc.List(context.Background(), dao.NotificationFilter{})
+	page, err := svc.List(context.Background(), dao.NotificationFilter{}, 1, 20)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
-	if len(items) != 1 || items[0].Status != model.NotificationStatus("expired") {
-		t.Fatalf("items = %+v, want status expired", items)
+	if len(page.Items) != 1 || page.Items[0].Status != model.NotificationStatus("expired") {
+		t.Fatalf("items = %+v, want status expired", page.Items)
 	}
 }
 

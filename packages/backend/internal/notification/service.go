@@ -33,11 +33,11 @@ type Event struct {
 }
 
 type Broadcaster interface {
-	Broadcast(event Event)
+	Publish(ctx context.Context, event Event) error
 }
 
 type Repository interface {
-	List(ctx context.Context, filter dao.NotificationFilter) ([]model.OpsNotification, error)
+	List(ctx context.Context, filter dao.NotificationFilter, offset, limit int) ([]model.OpsNotification, int64, error)
 	Get(ctx context.Context, id int64) (*model.OpsNotification, error)
 	Create(ctx context.Context, item *model.OpsNotification) error
 	Update(ctx context.Context, item *model.OpsNotification) error
@@ -89,16 +89,32 @@ type View struct {
 	UpdatedAt     time.Time                `json:"updatedAt"`
 }
 
-func (s *Service) List(ctx context.Context, filter dao.NotificationFilter) ([]View, error) {
-	items, err := s.Repo.List(ctx, filter)
+type ViewPage struct {
+	Items    []View `json:"notifications"`
+	Total    int64  `json:"total"`
+	Page     int    `json:"page"`
+	PageSize int    `json:"pageSize"`
+}
+
+func (s *Service) List(ctx context.Context, filter dao.NotificationFilter, page, pageSize int) (ViewPage, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+	items, total, err := s.Repo.List(ctx, filter, (page-1)*pageSize, pageSize)
 	if err != nil {
-		return nil, err
+		return ViewPage{}, err
 	}
 	out := make([]View, 0, len(items))
 	for _, item := range items {
 		out = append(out, s.view(item))
 	}
-	return out, nil
+	return ViewPage{Items: out, Total: total, Page: page, PageSize: pageSize}, nil
 }
 
 func (s *Service) Create(ctx context.Context, input CreateInput, creator Creator) (View, error) {
@@ -163,7 +179,7 @@ func (s *Service) Publish(ctx context.Context, id int64) (View, error) {
 		_ = s.removeCache(ctx, id, "publish rollback")
 		return View{}, err
 	}
-	s.broadcast("published", id)
+	s.broadcast(ctx, "published", id)
 	stored, err := s.Repo.Get(ctx, id)
 	if err != nil {
 		return s.view(*item), nil
@@ -185,7 +201,7 @@ func (s *Service) Unpublish(ctx context.Context, id int64) (View, error) {
 	if err := s.removeCache(ctx, id, "unpublish"); err != nil {
 		return View{}, ErrCacheUnavailable
 	}
-	s.broadcast("unpublished", id)
+	s.broadcast(ctx, "unpublished", id)
 	stored, err := s.Repo.Get(ctx, id)
 	if err != nil {
 		item.Status = model.NotificationUnpublished
@@ -204,7 +220,7 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 	if err := s.removeCache(ctx, id, "delete"); err != nil {
 		return ErrCacheUnavailable
 	}
-	s.broadcast("deleted", id)
+	s.broadcast(ctx, "deleted", id)
 	return nil
 }
 
@@ -326,8 +342,15 @@ func (s *Service) view(item model.OpsNotification) View {
 	}
 }
 
-func (s *Service) broadcast(action string, id int64) {
-	if s.Hub != nil {
-		s.Hub.Broadcast(Event{Type: "notifications.changed", Action: action, ID: id})
+func (s *Service) broadcast(ctx context.Context, action string, id int64) {
+	if s.Hub == nil {
+		return
+	}
+	if err := s.Hub.Publish(ctx, Event{Type: "notifications.changed", Action: action, ID: id}); err != nil {
+		slog.Default().Error("notification event publish failed",
+			"notification_id", id,
+			"action", action,
+			"error", err,
+		)
 	}
 }
