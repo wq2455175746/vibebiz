@@ -20,7 +20,7 @@ from app.services.workspace import Workspace
 
 logger = get_logger()
 
-ALLOWED_TOOLS = ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Skill"]
+ALLOWED_TOOLS = ["Read", "Write", "Edit", "Bash", "Glob", "Grep"]
 
 
 def build_options(
@@ -28,7 +28,11 @@ def build_options(
     cwd: str | Path,
     session_id: str | None = None,
 ) -> ClaudeAgentOptions:
-    env = {"ANTHROPIC_BASE_URL": settings.anthropic_base_url}
+    env: dict[str, str] = {}
+    if settings.anthropic_base_url:
+        env["ANTHROPIC_BASE_URL"] = settings.anthropic_base_url
+    if settings.anthropic_api_key:
+        env["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
     if settings.anthropic_auth_token:
         env["ANTHROPIC_AUTH_TOKEN"] = settings.anthropic_auth_token
 
@@ -65,6 +69,7 @@ class ClaudeAgent:
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
+        self._sessions: dict[str, str] = {}
 
     async def run(
         self,
@@ -125,8 +130,11 @@ class ClaudeAgent:
         session_id: str | None = None,
     ) -> AsyncIterator[dict]:
         project_dir = workspace.project_dir(project_id)
-        options = build_options(self.settings, project_dir, session_id)
+        session = session_id or self._sessions.get(project_id)
+        options = build_options(self.settings, project_dir, session)
         async for sdk_message in query(prompt=message, options=options):
+            if isinstance(sdk_message, ResultMessage) and sdk_message.session_id:
+                self._sessions[project_id] = sdk_message.session_id
             event = serialize_sdk_message(sdk_message)
             if event:
                 yield event

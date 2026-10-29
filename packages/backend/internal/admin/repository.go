@@ -1,6 +1,9 @@
 package admin
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 type Overview struct {
 	Projects         int `json:"projects"`
@@ -29,9 +32,9 @@ type Sandbox struct {
 type Quota struct {
 	UserID         string `json:"userId"`
 	Plan           string `json:"plan"`
-	LLMTokens      int    `json:"llmTokens"`
-	SandboxMinutes int    `json:"sandboxMinutes"`
-	StorageMB      int    `json:"storageMb"`
+	LLMTokens      int64  `json:"llmTokens"`
+	SandboxMinutes int64  `json:"sandboxMinutes"`
+	StorageMB      int64  `json:"storageMb"`
 }
 
 type AuditEvent struct {
@@ -42,10 +45,36 @@ type AuditEvent struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+type RequestCounter interface {
+	Today(ctx context.Context) (int64, error)
+}
+
+type AuditRecord struct {
+	OpsUserID     int64
+	ActorName     string
+	Action        string
+	ResourceType  string
+	ResourceID    string
+	RequestMethod string
+	RequestPath   string
+	RequestID     string
+	TraceID       string
+	IP            string
+	UserAgent     string
+	ResultStatus  string
+	ErrorMessage  string
+}
+
+type AuditRecorder interface {
+	RecordAudit(ctx context.Context, event AuditRecord) error
+}
+
 type Repository interface {
-	Overview(projectCount int) Overview
-	Users() []User
-	Sandboxes() []Sandbox
-	Quotas() []Quota
-	Audit() []AuditEvent
+	AuditRecorder
+	Overview(ctx context.Context, projectCount int) (Overview, error)
+	Users(ctx context.Context) ([]User, error)
+	Sandboxes(ctx context.Context) ([]Sandbox, error)
+	Quotas(ctx context.Context) ([]Quota, error)
+	Audit(ctx context.Context) ([]AuditEvent, error)
+	RecordAudit(ctx context.Context, event AuditRecord) error
 }

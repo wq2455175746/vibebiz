@@ -103,7 +103,7 @@
 - UI 保留最近 10,000 行；服务端保留最近 1,000 行 / 1 MB。
 - 自动滚底；用户上滚后暂停自动滚动。
 - 操作：暂停/继续、清空、按级别过滤、展开/收起。
-- 本轮日志由 mock adapter 提供；后续替换为 WebSocket。
+- 当前日志由 SSE 事件派生（agent/tool/sandbox）；后续替换为 WebSocket。
 - 视觉使用等宽字体、紧凑行高，不使用 Monaco。
 
 ## 5. 本轮 UI 数据策略
@@ -115,13 +115,13 @@
 | 项目创建/详情 | 真实 CP API |
 | 文件树/文件内容 | 真实 DP API |
 | iframe 预览 | 真实 DP API |
-| 聊天消息 | mock adapter |
-| 工具调用卡片 | mock adapter |
-| 执行日志 | mock adapter |
-| 首条自动消息 | mock adapter 触发 |
-| 模型选择 | UI 占位，默认 `deepseek-chat` |
+| 聊天消息 | 真实 DP SSE |
+| 工具调用卡片 | 真实 DP SSE |
+| 执行日志 | SSE 事件派生（WebSocket 后续接入） |
+| 首条自动消息 | 真实 `chat.send()` 触发 |
+| 模型选择 | UI 占位，默认 `deepseek-flash` |
 
-要求 mock adapter 与真实 adapter 接口一致，后续只替换实现。
+mock adapter 保留用于测试/回退，日常路径使用真实 adapter。
 
 ## 6. 前端模块
 
@@ -193,19 +193,19 @@ ClaudeAgentOptions(
 
 ## 8. 多模型
 
-### 8.1 统一网关
+### 8.1 协议与网关
 
-首期使用 LiteLLM 兼容网关，内部端口 `4000`，不对外暴露：
+DeepSeek 原生提供 Anthropic 兼容端点，不需要 LiteLLM：
 
 ```text
-sandbox → ANTHROPIC_BASE_URL=http://litellm:4000
-        → LiteLLM /v1/messages
-        → DeepSeek / Anthropic / 其他商用模型
+sandbox → ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic
+        → DeepSeek Anthropic API
 ```
 
 - Claude Agent SDK 只看到 Anthropic 协议。
-- LiteLLM 负责 OpenAI 协议到 Anthropic 协议的转换。
-- 模型 key 只存在 LiteLLM 环境，不进入前端、sandbox 项目目录或日志。
+- DeepSeek 直接配置 `ANTHROPIC_AUTH_TOKEN` 或 `ANTHROPIC_API_KEY`。
+- 只有 OpenAI-only、没有 Anthropic 兼容端点的模型才需要 LiteLLM 转换。
+- 模型 key 不进入前端、sandbox 项目目录或日志。
 
 ### 8.2 模型契约
 
@@ -219,11 +219,11 @@ GET /cp/api/v1/models
 Chat：
 
 ```json
-{ "message": "做一个贪吃蛇", "sessionId": "...", "modelId": "deepseek-chat" }
+{ "message": "做一个贪吃蛇", "sessionId": "...", "modelId": "deepseek-flash" }
 ```
 
 - `modelId` 缺省使用 `DEFAULT_MODEL_ID`。
-- 开发/测试阶段固定默认 `deepseek-chat`：sandbox 的 `ClaudeAgentOptions(model="deepseek-chat")`，`ANTHROPIC_BASE_URL` 指向 LiteLLM，LiteLLM 再路由到 DeepSeek。
+- 开发/测试阶段固定默认 `deepseek-flash`：sandbox 的 `ClaudeAgentOptions(model="deepseek-flash")`，`ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic`，直接用 DeepSeek API Key。
 - 写死的是 provider/model 路由，不写死 API Key；DeepSeek Key 只存在 LiteLLM 环境。
 - 后续多模型只把写死的 `model` 替换为请求里的 `modelId`，Agent 代码不重写。
 - UI 显示当前模型；模型选择器后续接 `/models`。
@@ -327,7 +327,7 @@ DP:      /dp/api/v1/projects/:id/logs/ws
 
 | 风险 | 处理 |
 |---|---|
-| Claude SDK 与 OpenAI-only 模型协议不通 | 首期用 LiteLLM 网关转换 |
+| Claude SDK 与 OpenAI-only 模型协议不通 | 仅此类模型用 LiteLLM；DeepSeek 可直连 Anthropic 端点 |
 | skills 运行时联网不可复现 | lockfile + 构建期安装 |
 | claude-mem 跨租户记忆泄漏 | 每工作区独立数据目录，关闭 Web Viewer |
 | 日志过大阻塞主线程 | 环形缓冲 + 截断 + 虚拟/滚动区，不用 Monaco |

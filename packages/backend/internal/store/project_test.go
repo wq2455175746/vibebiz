@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -12,11 +13,11 @@ func TestMemoryProjectStoreCreateAndGet(t *testing.T) {
 	s := NewMemoryProjectStore()
 	project := &model.Project{ID: "p1", Name: "demo", Prompt: "make a game", State: model.ProjectStateReady, CreatedAt: time.Now()}
 
-	if err := s.Create(project); err != nil {
+	if err := s.Create(context.Background(), project); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 
-	got, err := s.Get("p1")
+	got, err := s.Get(context.Background(), "p1")
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
@@ -28,29 +29,29 @@ func TestMemoryProjectStoreCreateAndGet(t *testing.T) {
 func TestMemoryProjectStoreDuplicate(t *testing.T) {
 	s := NewMemoryProjectStore()
 	project := &model.Project{ID: "p1"}
-	if err := s.Create(project); err != nil {
+	if err := s.Create(context.Background(), project); err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if err := s.Create(project); err == nil {
+	if err := s.Create(context.Background(), project); err == nil {
 		t.Fatal("expected duplicate error")
 	}
 }
 
 func TestMemoryProjectStoreNotFound(t *testing.T) {
 	s := NewMemoryProjectStore()
-	if _, err := s.Get("missing"); !errors.Is(err, ErrNotFound) {
+	if _, err := s.Get(context.Background(), "missing"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("err = %v, want ErrNotFound", err)
 	}
 }
 
 func TestMemoryProjectStoreReturnsCopy(t *testing.T) {
 	s := NewMemoryProjectStore()
-	s.Create(&model.Project{ID: "p1", Name: "original"})
+	s.Create(context.Background(), &model.Project{ID: "p1", Name: "original"})
 
-	got, _ := s.Get("p1")
+	got, _ := s.Get(context.Background(), "p1")
 	got.Name = "mutated"
 
-	again, _ := s.Get("p1")
+	again, _ := s.Get(context.Background(), "p1")
 	if again.Name != "original" {
 		t.Fatalf("store mutated through returned pointer: %q", again.Name)
 	}
@@ -59,10 +60,10 @@ func TestMemoryProjectStoreReturnsCopy(t *testing.T) {
 func TestMemoryProjectStoreListSortedNewestFirst(t *testing.T) {
 	s := NewMemoryProjectStore()
 	now := time.Now()
-	s.Create(&model.Project{ID: "old", CreatedAt: now.Add(-time.Hour)})
-	s.Create(&model.Project{ID: "new", CreatedAt: now})
+	s.Create(context.Background(), &model.Project{ID: "old", CreatedAt: now.Add(-time.Hour)})
+	s.Create(context.Background(), &model.Project{ID: "new", CreatedAt: now})
 
-	list := s.List()
+	list := s.List(context.Background())
 	if len(list) != 2 || list[0].ID != "new" {
 		t.Fatalf("unexpected order: %+v", list)
 	}
@@ -71,12 +72,12 @@ func TestMemoryProjectStoreListSortedNewestFirst(t *testing.T) {
 func TestMemoryProjectStoreListByWorkspaces(t *testing.T) {
 	s := NewMemoryProjectStore()
 	now := time.Now()
-	s.Create(&model.Project{ID: "w1-old", WorkspaceID: 1, OwnerUserID: 7, CreatedAt: now.Add(-time.Hour)})
-	s.Create(&model.Project{ID: "w1-new", WorkspaceID: 1, OwnerUserID: 8, CreatedAt: now})
-	s.Create(&model.Project{ID: "w2", WorkspaceID: 2, OwnerUserID: 9, CreatedAt: now})
-	s.Create(&model.Project{ID: "legacy", CreatedAt: now})
+	s.Create(context.Background(), &model.Project{ID: "w1-old", WorkspaceID: 1, OwnerUserID: 7, CreatedAt: now.Add(-time.Hour)})
+	s.Create(context.Background(), &model.Project{ID: "w1-new", WorkspaceID: 1, OwnerUserID: 8, CreatedAt: now})
+	s.Create(context.Background(), &model.Project{ID: "w2", WorkspaceID: 2, OwnerUserID: 9, CreatedAt: now})
+	s.Create(context.Background(), &model.Project{ID: "legacy", CreatedAt: now})
 
-	list := s.ListByWorkspaces([]int64{1})
+	list := s.ListByWorkspaces(context.Background(), []int64{1})
 	if len(list) != 2 || list[0].ID != "w1-new" || list[1].ID != "w1-old" {
 		t.Fatalf("unexpected list: %+v", list)
 	}
@@ -84,27 +85,27 @@ func TestMemoryProjectStoreListByWorkspaces(t *testing.T) {
 		t.Fatalf("ownership lost: %+v", list[0])
 	}
 
-	list = s.ListByWorkspaces([]int64{2, 1})
+	list = s.ListByWorkspaces(context.Background(), []int64{2, 1})
 	if len(list) != 3 || list[0].ID != "w1-new" {
 		t.Fatalf("multi workspace list: %+v", list)
 	}
 
-	if list := s.ListByWorkspaces(nil); len(list) != 0 {
+	if list := s.ListByWorkspaces(context.Background(), nil); len(list) != 0 {
 		t.Fatalf("empty workspace ids returned %+v", list)
 	}
 }
 
 func TestMemoryProjectStoreDelete(t *testing.T) {
 	s := NewMemoryProjectStore()
-	s.Create(&model.Project{ID: "p1", WorkspaceID: 1})
+	s.Create(context.Background(), &model.Project{ID: "p1", WorkspaceID: 1})
 
-	if err := s.Delete("p1"); err != nil {
+	if err := s.Delete(context.Background(), "p1"); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
-	if _, err := s.Get("p1"); !errors.Is(err, ErrNotFound) {
+	if _, err := s.Get(context.Background(), "p1"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("get after delete err = %v, want ErrNotFound", err)
 	}
-	if err := s.Delete("p1"); !errors.Is(err, ErrNotFound) {
+	if err := s.Delete(context.Background(), "p1"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("second delete err = %v, want ErrNotFound", err)
 	}
 }

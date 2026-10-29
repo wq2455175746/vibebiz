@@ -61,7 +61,7 @@ func run(args []string) error {
 	}
 	defer db.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 	if err := db.PingContext(ctx); err != nil {
 		return fmt.Errorf("ping mysql: %w", err)
@@ -122,7 +122,7 @@ func createDatabase(cfg dao.MySQLConfig) error {
 	}
 	defer admin.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 	if err := admin.PingContext(ctx); err != nil {
 		return fmt.Errorf("ping mysql admin: %w", err)

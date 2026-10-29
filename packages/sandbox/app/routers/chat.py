@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 from app.errors import NotFoundError, WorkspaceError
 from app.observability import SANDBOX_REQUESTS, SSE_EVENTS, get_logger, get_tracer
-from app.services.agent import StubAgent
+from app.services.agent import Agent
 from app.services.events import DONE, sse
 from app.services.versioning import Versioning
 from app.services.workspace import Workspace
@@ -26,7 +26,7 @@ def _count(project_id: str, status: str) -> None:
 async def chat(project_id: str, body: ChatRequest, request: Request) -> StreamingResponse:
     workspace: Workspace = request.app.state.workspace
     versioning: Versioning = request.app.state.versioning
-    agent: StubAgent = request.app.state.agent
+    agent: Agent = request.app.state.agent
 
     message = body.message.strip()
     if not message:

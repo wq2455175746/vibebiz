@@ -33,9 +33,9 @@ func TestStorageSummaryAggregatesCurrentWorkspace(t *testing.T) {
 	repo.quota = &dao.UserQuotaRecord{StorageQuotaBytes: 10 << 30}
 
 	projects := store.NewMemoryProjectStore()
-	projects.Create(&model.Project{ID: "p1", Name: "one", WorkspaceID: 5})
-	projects.Create(&model.Project{ID: "p2", Name: "two", WorkspaceID: 5})
-	projects.Create(&model.Project{ID: "p3", Name: "other", WorkspaceID: 9})
+	projects.Create(context.Background(), &model.Project{ID: "p1", Name: "one", WorkspaceID: 5})
+	projects.Create(context.Background(), &model.Project{ID: "p2", Name: "two", WorkspaceID: 5})
+	projects.Create(context.Background(), &model.Project{ID: "p3", Name: "other", WorkspaceID: 9})
 
 	stats := &fakeStatsClient{
 		stats: map[string]client.ProjectStats{

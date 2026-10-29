@@ -8,9 +8,55 @@ import type { ChatMessage } from '@/types'
 
 interface AgentPayload {
   type?: string
+  subtype?: string
   message?: {
     content?: Array<Record<string, unknown>>
   }
+  result?: unknown
+  durationMs?: number
+  duration_ms?: number
+  numTurns?: number
+  num_turns?: number
+}
+
+interface AgentBlock extends Record<string, unknown> {
+  type?: string
+  text?: string
+  id?: string
+  name?: string
+  input?: unknown
+  tool_use_id?: string
+}
+
+function numeric(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function toolDetail(input: unknown): string {
+  if (!input || typeof input !== 'object') {
+    return ''
+  }
+  const record = input as Record<string, unknown>
+  const value = record.file_path ?? record.path ?? record.command ?? record.pattern ?? record.query
+  if (typeof value !== 'string') {
+    return ''
+  }
+  const detail = value.replace(/\s+/g, ' ').trim()
+  return detail.length > 120 ? `${detail.slice(0, 117)}...` : detail
+}
+
+function resultLog(payload: AgentPayload): { level: 'info' | 'error'; message: string } {
+  const success = !payload.subtype || payload.subtype === 'success'
+  const turns = numeric(payload.numTurns) ?? numeric(payload.num_turns)
+  const duration = numeric(payload.durationMs) ?? numeric(payload.duration_ms)
+  let message = success ? '执行完成' : '执行结束'
+  if (turns) {
+    message += ` · ${turns} 轮`
+  }
+  if (duration) {
+    message += ` · ${(duration / 1000).toFixed(1)}s`
+  }
+  return { level: success ? 'info' : 'error', message }
 }
 
 let seq = 0
@@ -114,6 +160,7 @@ export const useChatStore = defineStore('chat', () => {
     if (streaming.value) {
       return
     }
+    const logs = useLogStore()
     messages.value.push({
       id: nextId(),
       role: 'user',
@@ -132,15 +179,18 @@ export const useChatStore = defineStore('chat', () => {
     const assistant = messages.value[messages.value.length - 1]
     streaming.value = true
     controller = new AbortController()
+    logs.append({ level: 'info', source: 'agent', message: 'Agent 开始执行' })
 
     try {
       for await (const event of streamChat(projectId, text, controller.signal)) {
-        applyEvent(assistant, event)
+        applyEvent(assistant, event, logs)
       }
     } catch (error) {
       if ((error as Error).name !== 'AbortError') {
-        assistant.text = assistant.text || `请求失败：${(error as Error).message}`
+        const message = (error as Error).message
+        assistant.text = assistant.text || `请求失败：${message}`
         assistant.role = 'system'
+        logs.append({ level: 'error', source: 'agent', message: `执行失败：${message}` })
       }
     } finally {
       assistant.pending = false
@@ -150,13 +200,22 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  function applyEvent(target: ChatMessage, event: StreamEvent) {
+  function applyEvent(
+    target: ChatMessage,
+    event: StreamEvent,
+    logs: ReturnType<typeof useLogStore>,
+  ) {
     if (event.type === 'error') {
-      target.text = target.text || String(event.message ?? 'agent error')
+      const message = String(event.message ?? 'agent error')
+      target.text = target.text || message
+      logs.append({ level: 'error', source: 'agent', message: `执行失败：${message}` })
       return
     }
     if (event.type === 'sandbox-status') {
       target.pending = false
+      if (event.state === 'ready') {
+        logs.append({ level: 'info', source: 'sandbox', message: '沙箱已就绪' })
+      }
       return
     }
     if (event.type !== 'agent') {
@@ -164,27 +223,42 @@ export const useChatStore = defineStore('chat', () => {
     }
 
     const payload = event.payload as AgentPayload | undefined
-    if (!payload) {
+    if (!payload || payload.type === 'system') {
       return
     }
     if (payload.type === 'result') {
+      if (!target.text && typeof payload.result === 'string') {
+        target.text = payload.result
+      }
       target.pending = false
+      logs.append({ source: 'agent', ...resultLog(payload) })
       return
     }
 
-    for (const block of payload.message?.content ?? []) {
-      const type = block.type
-      if (type === 'text' && typeof block.text === 'string') {
-        target.text += block.text
+    const blocks = (payload.message?.content ?? []) as AgentBlock[]
+    for (const block of blocks) {
+      if (block.type === 'text' && typeof block.text === 'string') {
+        if (block.text) {
+          target.text = target.text ? `${target.text}\n\n${block.text}` : block.text
+        }
       }
-      if (type === 'tool_use' && typeof block.name === 'string') {
-        target.tools.push({
-          id: String(block.id ?? nextId()),
-          name: block.name,
-          status: 'running',
-        })
+      if (
+        payload.type === 'assistant' &&
+        block.type === 'tool_use' &&
+        typeof block.name === 'string'
+      ) {
+        const id = String(block.id ?? nextId())
+        if (!target.tools.some((item) => item.id === id)) {
+          target.tools.push({ id, name: block.name, status: 'running' })
+          const detail = toolDetail(block.input)
+          logs.append({
+            level: 'info',
+            source: 'tool',
+            message: detail ? `${block.name} ${detail}` : block.name,
+          })
+        }
       }
-      if (type === 'tool_result' && typeof block.tool_use_id === 'string') {
+      if (block.type === 'tool_result' && typeof block.tool_use_id === 'string') {
         const tool = target.tools.find((item) => item.id === block.tool_use_id)
         if (tool) {
           tool.status = 'done'

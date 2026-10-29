@@ -32,7 +32,7 @@ function send() {
     return
   }
   prompt.value = ''
-  chat.sendMock(props.projectId, text)
+  void chat.send(props.projectId, text)
   stickToBottom = true
   void scrollToBottom()
 }

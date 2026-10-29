@@ -1,6 +1,8 @@
 package router
 
 import (
+	"log/slog"
+
 	"github.com/labstack/echo/v4"
 
 	"vibebiz/internal/admin"
@@ -53,6 +55,11 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 	adminAPI.POST("/auth/logout", authHandler.LogoutOps)
 
 	adminProtected := adminAPI.Group("", authn.RequireOps)
+	var auditLogger *slog.Logger
+	if obs != nil {
+		auditLogger = obs.Logger
+	}
+	adminProtected.Use(admin.AuditMiddleware(repo, auditLogger))
 	adminProtected.GET("/overview", adminHandler.Overview)
 	adminProtected.GET("/users", adminHandler.Users)
 	adminProtected.GET("/projects", adminHandler.Projects)

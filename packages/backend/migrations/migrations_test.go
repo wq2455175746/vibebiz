@@ -158,14 +158,32 @@ func TestOpsNotificationMigration(t *testing.T) {
 	}
 }
 
+func TestProjectPersistenceMigration(t *testing.T) {
+	body, err := fs.ReadFile(FS, "00009_project_persistence.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	for _, want := range []string{
+		"ADD COLUMN `public_id` char(36)", "ADD COLUMN `prompt` mediumtext",
+		"uk_project_public_id", "MODIFY COLUMN `public_id` char(36) NOT NULL",
+		"MODIFY COLUMN `prompt` mediumtext NOT NULL",
+		"-- +goose Up", "-- +goose Down",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("project persistence migration missing %q", want)
+		}
+	}
+}
+
 func TestGooseCanCollectMigrations(t *testing.T) {
 	goose.SetBaseFS(FS)
 	migs, err := goose.CollectMigrations(".", 0, int64(^uint(0)>>1))
 	if err != nil {
 		t.Fatalf("collect migrations: %v", err)
 	}
-	if len(migs) != 8 {
-		t.Fatalf("collected %d migrations, want 8", len(migs))
+	if len(migs) != 9 {
+		t.Fatalf("collected %d migrations, want 9", len(migs))
 	}
 	for i, mig := range migs {
 		want := int64(i + 1)

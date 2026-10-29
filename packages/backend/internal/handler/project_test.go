@@ -166,7 +166,7 @@ func TestCreateProjectRejectsForeignCurrentWorkspace(t *testing.T) {
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want 403", rec.Code)
 	}
-	if len(projectStore.List()) != 0 {
+	if len(projectStore.List(context.Background())) != 0 {
 		t.Fatal("project should not be stored for foreign workspace")
 	}
 }
@@ -212,7 +212,7 @@ func TestCreateProjectSandboxFailure(t *testing.T) {
 	if env.Message != "workspace init failed" {
 		t.Fatalf("message = %q, want generic message", env.Message)
 	}
-	if len(projectStore.List()) != 0 {
+	if len(projectStore.List(context.Background())) != 0 {
 		t.Fatal("project should not be stored when init fails")
 	}
 }
@@ -233,7 +233,7 @@ func TestCreateProjectMetaFailureRollsBack(t *testing.T) {
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want 500", rec.Code)
 	}
-	if len(projectStore.List()) != 0 {
+	if len(projectStore.List(context.Background())) != 0 {
 		t.Fatal("project should be removed when meta write fails")
 	}
 }
@@ -241,9 +241,9 @@ func TestCreateProjectMetaFailureRollsBack(t *testing.T) {
 func TestListProjectsUsesCurrentWorkspace(t *testing.T) {
 	projectStore := store.NewMemoryProjectStore()
 	now := time.Now()
-	projectStore.Create(&model.Project{ID: "p1", WorkspaceID: 1, CreatedAt: now.Add(-time.Minute)})
-	projectStore.Create(&model.Project{ID: "p2", WorkspaceID: 2, CreatedAt: now})
-	projectStore.Create(&model.Project{ID: "p3", WorkspaceID: 3, CreatedAt: now})
+	projectStore.Create(context.Background(), &model.Project{ID: "p1", WorkspaceID: 1, CreatedAt: now.Add(-time.Minute)})
+	projectStore.Create(context.Background(), &model.Project{ID: "p2", WorkspaceID: 2, CreatedAt: now})
+	projectStore.Create(context.Background(), &model.Project{ID: "p3", WorkspaceID: 3, CreatedAt: now})
 
 	h := newProjectHandlerForTest(projectStore, &fakeInitializer{}, newFakeMetaStore())
 	e := echo.New()
@@ -270,7 +270,7 @@ func TestListProjectsUsesCurrentWorkspace(t *testing.T) {
 
 func TestGetProjectCrossWorkspaceNotFound(t *testing.T) {
 	projectStore := store.NewMemoryProjectStore()
-	projectStore.Create(&model.Project{ID: "p2", WorkspaceID: 2})
+	projectStore.Create(context.Background(), &model.Project{ID: "p2", WorkspaceID: 2})
 
 	h := newProjectHandlerForTest(projectStore, &fakeInitializer{}, newFakeMetaStore())
 	e := echo.New()
@@ -285,7 +285,7 @@ func TestGetProjectCrossWorkspaceNotFound(t *testing.T) {
 
 func TestGetProjectOwnWorkspace(t *testing.T) {
 	projectStore := store.NewMemoryProjectStore()
-	projectStore.Create(&model.Project{ID: "p1", WorkspaceID: 1})
+	projectStore.Create(context.Background(), &model.Project{ID: "p1", WorkspaceID: 1})
 
 	h := newProjectHandlerForTest(projectStore, &fakeInitializer{}, newFakeMetaStore())
 	e := echo.New()
@@ -300,7 +300,7 @@ func TestGetProjectOwnWorkspace(t *testing.T) {
 
 func TestDeleteProjectCrossWorkspaceNotFound(t *testing.T) {
 	projectStore := store.NewMemoryProjectStore()
-	projectStore.Create(&model.Project{ID: "p2", WorkspaceID: 2})
+	projectStore.Create(context.Background(), &model.Project{ID: "p2", WorkspaceID: 2})
 
 	h := newProjectHandlerForTest(projectStore, &fakeInitializer{}, newFakeMetaStore())
 	e := echo.New()
@@ -311,14 +311,14 @@ func TestDeleteProjectCrossWorkspaceNotFound(t *testing.T) {
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", rec.Code)
 	}
-	if _, err := projectStore.Get("p2"); err != nil {
+	if _, err := projectStore.Get(context.Background(), "p2"); err != nil {
 		t.Fatal("project should still exist")
 	}
 }
 
 func TestDeleteProjectDeletesStoreAndMeta(t *testing.T) {
 	projectStore := store.NewMemoryProjectStore()
-	projectStore.Create(&model.Project{ID: "p1", WorkspaceID: 1})
+	projectStore.Create(context.Background(), &model.Project{ID: "p1", WorkspaceID: 1})
 	metas := newFakeMetaStore()
 	metas.items["p1"] = auth.ProjectMeta{WorkspaceID: 1, OwnerUserID: 7}
 
@@ -331,7 +331,7 @@ func TestDeleteProjectDeletesStoreAndMeta(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
-	if _, err := projectStore.Get("p1"); !errors.Is(err, store.ErrNotFound) {
+	if _, err := projectStore.Get(context.Background(), "p1"); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("project still exists: %v", err)
 	}
 	if len(metas.deleted) != 1 || metas.deleted[0] != "p1" {

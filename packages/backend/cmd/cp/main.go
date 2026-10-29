@@ -21,6 +21,7 @@ import (
 	"vibebiz/internal/handler"
 	"vibebiz/internal/notification"
 	"vibebiz/internal/observability"
+	"vibebiz/internal/requestcount"
 	"vibebiz/internal/router"
 	storages3 "vibebiz/internal/s3"
 	"vibebiz/internal/server"
@@ -104,9 +105,16 @@ func main() {
 	authHandler := &handler.AuthHandler{Service: authService, Account: accountService, UserCookie: userCookie, OpsCookie: opsCookie}
 	settingsHandler := handler.NewSettingsHandler(accountService, userCookie)
 
-	projectStore := store.NewMemoryProjectStore()
+	projectStore, err := store.NewMySQLProjectStore(ctx, db)
+	if err != nil {
+		obs.Logger.Error("project store init failed", "error", err)
+		os.Exit(1)
+	}
 	sandbox := client.NewSandbox(cfg.SandboxBaseURL, obs)
 	storageHandler := &handler.StorageHandler{Projects: projectStore, Sandbox: sandbox, Account: accountService}
+
+	requestCounter := requestcount.NewCounter(redisClient, redisPrefix)
+	adminRepo := admin.NewMySQLRepository(db, requestCounter)
 
 	notificationRepo := dao.NewNotificationRepository(db)
 	notificationCache := notification.NewCache(redisClient, redisPrefix)
@@ -127,7 +135,8 @@ func main() {
 	notificationHandler := handler.NewNotificationHandler(notificationService, notificationHub, cfg.CorsOrigins)
 
 	e := server.New(cfg, obs)
-	router.RegisterControl(e, admin.NewMemoryRepository(), projectStore, sandbox, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler)
+	e.Use(requestCounter.Middleware())
+	router.RegisterControl(e, adminRepo, projectStore, sandbox, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler)
 
 	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
 	go func() {

@@ -26,7 +26,7 @@ const columns: TableColumn[] = [
     <header class="page-head">
       <div>
         <h1>沙箱节点</h1>
-        <p class="page-desc">本地沙箱节点的运行状态。</p>
+        <p class="page-desc">沙箱运行态注册表接入后展示实时节点。</p>
       </div>
       <span class="tag">{{ rows.length }} 条</span>
     </header>

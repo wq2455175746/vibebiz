@@ -57,7 +57,7 @@ func (h *StorageHandler) Summary(c echo.Context) error {
 	if err != nil {
 		return settingsError(c, err)
 	}
-	projects := h.Projects.ListByWorkspaces([]int64{workspace.ID})
+	projects := h.Projects.ListByWorkspaces(ctx, []int64{workspace.ID})
 	summary := StorageSummary{
 		QuotaBytes:   quota.StorageQuotaBytes,
 		ProjectCount: len(projects),

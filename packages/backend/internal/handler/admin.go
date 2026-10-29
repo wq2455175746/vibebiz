@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"net/http"
 	"strconv"
 	"time"
 
@@ -31,27 +32,48 @@ type adminProject struct {
 }
 
 func (h *AdminHandler) Overview(c echo.Context) error {
-	return response.OK(c, h.Repo.Overview(len(h.ProjectsStore.List())))
+	ctx := c.Request().Context()
+	overview, err := h.Repo.Overview(ctx, len(h.ProjectsStore.List(ctx)))
+	if err != nil {
+		return adminRepoError(c, err)
+	}
+	return response.OK(c, overview)
 }
 
 func (h *AdminHandler) Users(c echo.Context) error {
-	return response.OK(c, h.Repo.Users())
+	users, err := h.Repo.Users(c.Request().Context())
+	if err != nil {
+		return adminRepoError(c, err)
+	}
+	return response.OK(c, users)
 }
 
 func (h *AdminHandler) Sandboxes(c echo.Context) error {
-	return response.OK(c, h.Repo.Sandboxes())
+	sandboxes, err := h.Repo.Sandboxes(c.Request().Context())
+	if err != nil {
+		return adminRepoError(c, err)
+	}
+	return response.OK(c, sandboxes)
 }
 
 func (h *AdminHandler) Quotas(c echo.Context) error {
-	return response.OK(c, h.Repo.Quotas())
+	quotas, err := h.Repo.Quotas(c.Request().Context())
+	if err != nil {
+		return adminRepoError(c, err)
+	}
+	return response.OK(c, quotas)
 }
 
 func (h *AdminHandler) Audit(c echo.Context) error {
-	return response.OK(c, h.Repo.Audit())
+	events, err := h.Repo.Audit(c.Request().Context())
+	if err != nil {
+		return adminRepoError(c, err)
+	}
+	return response.OK(c, events)
 }
 
 func (h *AdminHandler) Projects(c echo.Context) error {
-	projects := h.ProjectsStore.List()
+	projects := h.ProjectsStore.List(c.Request().Context())
 	out := make([]adminProject, 0, len(projects))
 	for _, project := range projects {
 		out = append(out, adminProject{
@@ -65,4 +87,8 @@ func (h *AdminHandler) Projects(c echo.Context) error {
 		})
 	}
 	return response.OK(c, map[string]any{"projects": out})
+}
+
+func adminRepoError(c echo.Context, _ error) error {
+	return response.Fail(c, http.StatusInternalServerError, 50001, "admin data unavailable")
 }

@@ -1,6 +1,9 @@
 package admin
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 type MemoryRepository struct {
 	users     []User
@@ -32,29 +35,40 @@ func NewMemoryRepository() Repository {
 	}
 }
 
-func (r *MemoryRepository) Overview(projectCount int) Overview {
+func (r *MemoryRepository) Overview(_ context.Context, projectCount int) (Overview, error) {
 	return Overview{
 		Projects:         projectCount,
 		Users:            2,
 		RunningSandboxes: 1,
 		TodayRequests:    128,
-	}
+	}, nil
 }
 
-func (r *MemoryRepository) Users() []User {
-	return clone(r.users)
+func (r *MemoryRepository) Users(_ context.Context) ([]User, error) {
+	return clone(r.users), nil
 }
 
-func (r *MemoryRepository) Sandboxes() []Sandbox {
-	return clone(r.sandboxes)
+func (r *MemoryRepository) Sandboxes(_ context.Context) ([]Sandbox, error) {
+	return clone(r.sandboxes), nil
 }
 
-func (r *MemoryRepository) Quotas() []Quota {
-	return clone(r.quotas)
+func (r *MemoryRepository) Quotas(_ context.Context) ([]Quota, error) {
+	return clone(r.quotas), nil
 }
 
-func (r *MemoryRepository) Audit() []AuditEvent {
-	return clone(r.audit)
+func (r *MemoryRepository) Audit(_ context.Context) ([]AuditEvent, error) {
+	return clone(r.audit), nil
+}
+
+func (r *MemoryRepository) RecordAudit(_ context.Context, event AuditRecord) error {
+	r.audit = append([]AuditEvent{{
+		ID:        "evt_memory",
+		Actor:     event.ActorName,
+		Action:    event.Action,
+		Target:    event.ResourceID,
+		CreatedAt: time.Now().UTC(),
+	}}, r.audit...)
+	return nil
 }
 
 func clone[T any](items []T) []T {

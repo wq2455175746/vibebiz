@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"errors"
 	"sort"
 	"sync"
@@ -11,12 +12,12 @@ import (
 var ErrNotFound = errors.New("project not found")
 
 type ProjectStore interface {
-	Create(project *model.Project) error
-	Get(id string) (*model.Project, error)
-	List() []*model.Project
-	ListByWorkspaces(workspaceIDs []int64) []*model.Project
-	Update(project *model.Project) error
-	Delete(id string) error
+	Create(ctx context.Context, project *model.Project) error
+	Get(ctx context.Context, id string) (*model.Project, error)
+	List(ctx context.Context) []*model.Project
+	ListByWorkspaces(ctx context.Context, workspaceIDs []int64) []*model.Project
+	Update(ctx context.Context, project *model.Project) error
+	Delete(ctx context.Context, id string) error
 }
 
 type MemoryProjectStore struct {
@@ -28,7 +29,7 @@ func NewMemoryProjectStore() *MemoryProjectStore {
 	return &MemoryProjectStore{items: make(map[string]*model.Project)}
 }
 
-func (s *MemoryProjectStore) Create(project *model.Project) error {
+func (s *MemoryProjectStore) Create(_ context.Context, project *model.Project) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.items[project.ID]; ok {
@@ -38,7 +39,7 @@ func (s *MemoryProjectStore) Create(project *model.Project) error {
 	return nil
 }
 
-func (s *MemoryProjectStore) Get(id string) (*model.Project, error) {
+func (s *MemoryProjectStore) Get(_ context.Context, id string) (*model.Project, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	project, ok := s.items[id]
@@ -48,7 +49,7 @@ func (s *MemoryProjectStore) Get(id string) (*model.Project, error) {
 	return clone(project), nil
 }
 
-func (s *MemoryProjectStore) List() []*model.Project {
+func (s *MemoryProjectStore) List(_ context.Context) []*model.Project {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	out := make([]*model.Project, 0, len(s.items))
@@ -61,7 +62,7 @@ func (s *MemoryProjectStore) List() []*model.Project {
 	return out
 }
 
-func (s *MemoryProjectStore) ListByWorkspaces(workspaceIDs []int64) []*model.Project {
+func (s *MemoryProjectStore) ListByWorkspaces(_ context.Context, workspaceIDs []int64) []*model.Project {
 	if len(workspaceIDs) == 0 {
 		return []*model.Project{}
 	}
@@ -85,7 +86,7 @@ func (s *MemoryProjectStore) ListByWorkspaces(workspaceIDs []int64) []*model.Pro
 	return out
 }
 
-func (s *MemoryProjectStore) Delete(id string) error {
+func (s *MemoryProjectStore) Delete(_ context.Context, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.items[id]; !ok {
@@ -95,7 +96,7 @@ func (s *MemoryProjectStore) Delete(id string) error {
 	return nil
 }
 
-func (s *MemoryProjectStore) Update(project *model.Project) error {
+func (s *MemoryProjectStore) Update(_ context.Context, project *model.Project) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.items[project.ID]; !ok {

@@ -2,6 +2,7 @@ import html
 import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
+from typing import Protocol
 
 from app.config import Settings
 from app.observability import AGENT_RUNS, get_logger, get_tracer
@@ -10,7 +11,19 @@ from app.services.workspace import Workspace
 logger = get_logger()
 
 
-def build_agent(settings: Settings):
+class Agent(Protocol):
+    mode: str
+
+    def run(
+        self,
+        project_id: str,
+        message: str,
+        workspace: Workspace,
+        session_id: str | None = None,
+    ) -> AsyncIterator[dict]: ...
+
+
+def build_agent(settings: Settings) -> Agent:
     if settings.agent_mode == "claude":
         from app.services.claude_agent import ClaudeAgent
 

@@ -166,15 +166,19 @@ make -C packages/ops-web dev
 - 默认存储额度 10GB；磁盘统计来自 sandbox 项目目录扫描。
 - 首页左侧工作区下拉切换当前工作区；邀请成员后对方重新登录/刷新可看到共享工作区。
 - 首页左侧“文件夹”支持在当前工作区创建一级文件夹；文件夹是工作区下的逻辑目录节点，后续用于归档项目。
-- 编辑页采用两栏工作台：左侧任务对话，右侧“应用查看器 / 代码”与可展开执行日志；当前聊天和日志使用 mock adapter，项目/文件/预览走真实 CP/DP API。
+- 编辑页采用两栏工作台：左侧任务对话，右侧“应用查看器 / 代码”与可展开执行日志；聊天走真实 DP SSE，日志暂由 SSE 派生，项目/文件/预览走真实 CP/DP API。
 
 ## Sandbox Agent SDK
 
 - `AGENT_MODE=stub` 仍使用确定性 StubAgent；`AGENT_MODE=claude` 使用官方 `claude-agent-sdk`。
-- 开发默认模型：`AGENT_MODEL=deepseek-chat`，通过 `ANTHROPIC_BASE_URL` 指向 LiteLLM/Anthropic 兼容网关。
-- `ANTHROPIC_AUTH_TOKEN` 只放 sandbox/网关配置，不进入前端或项目目录。
+- DeepSeek 直连：`ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic` + `ANTHROPIC_AUTH_TOKEN`，模型用 `deepseek-flash`。
+- Anthropic 官方：`ANTHROPIC_BASE_URL` 留空 + `ANTHROPIC_API_KEY`。
+- LiteLLM 仅用于没有 Anthropic 兼容端点的 OpenAI-only 模型；DeepSeek 不需要。
+- `ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN` 只放 sandbox/网关配置，不进入前端或项目目录。
 - `AGENT_SKILLS=all` 或逗号分隔技能名；`AGENT_PLUGINS` 为逗号分隔本地插件目录。
 - 切换真实模型前先启动 LiteLLM 网关并配置 DeepSeek key；未配置时保持 `AGENT_MODE=stub`。
+- `packages/sandbox/litellm.yaml` 仅作为 OpenAI-only 模型的备用适配配置，不是 DeepSeek 必需项。
+- 本地 sandbox 冒烟测试步骤见 `docs/sandbox-smoke-test.md`。
 
 ## 数据库迁移
 
@@ -230,7 +234,7 @@ make -C packages/ops-web test quality
 2. 跳转编辑器 → 通过 DP 加载文件树与预览 iframe。
 3. 发送消息 → `POST /dp/api/v1/projects/{id}/chat` → DP SSE 透传 → sandbox stub agent 修改 `index.html` → 前端刷新预览。
 4. 代码视图通过 DP 读取 / 保存文件，带版本号校验（409 冲突）。
-5. ops-web 从 `/cp/api/v1/admin/*` 读取概览、用户、项目、沙箱、配额、审计的内存 seed 数据。
+5. ops-web 从 `/cp/api/v1/admin/*` 读取概览、用户、项目、沙箱、配额、审计；项目来自 MySQL，其余 admin 数据仍为内存 seed。
 
 Stub agent 只做确定性的演示改写，**不具备真实生成能力**；真实 LLM agent 是下一个里程碑。
 
@@ -297,7 +301,7 @@ data: [DONE]
 
 ## 数据与存储
 
-- CP 的项目元数据当前为内存实现，重启即丢；admin 数据同样为内存 seed。
+- CP 的项目目录已持久化到 MySQL `project` 表；admin 用户/沙箱/配额/审计仍为内存 seed。
 - sandbox 工作区在磁盘持久化，是项目代码的唯一真相源。
 - 目标数据库为 **MySQL 8**；GORM DAO 与 goose 版本化迁移已加入 `packages/backend`，但尚未接入 `ProjectStore` / `admin.Repository`。
 - 数据库凭据只存在于 CP 服务端环境变量，禁止进入前端、日志或仓库。
@@ -307,7 +311,7 @@ data: [DONE]
 - **M0 Harness（当前）**：CP / DP 拆分、ops-web 骨架、可观测性接线、端到端最小链路、Docker、测试脚手架。
 - **M1 真实生成**：OpenAI 兼容模型 + 工具调用（读/写/列目录），每轮自动 git commit。
 - **M2 编辑器体验**：Monaco 完整接入、文件树 CRUD、409 冲突合并、预览自动刷新。
-- **M3 产品化**：登录、多项目、版本列表/diff/回滚、Remix、MySQL 持久化。
+- **M3 产品化**：登录、多项目、项目 MySQL 持久化、版本列表/diff/回滚、Remix。
 - **M4 运行隔离**：每项目容器、卷持久化、预览独立 origin、资源限额。
 - **M5 交付**：Compose/K8s、CI/CD、观测后端接入。
 

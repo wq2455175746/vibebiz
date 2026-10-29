@@ -44,9 +44,11 @@ func (ProjectTemplate) TableName() string { return "project_template" }
 
 type Project struct {
 	Base
+	PublicID           string     `gorm:"column:public_id" json:"publicId"`
 	WorkspaceID        int64      `gorm:"column:workspace_id" json:"workspaceId"`
 	UserID             int64      `gorm:"column:user_id" json:"userId"`
 	Name               string     `gorm:"column:name" json:"name"`
+	Prompt             string     `gorm:"column:prompt" json:"prompt"`
 	Description        string     `gorm:"column:description" json:"description"`
 	TopicID            int64      `gorm:"column:topic_id" json:"topicId"`
 	TemplateID         *int64     `gorm:"column:template_id" json:"templateId,omitempty"`

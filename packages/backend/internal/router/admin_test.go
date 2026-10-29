@@ -1,6 +1,7 @@
 package router
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"testing"
@@ -31,7 +32,7 @@ func decodeEnvelope(t *testing.T, body []byte) envelope {
 
 func TestAdminOverview(t *testing.T) {
 	projects := store.NewMemoryProjectStore()
-	if err := projects.Create(&model.Project{ID: "p1", Name: "demo", State: model.ProjectStateReady, CreatedAt: time.Now()}); err != nil {
+	if err := projects.Create(context.Background(), &model.Project{ID: "p1", Name: "demo", State: model.ProjectStateReady, CreatedAt: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
 	e, _, authState := newCP(t, projects)
@@ -68,10 +69,10 @@ func TestAdminUsers(t *testing.T) {
 func TestAdminProjects(t *testing.T) {
 	projects := store.NewMemoryProjectStore()
 	now := time.Now()
-	if err := projects.Create(&model.Project{ID: "p1", Name: "demo", State: model.ProjectStateReady, WorkspaceID: 2, OwnerUserID: 7, CreatedAt: now}); err != nil {
+	if err := projects.Create(context.Background(), &model.Project{ID: "p1", Name: "demo", State: model.ProjectStateReady, WorkspaceID: 2, OwnerUserID: 7, CreatedAt: now}); err != nil {
 		t.Fatal(err)
 	}
-	if err := projects.Create(&model.Project{ID: "p2", Name: "other", State: model.ProjectStateReady, WorkspaceID: 5, OwnerUserID: 8, CreatedAt: now.Add(-time.Minute)}); err != nil {
+	if err := projects.Create(context.Background(), &model.Project{ID: "p2", Name: "other", State: model.ProjectStateReady, WorkspaceID: 5, OwnerUserID: 8, CreatedAt: now.Add(-time.Minute)}); err != nil {
 		t.Fatal(err)
 	}
 	e, _, authState := newCP(t, projects)

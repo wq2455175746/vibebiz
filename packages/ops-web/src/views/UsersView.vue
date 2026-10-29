@@ -21,7 +21,7 @@ const columns: TableColumn[] = [
     <header class="page-head">
       <div>
         <h1>用户</h1>
-        <p class="page-desc">控制面内存中的运营用户视图。</p>
+        <p class="page-desc">MySQL 中的业务用户与套餐视图。</p>
       </div>
       <span class="tag">{{ rows.length }} 条</span>
     </header>

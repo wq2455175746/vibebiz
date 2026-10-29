@@ -17,7 +17,7 @@
 - M0 harness 阶段：只保证 CP / DP / sandbox / web / ops-web 骨架与最小链路可运行。
 - 不引入 k8s / CI/CD / 多租户鉴权；这些属于后续里程碑。
 - 不交付 Collector / Jaeger / Grafana 等观测后端，只保证日志、OTLP Trace 与 `/metrics` 可接入。
-- 不使用设计文档以外的数据库。CP 项目元数据与 admin seed 在内存中，重启即丢；工作区在磁盘持久化。目标数据库为 MySQL 8，本轮不引入驱动或表结构。
+- 不使用设计文档以外的数据库。CP 项目目录已持久化到 MySQL `project` 表（`public_id` UUID + 内部 bigint）；admin seed 仍在内存，重启即丢；工作区在磁盘持久化。目标数据库为 MySQL 8。
 - ops-web 使用本地 admin 账号登录，仅面向本地；生产必须接入 SSO + RBAC。
 
 ## 目录与职责

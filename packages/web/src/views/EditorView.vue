@@ -67,7 +67,7 @@ async function load() {
   const prompt = takeInitialPrompt(projectId)
   if (prompt) {
     openConsole()
-    chat.sendMock(projectId, prompt)
+    void chat.send(projectId, prompt)
   }
 }
 
@@ -105,7 +105,7 @@ onBeforeUnmount(() => chat.stop())
       :project-name="projectStore.current?.name || '加载中'"
       :project-state="projectStore.current?.state || 'starting'"
       :console-open="consoleOpen"
-      model-label="DeepSeek Chat"
+      model-label="DeepSeek Flash"
       @back="goHome"
       @toggle-console="consoleOpen = !consoleOpen"
     />

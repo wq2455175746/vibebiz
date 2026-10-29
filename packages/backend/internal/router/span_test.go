@@ -37,7 +37,7 @@ func TestHTTPRequestSpanHasProjectID(t *testing.T) {
 	})
 
 	projects := store.NewMemoryProjectStore()
-	if err := projects.Create(&model.Project{ID: "p1", Name: "demo", State: model.ProjectStateReady, WorkspaceID: 1, OwnerUserID: 7, CreatedAt: time.Now()}); err != nil {
+	if err := projects.Create(context.Background(), &model.Project{ID: "p1", Name: "demo", State: model.ProjectStateReady, WorkspaceID: 1, OwnerUserID: 7, CreatedAt: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
 

@@ -102,7 +102,7 @@ func (h *ProjectHandler) Create(c echo.Context) error {
 		return response.Fail(c, http.StatusBadGateway, 50201, "workspace init failed")
 	}
 
-	if err := h.Store.Create(project); err != nil {
+	if err := h.Store.Create(ctx, project); err != nil {
 		if h.Obs != nil {
 			h.Obs.Log(ctx, slog.LevelError, "project.create", "project_id", id, "status", "error", "error", err.Error())
 		}
@@ -112,7 +112,7 @@ func (h *ProjectHandler) Create(c echo.Context) error {
 	if h.Metas != nil {
 		meta := auth.ProjectMeta{WorkspaceID: workspaceID, OwnerUserID: session.UserID}
 		if err := h.Metas.Set(ctx, id, meta); err != nil {
-			_ = h.Store.Delete(id)
+			_ = h.Store.Delete(c.Request().Context(), id)
 			if h.Obs != nil {
 				h.Obs.Log(ctx, slog.LevelError, "project.create", "project_id", id, "status", "error", "error", err.Error())
 			}
@@ -135,7 +135,7 @@ func (h *ProjectHandler) List(c echo.Context) error {
 	if session.CurrentWorkspaceID == 0 {
 		return response.OK(c, map[string]any{"projects": []*model.Project{}})
 	}
-	return response.OK(c, map[string]any{"projects": h.Store.ListByWorkspaces([]int64{session.CurrentWorkspaceID})})
+	return response.OK(c, map[string]any{"projects": h.Store.ListByWorkspaces(c.Request().Context(), []int64{session.CurrentWorkspaceID})})
 }
 
 func (h *ProjectHandler) Get(c echo.Context) error {
@@ -143,7 +143,7 @@ func (h *ProjectHandler) Get(c echo.Context) error {
 	if !ok {
 		return response.Fail(c, http.StatusUnauthorized, 40101, "unauthorized")
 	}
-	project, err := h.Store.Get(c.Param("id"))
+	project, err := h.Store.Get(c.Request().Context(), c.Param("id"))
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return response.Fail(c, http.StatusNotFound, 40401, "project not found")
@@ -162,7 +162,7 @@ func (h *ProjectHandler) Delete(c echo.Context) error {
 		return response.Fail(c, http.StatusUnauthorized, 40101, "unauthorized")
 	}
 	id := c.Param("id")
-	project, err := h.Store.Get(id)
+	project, err := h.Store.Get(c.Request().Context(), id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return response.Fail(c, http.StatusNotFound, 40401, "project not found")
@@ -172,7 +172,7 @@ func (h *ProjectHandler) Delete(c echo.Context) error {
 	if !containsInt64(session.WorkspaceIDs, project.WorkspaceID) {
 		return response.Fail(c, http.StatusNotFound, 40401, "project not found")
 	}
-	if err := h.Store.Delete(id); err != nil {
+	if err := h.Store.Delete(c.Request().Context(), id); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return response.Fail(c, http.StatusNotFound, 40401, "project not found")
 		}
