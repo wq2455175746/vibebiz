@@ -378,7 +378,7 @@ def validate_contracts() -> None:
         ["dev-cp:", "dev-dp:", "test:", "quality:", "build:", "install:", "db-create:", "db-migrate-up:", "db-migrate-status:"],
     )
     require_contains("packages/backend/.env.example", [
-        "HOST=", "CP_PORT=", "DP_PORT=", "SANDBOX_BASE_URL=", "CORS_ORIGINS=",
+        "HOST=", "CP_PORT=", "DP_PORT=", "SANDBOX_REGISTRY_TOKEN=", "CORS_ORIGINS=",
         "MYSQL_HOST=", "MYSQL_DATABASE=", "REDIS_HOST=", "S3_BUCKET=", "S3_ENDPOINT=",
     ])
     for name in (

@@ -15,8 +15,8 @@ type fakePreview struct {
 	url string
 }
 
-func (f fakePreview) PreviewURL(string) string {
-	return f.url
+func (f fakePreview) PreviewURL(context.Context, string) (string, error) {
+	return f.url, nil
 }
 
 func TestPreviewProxyInjectsTraceParent(t *testing.T) {

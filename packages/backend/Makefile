@@ -4,7 +4,6 @@ SHELL := /bin/bash
 HOST ?= 127.0.0.1
 CP_PORT ?= 8080
 DP_PORT ?= 8081
-SANDBOX_BASE_URL ?= http://localhost:8000
 CORS_ORIGINS ?= http://localhost:5173,http://localhost:5174
 export
 

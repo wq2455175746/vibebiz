@@ -15,8 +15,10 @@ import (
 	"vibebiz/internal/auth"
 	"vibebiz/internal/client"
 	"vibebiz/internal/config"
+	"vibebiz/internal/dao"
 	"vibebiz/internal/observability"
 	"vibebiz/internal/router"
+	"vibebiz/internal/sandboxregistry"
 	"vibebiz/internal/server"
 )
 
@@ -39,6 +41,24 @@ func main() {
 		}
 	}()
 
+	db, err := dao.OpenMySQL(ctx, dao.MySQLConfig{
+		Host:         cfg.MySQLHost,
+		Username:     cfg.MySQLUsername,
+		Password:     cfg.MySQLPassword,
+		Database:     cfg.MySQLDatabase,
+		MaxOpenConns: cfg.MySQLMaxOpenConns,
+		MaxIdleConns: cfg.MySQLMaxIdleConns,
+	})
+	if err != nil {
+		obs.Logger.Error("mysql init failed", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := dao.CloseMySQL(db); err != nil {
+			obs.Logger.Error("mysql close failed", "error", err)
+		}
+	}()
+
 	redisClient := auth.NewRedisClient(cfg)
 	if err := redisClient.Ping(ctx).Err(); err != nil {
 		obs.Logger.Error("redis init failed", "error", err)
@@ -56,14 +76,17 @@ func main() {
 	authn := auth.NewAuthenticator(authService, userCookie, auth.CookieManager{})
 	metas := auth.NewProjectMetaStore(redisClient, redisPrefix)
 
-	sandbox := client.NewSandbox(cfg.SandboxBaseURL, obs)
+	registryRepo := sandboxregistry.NewMySQLRepository(db)
+	selector := sandboxregistry.NewSelector(registryRepo, cfg.SandboxHeartbeatTTL, time.Now)
+	resolver := sandboxregistry.NewResolver(registryRepo, selector, cfg.SandboxHeartbeatTTL, time.Now)
+	sandbox := client.NewRouter(resolver, obs)
 
 	e := server.New(cfg, obs)
 	router.RegisterData(e, sandbox, obs, authn, metas)
 
 	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
 	go func() {
-		obs.Logger.Info("dp listening", "host", cfg.Host, "port", cfg.Port, "sandbox", cfg.SandboxBaseURL)
+		obs.Logger.Info("dp listening", "host", cfg.Host, "port", cfg.Port, "sandbox_registry", "mysql")
 		if err := e.Start(addr); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			obs.Logger.Error("server stopped", "error", err)
 			os.Exit(1)

@@ -14,6 +14,7 @@ type Project struct {
 	State       string    `json:"state"`
 	WorkspaceID int64     `json:"workspaceId"`
 	OwnerUserID int64     `json:"ownerUserId"`
+	SandboxID   *int64    `json:"sandboxId,omitempty"`
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
 }

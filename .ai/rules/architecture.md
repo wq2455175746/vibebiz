@@ -86,7 +86,7 @@
 | GET | `/storage` | 当前工作区磁盘统计 |
 | POST | `/projects` | 当前工作区；`POST /internal/projects/{id}/init` |
 | GET | `/projects` | 用户登录 + 工作区过滤 |
-| GET | `/projects/:id` | 用户登录 + 工作区过滤；读取 CP 内存 store |
+| GET | `/projects/:id` | 用户登录 + 工作区过滤；读取 MySQL `project` |
 | DELETE | `/projects/:id` | 用户登录 + 工作区过滤 |
 | POST | `/admin/auth/login` | 公开，ops 登录 |
 | GET | `/admin/auth/me` | ops Cookie |
@@ -97,6 +97,7 @@
 | GET | `/admin/sandboxes` | - |
 | GET | `/admin/quotas` | - |
 | GET | `/admin/audit` | - |
+| POST | `/internal/sandboxes/heartbeat` | sandbox 心跳，`X-Sandbox-Token` |
 
 ### DP · `/dp/api/v1`
 
@@ -127,6 +128,14 @@ DP 不注册项目列表 / 创建 / 详情，也不注册任何 admin 路由。C
 ```
 
 写入带 `baseVersion` 时不匹配 → HTTP 409。
+
+### Sandbox 注册中心
+
+- `sandbox_instance` 保存实例名称、host/port、online/offline、healthy/unhealthy、当前/最大并发、最后心跳。
+- sandbox 每 5s 向 CP `POST /cp/api/v1/internal/sandboxes/heartbeat` 上报，`X-Sandbox-Token` 鉴权。
+- CP 用 asynq 每 10s 拉取 `/health`；心跳过期或健康失败标记 offline。
+- 新项目选最低压力健康节点并写 `project.sandbox_id`；节点离线后自动改绑，工作区依赖共享 NFS。
+- 本次不做 `project_leases` / epoch / flock。
 
 ## 4. SSE 契约
 
@@ -195,7 +204,10 @@ data/workspaces/<projectId>/
 |---|---|---|
 | `CP_PORT` | dev | CP 默认 8080；进程内注入 `PORT` |
 | `DP_PORT` | dev | DP 默认 8081；进程内注入 `PORT` |
-| `SANDBOX_BASE_URL` | CP / DP | 默认 `http://localhost:8000` |
+| `SANDBOX_REGISTRY_TOKEN` | CP / sandbox | 心跳共享 token |
+| `SANDBOX_HEARTBEAT_TTL` | CP | 默认 `15s` |
+| `CP_REGISTRY_URL` | sandbox | CP 心跳地址；为空关闭注册 |
+| `SANDBOX_ADVERTISE_HOST` / `SANDBOX_ADVERTISE_PORT` | sandbox | 上报的可访问地址 |
 | `CORS_ORIGINS` | CP / DP | 默认允许 5173 与 5174 |
 | `WORKSPACES_DIR` | sandbox | 工作区根目录 |
 | `AGENT_MODE` | sandbox | `stub` / `llm` |

@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httputil"
@@ -14,6 +16,7 @@ import (
 
 	"vibebiz/internal/observability"
 	"vibebiz/internal/response"
+	"vibebiz/internal/sandboxregistry"
 )
 
 var previewTransport = func() *http.Transport {
@@ -23,7 +26,7 @@ var previewTransport = func() *http.Transport {
 }()
 
 type PreviewClient interface {
-	PreviewURL(id string) string
+	PreviewURL(ctx context.Context, id string) (string, error)
 }
 
 type PreviewHandler struct {
@@ -49,7 +52,14 @@ func (h *PreviewHandler) Serve(c echo.Context) error {
 		h.Obs.Log(ctx, slog.LevelInfo, "preview.proxy", "project_id", projectID, "route", c.Path())
 	}
 
-	target, err := url.Parse(h.Sandbox.PreviewURL(projectID))
+	previewURL, err := h.Sandbox.PreviewURL(c.Request().Context(), projectID)
+	if err != nil {
+		if errors.Is(err, sandboxregistry.ErrProjectNotFound) {
+			return response.Fail(c, http.StatusNotFound, 40401, "project not found")
+		}
+		return response.Fail(c, http.StatusServiceUnavailable, 50302, "sandbox unavailable")
+	}
+	target, err := url.Parse(previewURL)
 	if err != nil {
 		return response.Fail(c, http.StatusInternalServerError, 50003, "invalid preview target")
 	}

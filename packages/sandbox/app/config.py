@@ -1,4 +1,5 @@
 import os
+import socket
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -17,10 +18,31 @@ class Settings:
     agent_skills: str = "all"
     agent_plugins: str = ""
     agent_max_turns: int = 40
+    sandbox_name: str = ""
+    advertise_scheme: str = "http"
+    advertise_host: str = "127.0.0.1"
+    advertise_port: int = 8000
+    cp_registry_url: str = ""
+    registry_token: str = ""
+    heartbeat_interval: float = 5.0
+    max_concurrency: int = 8
+
+
+def _seconds(name: str, default: float) -> float:
+    raw = os.getenv(name, "").strip()
+    if raw.endswith("s"):
+        raw = raw[:-1]
+    return float(raw) if raw else default
 
 
 def load_settings() -> Settings:
     root = Path(os.getenv("WORKSPACES_DIR", "./data/workspaces"))
+    advertise_port = int(
+        os.getenv("SANDBOX_ADVERTISE_PORT", "") or os.getenv("SANDBOX_PORT", "8000")
+    )
+    sandbox_name = (
+        os.getenv("SANDBOX_NAME", "").strip() or f"{socket.gethostname()}:{advertise_port}"
+    )
     return Settings(
         workspaces_dir=root.resolve(),
         agent_mode=os.getenv("AGENT_MODE", "stub").strip().lower(),
@@ -38,4 +60,12 @@ def load_settings() -> Settings:
         agent_skills=os.getenv("AGENT_SKILLS", "all").strip(),
         agent_plugins=os.getenv("AGENT_PLUGINS", "").strip(),
         agent_max_turns=int(os.getenv("AGENT_MAX_TURNS", "40")),
+        sandbox_name=sandbox_name,
+        advertise_scheme=os.getenv("SANDBOX_ADVERTISE_SCHEME", "http").strip() or "http",
+        advertise_host=os.getenv("SANDBOX_ADVERTISE_HOST", "127.0.0.1").strip() or "127.0.0.1",
+        advertise_port=advertise_port,
+        cp_registry_url=os.getenv("CP_REGISTRY_URL", "").strip(),
+        registry_token=os.getenv("SANDBOX_REGISTRY_TOKEN", "").strip(),
+        heartbeat_interval=max(1.0, _seconds("SANDBOX_HEARTBEAT_INTERVAL", 5.0)),
+        max_concurrency=max(1, int(os.getenv("SANDBOX_MAX_CONCURRENCY", "8"))),
     )

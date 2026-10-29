@@ -31,10 +31,16 @@ export interface AdminProject {
 
 export interface AdminSandbox {
   id: string
-  projectId: string
-  node: string
-  state: string
-  startedAt: string
+  name: string
+  host: string
+  port: number
+  status: string
+  healthStatus: string
+  activeRequests: number
+  maxConcurrency: number
+  lastHeartbeatAt: string | null
+  lastHealthAt: string | null
+  healthError: string
 }
 
 export interface AdminQuota {

@@ -4,12 +4,17 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"vibebiz/internal/auth"
-	"vibebiz/internal/client"
 	"vibebiz/internal/handler"
 	"vibebiz/internal/observability"
 )
 
-func RegisterData(e *echo.Echo, sandbox *client.Sandbox, obs *observability.Provider, authn *auth.Authenticator, metas auth.ProjectMetaStore) {
+type DataSandbox interface {
+	handler.FileClient
+	handler.ChatClient
+	handler.PreviewClient
+}
+
+func RegisterData(e *echo.Echo, sandbox DataSandbox, obs *observability.Provider, authn *auth.Authenticator, metas auth.ProjectMetaStore) {
 	files := handler.NewFileHandler(sandbox, obs)
 	chat := handler.NewChatHandler(sandbox, obs)
 	preview := handler.NewPreviewHandler(sandbox, obs)

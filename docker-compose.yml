@@ -9,6 +9,12 @@ services:
       - ./packages/sandbox/.env
     environment:
       WORKSPACES_DIR: /data/workspaces
+      SANDBOX_NAME: sandbox
+      SANDBOX_ADVERTISE_HOST: sandbox
+      SANDBOX_ADVERTISE_PORT: 8000
+      CP_REGISTRY_URL: http://cp:8080/cp/api/v1/internal/sandboxes/heartbeat
+      SANDBOX_REGISTRY_TOKEN: ${SANDBOX_REGISTRY_TOKEN:-change-me}
+      SANDBOX_HEARTBEAT_INTERVAL: ${SANDBOX_HEARTBEAT_INTERVAL:-5s}
       AGENT_MODE: ${AGENT_MODE:-stub}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://api.deepseek.com}
@@ -36,7 +42,7 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: 8080
-      SANDBOX_BASE_URL: http://sandbox:8000
+      SANDBOX_REGISTRY_TOKEN: ${SANDBOX_REGISTRY_TOKEN:-change-me}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://vibebiz-dev.com:5173,http://vibebiz-dev-ops.com:5174}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       OTEL_SERVICE_NAME: vibebiz-cp
@@ -61,7 +67,6 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: 8081
-      SANDBOX_BASE_URL: http://sandbox:8000
       CORS_ORIGINS: ${CORS_ORIGINS:-http://vibebiz-dev.com:5173,http://vibebiz-dev-ops.com:5174}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       OTEL_SERVICE_NAME: vibebiz-dp

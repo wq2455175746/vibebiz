@@ -111,20 +111,38 @@ func TestMySQLRepositoryOverview(t *testing.T) {
 	repo := NewMySQLRepository(db, fixedCounter(37))
 	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `user`").
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `sandbox_instance`").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
 
 	overview, err := repo.Overview(context.Background(), 5)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if overview.Projects != 5 || overview.Users != 2 || overview.RunningSandboxes != 0 || overview.TodayRequests != 37 {
+	if overview.Projects != 5 || overview.Users != 2 || overview.RunningSandboxes != 1 || overview.TodayRequests != 37 {
 		t.Fatalf("overview = %+v", overview)
 	}
 }
 
-func TestMySQLRepositorySandboxesEmpty(t *testing.T) {
-	repo := NewMySQLRepository(nil, nil)
+func TestMySQLRepositorySandboxes(t *testing.T) {
+	db, mock := newAdminMockDB(t)
+	repo := NewMySQLRepository(db, fixedCounter(0))
+	now := time.Date(2026, 10, 29, 8, 0, 0, 0, time.UTC)
+	mock.ExpectQuery("SELECT \\* FROM `sandbox_instance` WHERE `sandbox_instance`.`deleted_at` IS NULL ORDER BY name ASC").
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "public_id", "name", "scheme", "host", "port", "status", "health_status",
+			"active_requests", "max_concurrency", "last_heartbeat_at", "last_health_at", "health_error",
+		}).
+			AddRow(1, "sb-1", "sandbox-a", "http", "10.0.0.11", 8000, "online", "healthy", 2, 8, now, now, "").
+			AddRow(2, "sb-2", "sandbox-b", "http", "10.0.0.12", 8000, "offline", "unhealthy", 0, 8, now, now, "timeout"))
+
 	sandboxes, err := repo.Sandboxes(context.Background())
-	if err != nil || len(sandboxes) != 0 {
-		t.Fatalf("sandboxes = %+v, err = %v", sandboxes, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sandboxes) != 2 || sandboxes[0].Name != "sandbox-a" || sandboxes[0].Status != "online" || sandboxes[0].ActiveRequests != 2 {
+		t.Fatalf("sandboxes = %+v", sandboxes)
+	}
+	if sandboxes[1].HealthStatus != "unhealthy" || sandboxes[1].HealthError != "timeout" {
+		t.Fatalf("second sandbox = %+v", sandboxes[1])
 	}
 }
