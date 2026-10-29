@@ -23,9 +23,21 @@ const groups = computed(() => groupNotifications(store.items))
 
 watch(
   () => props.visible,
-  (visible) => {
+  async (visible) => {
     if (visible) {
-      void store.load(store.items.length > 0)
+      await store.load(store.items.length > 0)
+      if (visible) {
+        void store.markRead()
+      }
+    }
+  },
+)
+
+watch(
+  () => store.items,
+  () => {
+    if (props.visible && store.items.length > 0) {
+      void store.markRead()
     }
   },
 )

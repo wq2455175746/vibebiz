@@ -71,6 +71,14 @@ func (routerNotificationCache) Rebuild(context.Context, []model.OpsNotification)
 	return nil
 }
 
+func (routerNotificationCache) LastRead(context.Context, int64) (time.Time, error) {
+	return time.Time{}, nil
+}
+
+func (routerNotificationCache) MarkRead(context.Context, int64, time.Time) error {
+	return nil
+}
+
 func newNotificationHandler(t *testing.T) *handler.NotificationHandler {
 	t.Helper()
 	hub := notification.NewHub()

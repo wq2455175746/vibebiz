@@ -63,6 +63,7 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 	notificationsAPI := api.Group("/notifications", authn.RequireUser)
 	notificationsAPI.GET("", notifications.WebList)
 	notificationsAPI.GET("/ws", notifications.Socket)
+	notificationsAPI.POST("/read", notifications.MarkRead)
 
 	adminProtected.GET("/notifications", notifications.AdminList)
 	adminProtected.POST("/notifications", notifications.AdminCreate)

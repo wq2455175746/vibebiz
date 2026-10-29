@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -148,11 +149,40 @@ func (h *NotificationHandler) AdminDelete(c echo.Context) error {
 }
 
 func (h *NotificationHandler) WebList(c echo.Context) error {
-	items, err := h.Service.Published(c.Request().Context())
+	session, ok := auth.SessionFrom(c)
+	if !ok {
+		return response.Fail(c, http.StatusUnauthorized, 40101, "unauthorized")
+	}
+	result, err := h.Service.Published(c.Request().Context(), session.UserID)
 	if err != nil {
 		return notificationError(c, err)
 	}
-	return response.OK(c, map[string]any{"notifications": items})
+	return response.OK(c, result)
+}
+
+func (h *NotificationHandler) MarkRead(c echo.Context) error {
+	session, ok := auth.SessionFrom(c)
+	if !ok {
+		return response.Fail(c, http.StatusUnauthorized, 40101, "unauthorized")
+	}
+	var req struct {
+		ReadAt string `json:"readAt"`
+	}
+	if err := c.Bind(&req); err != nil && !errors.Is(err, io.EOF) {
+		return response.Fail(c, http.StatusBadRequest, 40001, "invalid body")
+	}
+	readAt := time.Time{}
+	if req.ReadAt != "" {
+		parsed, err := time.Parse(time.RFC3339, req.ReadAt)
+		if err != nil {
+			return response.Fail(c, http.StatusBadRequest, 40001, "invalid readAt")
+		}
+		readAt = parsed
+	}
+	if err := h.Service.MarkRead(c.Request().Context(), session.UserID, readAt); err != nil {
+		return notificationError(c, err)
+	}
+	return response.OK(c, map[string]any{"unread": false})
 }
 
 func (h *NotificationHandler) Socket(c echo.Context) error {

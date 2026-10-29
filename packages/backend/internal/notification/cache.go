@@ -27,21 +27,54 @@ type Published struct {
 }
 
 type Cache struct {
-	client *redis.Client
-	index  string
-	prefix string
+	client     *redis.Client
+	index      string
+	prefix     string
+	readPrefix string
 }
 
 func NewCache(client *redis.Client, prefix string) *Cache {
 	return &Cache{
-		client: client,
-		index:  prefix + ":notification:index",
-		prefix: prefix + ":notification:item:",
+		client:     client,
+		index:      prefix + ":notification:index",
+		prefix:     prefix + ":notification:item:",
+		readPrefix: prefix + ":notification:read:",
 	}
 }
 
 func (c *Cache) itemKey(id int64) string {
 	return fmt.Sprintf("%s%d", c.prefix, id)
+}
+
+func (c *Cache) readKey(userID int64) string {
+	return fmt.Sprintf("%s%d", c.readPrefix, userID)
+}
+
+const readStateTTL = 90 * 24 * time.Hour
+
+func (c *Cache) LastRead(ctx context.Context, userID int64) (time.Time, error) {
+	value, err := c.client.Get(ctx, c.readKey(userID)).Int64()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return time.Time{}, nil
+		}
+		return time.Time{}, fmt.Errorf("read notification state: %w", err)
+	}
+	return time.UnixMilli(value).UTC(), nil
+}
+
+func (c *Cache) MarkRead(ctx context.Context, userID int64, readAt time.Time) error {
+	current, err := c.LastRead(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if !readAt.After(current) && !current.IsZero() {
+		return nil
+	}
+	if err := c.client.Set(ctx, c.readKey(userID), readAt.UnixMilli(), readStateTTL).Err(); err != nil {
+		return fmt.Errorf("store notification read state: %w", err)
+	}
+	return nil
 }
 
 func publishedFromModel(item model.OpsNotification) Published {

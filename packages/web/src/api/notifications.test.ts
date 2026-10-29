@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NotificationItem } from '@/types'
 
 import { cpHttp, request } from './client'
-import { listNotifications } from './notifications'
+import { listNotifications, markNotificationsRead } from './notifications'
 
 vi.mock('./client', () => ({
   cpHttp: {},
@@ -28,19 +28,35 @@ beforeEach(() => {
 })
 
 describe('listNotifications', () => {
-  it('unwraps the notifications envelope', async () => {
-    requestMock.mockResolvedValue({ notifications: [notification] })
+  it('unwraps the notifications envelope and unread flag', async () => {
+    requestMock.mockResolvedValue({ notifications: [notification], unread: true })
 
-    await expect(listNotifications()).resolves.toEqual([notification])
+    await expect(listNotifications()).resolves.toEqual({
+      notifications: [notification],
+      unread: true,
+    })
     expect(requestMock).toHaveBeenCalledWith(cpHttp, {
       method: 'get',
       url: '/notifications',
     })
   })
 
-  it('falls back to an empty list when notifications are missing', async () => {
+  it('falls back to an empty read list when notifications are missing', async () => {
     requestMock.mockResolvedValue({})
 
-    await expect(listNotifications()).resolves.toEqual([])
+    await expect(listNotifications()).resolves.toEqual({ notifications: [], unread: false })
+  })
+})
+
+describe('markNotificationsRead', () => {
+  it('posts the newest seen publishedAt', async () => {
+    requestMock.mockResolvedValue({ unread: false })
+
+    await markNotificationsRead(notification.publishedAt)
+    expect(requestMock).toHaveBeenCalledWith(cpHttp, {
+      method: 'post',
+      url: '/notifications/read',
+      data: { readAt: notification.publishedAt },
+    })
   })
 })

@@ -6,6 +6,7 @@ import Popover from 'primevue/popover'
 import { createFolder, listFolders } from '@/api/settings'
 import NotificationsDialog from '@/components/home/NotificationsDialog.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useNotificationsStore } from '@/stores/notifications'
 import type { Project, WorkspaceFolder } from '@/types'
 
 defineProps<{ recentProjects: Project[]; collapsed?: boolean }>()
@@ -16,6 +17,7 @@ const emit = defineEmits<{
 }>()
 
 const auth = useAuthStore()
+const notifications = useNotificationsStore()
 const router = useRouter()
 
 const account = computed(() => {
@@ -287,13 +289,18 @@ const navigation = [
           <i class="pi pi-question-circle" />
         </a>
         <button
-          class="sidebar-icon-btn"
+          class="sidebar-icon-btn sidebar-bell"
           type="button"
           aria-label="通知"
           title="通知"
           @click="notificationsOpen = true"
         >
           <i class="pi pi-bell" />
+          <span
+            v-if="notifications.unread"
+            class="sidebar-unread-dot"
+            aria-label="有未读通知"
+          />
         </button>
         <button
           class="sidebar-account-trigger"
