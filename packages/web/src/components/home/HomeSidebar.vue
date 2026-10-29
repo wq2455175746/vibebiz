@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import Popover from 'primevue/popover'
 
 import { createFolder, listFolders } from '@/api/settings'
+import NotificationsDialog from '@/components/home/NotificationsDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import type { Project, WorkspaceFolder } from '@/types'
 
@@ -39,6 +40,7 @@ const currentWorkspace = computed(() => {
 
 const accountMenu = ref<InstanceType<typeof Popover> | null>(null)
 const workspaceMenu = ref<InstanceType<typeof Popover> | null>(null)
+const notificationsOpen = ref(false)
 const switching = ref(false)
 const workspaceError = ref('')
 
@@ -274,10 +276,23 @@ const navigation = [
 
     <div class="sidebar-footer">
       <div class="sidebar-tools">
-        <button class="sidebar-icon-btn" type="button" aria-label="帮助" title="帮助">
+        <a
+          class="sidebar-icon-btn"
+          href="https://help.atoms.dev/zh"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="帮助"
+          title="帮助"
+        >
           <i class="pi pi-question-circle" />
-        </button>
-        <button class="sidebar-icon-btn" type="button" aria-label="通知" title="通知">
+        </a>
+        <button
+          class="sidebar-icon-btn"
+          type="button"
+          aria-label="通知"
+          title="通知"
+          @click="notificationsOpen = true"
+        >
           <i class="pi pi-bell" />
         </button>
         <button
@@ -326,6 +341,8 @@ const navigation = [
           </div>
         </div>
       </Popover>
+
+      <NotificationsDialog v-model:visible="notificationsOpen" />
 
       <Popover ref="workspaceMenu">
         <div class="workspace-card">

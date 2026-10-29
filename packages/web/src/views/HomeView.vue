@@ -1,20 +1,41 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { createProject, listProjects } from '@/api/projects'
 import HomeDiscovery from '@/components/home/HomeDiscovery.vue'
 import HomeHero from '@/components/home/HomeHero.vue'
 import HomeSidebar from '@/components/home/HomeSidebar.vue'
+import { useNotificationSocket } from '@/composables/useNotificationSocket'
+import { useAuthStore } from '@/stores/auth'
+import { useNotificationsStore } from '@/stores/notifications'
 import '@/styles/home.css'
 import type { Project } from '@/types'
 
 const router = useRouter()
+const auth = useAuthStore()
+const notifications = useNotificationsStore()
 const prompt = ref('')
 const creating = ref(false)
 const error = ref('')
 const projects = ref<Project[]>([])
 const sidebarCollapsed = ref(localStorage.getItem('vibebiz:sidebar-collapsed') === '1')
+
+const { connect, disconnect } = useNotificationSocket(() => {
+  void notifications.load(true)
+})
+
+watch(
+  () => auth.isAuthenticated,
+  (authenticated) => {
+    if (authenticated) {
+      connect()
+    } else {
+      disconnect()
+      notifications.clear()
+    }
+  },
+)
 
 function toggleSidebar() {
   sidebarCollapsed.value = !sidebarCollapsed.value
@@ -46,7 +67,13 @@ async function loadProjects() {
   }
 }
 
-onMounted(loadProjects)
+onMounted(async () => {
+  await auth.ensure()
+  if (auth.isAuthenticated) {
+    connect()
+  }
+  await loadProjects()
+})
 </script>
 
 <template>

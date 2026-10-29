@@ -111,3 +111,16 @@ export interface ChatMessage {
   tools: ToolState[]
   pending: boolean
 }
+
+export type NotificationType = 'version_release' | 'inbox'
+
+export interface NotificationItem {
+  id: number
+  title: string
+  content: string
+  type: NotificationType
+  version: string
+  link: string
+  publishedAt: string
+  expireAt: string
+}
