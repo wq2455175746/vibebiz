@@ -28,9 +28,12 @@ import type {
 import { formatDateTime } from '@/utils/format'
 import {
   canEdit,
-  isExpired,
+  canPublish,
+  canUnpublish,
+  notificationDateBounds,
   notificationStatusLabel,
   notificationTypeLabel,
+  resolveExpireAt,
 } from '@/utils/notificationStatus'
 
 const { rows, loading, error, load } = useAdminList(listNotifications)
@@ -63,6 +66,7 @@ const typeOptions = [
   { label: '站内信', value: 'inbox' as NotificationType },
 ]
 
+const dateBounds = notificationDateBounds()
 const dialogVisible = ref(false)
 const editingId = ref<number | null>(null)
 const saving = ref(false)
@@ -101,16 +105,26 @@ function resetForm(): void {
   expireDate.value = defaultExpireDate()
 }
 
+function clearFeedback(): void {
+  actionError.value = ''
+  notice.value = ''
+}
+
+function closeDialog(): void {
+  clearFeedback()
+  dialogVisible.value = false
+}
+
 function openCreate(): void {
   editingId.value = null
-  actionError.value = ''
+  clearFeedback()
   resetForm()
   dialogVisible.value = true
 }
 
 function openEdit(item: OpsNotification): void {
   editingId.value = item.id
-  actionError.value = ''
+  clearFeedback()
   form.value = {
     title: item.title,
     content: item.content,
@@ -118,7 +132,8 @@ function openEdit(item: OpsNotification): void {
     version: item.version,
     link: item.link,
   }
-  expireDate.value = endOfDay(new Date(item.expireAt))
+  const current = new Date(item.expireAt)
+  expireDate.value = current.getTime() > Date.now() ? endOfDay(current) : defaultExpireDate()
   dialogVisible.value = true
 }
 
@@ -131,13 +146,18 @@ function buildInput(): NotificationInput | null {
     actionError.value = '请选择过期时间'
     return null
   }
+  const expireAt = resolveExpireAt(expireDate.value)
+  if (new Date(expireAt).getTime() <= Date.now()) {
+    actionError.value = '过期时间必须晚于当前时间'
+    return null
+  }
   return {
     title: form.value.title.trim(),
     content: form.value.content,
     type: form.value.type,
     version: form.value.type === 'version_release' ? form.value.version.trim() : '',
     link: form.value.link.trim(),
-    expireAt: endOfDay(expireDate.value).toISOString(),
+    expireAt,
   }
 }
 
@@ -202,10 +222,6 @@ function remove(item: OpsNotification): void {
 function asNotification(row: TableRow): OpsNotification {
   return row as OpsNotification
 }
-
-function canPublish(item: OpsNotification): boolean {
-  return item.status !== 'published' && !isExpired(item)
-}
 </script>
 
 <template>
@@ -250,7 +266,7 @@ function canPublish(item: OpsNotification): boolean {
             @click="publish(asNotification(row))"
           />
           <Button
-            v-if="asNotification(row).status === 'published'"
+            v-if="canUnpublish(asNotification(row))"
             label="取消发布"
             size="small"
             text
@@ -261,7 +277,7 @@ function canPublish(item: OpsNotification): boolean {
             label="删除"
             size="small"
             text
-            severity="danger"
+            severity="secondary"
             :disabled="busyId === asNotification(row).id"
             @click="remove(asNotification(row))"
           />
@@ -269,7 +285,13 @@ function canPublish(item: OpsNotification): boolean {
       </template>
     </DataTable>
 
-    <Dialog v-model:visible="dialogVisible" :header="dialogTitle" modal :style="{ width: '560px' }">
+    <Dialog
+      v-model:visible="dialogVisible"
+      :header="dialogTitle"
+      modal
+      :style="{ width: '560px' }"
+      @hide="actionError = ''"
+    >
       <div class="form">
         <label class="field">
           <span>标题</span>
@@ -308,6 +330,8 @@ function canPublish(item: OpsNotification): boolean {
             date-format="yy-mm-dd"
             :show-icon="true"
             :manual-input="false"
+            :min-date="dateBounds.minDate"
+            :max-date="dateBounds.maxDate"
           />
         </label>
 
@@ -315,7 +339,7 @@ function canPublish(item: OpsNotification): boolean {
       </div>
 
       <template #footer>
-        <Button label="取消" severity="secondary" text @click="dialogVisible = false" />
+        <Button label="取消" severity="secondary" text @click="closeDialog" />
         <Button label="保存" :loading="saving" @click="submit" />
       </template>
     </Dialog>

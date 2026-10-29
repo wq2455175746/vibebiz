@@ -65,7 +65,7 @@ export interface OpsNotification {
   link: string
   status: NotificationStatus
   expireAt: string
-  publishedAt: string | null
+  publishedAt: string | null | undefined
   createdBy: number
   createdByName: string
   createdAt: string
