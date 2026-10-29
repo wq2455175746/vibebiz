@@ -18,7 +18,9 @@ export const useFileStore = defineStore('files', () => {
   const dirty = computed(() => active.value !== null && draft.value !== active.value.content)
 
   async function loadTree(projectId: string) {
-    entries.value = await listFiles(projectId)
+    entries.value = (await listFiles(projectId)).filter(
+      (entry) => !entry.path.split('/').includes('.chathistory'),
+    )
   }
 
   async function open(projectId: string, path: string) {

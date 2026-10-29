@@ -18,6 +18,8 @@ class Settings:
     agent_skills: str = "all"
     agent_plugins: str = ""
     agent_max_turns: int = 40
+    chat_turn_timeout_seconds: int = 600
+    chat_history_max_bytes: int = 10 * 1024 * 1024
     sandbox_name: str = ""
     advertise_scheme: str = "http"
     advertise_host: str = "127.0.0.1"
@@ -60,6 +62,8 @@ def load_settings() -> Settings:
         agent_skills=os.getenv("AGENT_SKILLS", "all").strip(),
         agent_plugins=os.getenv("AGENT_PLUGINS", "").strip(),
         agent_max_turns=int(os.getenv("AGENT_MAX_TURNS", "40")),
+        chat_turn_timeout_seconds=int(os.getenv("CHAT_TURN_TIMEOUT_SECONDS", "600")),
+        chat_history_max_bytes=int(os.getenv("CHAT_HISTORY_MAX_BYTES", str(10 * 1024 * 1024))),
         sandbox_name=sandbox_name,
         advertise_scheme=os.getenv("SANDBOX_ADVERTISE_SCHEME", "http").strip() or "http",
         advertise_host=os.getenv("SANDBOX_ADVERTISE_HOST", "127.0.0.1").strip() or "127.0.0.1",

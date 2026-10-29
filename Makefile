@@ -6,7 +6,7 @@ WEB := $(ROOT)/packages/web
 OPS_WEB := $(ROOT)/packages/ops-web
 
 .PHONY: help init install install-web install-ops-web install-backend install-sandbox \
-	dev dev-web dev-ops-web dev-cp dev-dp dev-sandbox \
+	dev dev-web dev-ops-web dev-cp dev-dp dev-sandbox stop \
 	test test-web test-ops-web test-backend test-sandbox \
 	lint quality validate validate-web validate-ops-web validate-backend validate-sandbox \
 	checkpoint memory-add harness-update harness-failure deps-check \
@@ -24,6 +24,7 @@ help:
 	@echo "  make dev-cp          - CP 控制面 (http://vibebiz-dev.com:8080)"
 	@echo "  make dev-dp          - DP 数据面 (http://vibebiz-dev.com:8081)"
 	@echo "  make dev-sandbox     - Python sandbox (http://localhost:8000)"
+	@echo "  make stop            - 停止所有本地 vibebiz 进程"
 	@echo "  make test            - 四端测试"
 	@echo "  make quality         - Go/Python/TypeScript 质量门禁"
 	@echo "  make validate        - 静态校验 + 架构依赖 + 质量门禁"
@@ -88,6 +89,9 @@ dev-dp:
 
 dev-sandbox:
 	@$(MAKE) --no-print-directory -C $(SANDBOX) dev
+
+stop:
+	@./scripts/stop.sh
 
 test:
 	@$(MAKE) --no-print-directory -C $(BACKEND) test

@@ -1,6 +1,6 @@
 # 对话记录持久化设计（A 方案）
 
-**Status:** Draft for review  
+**Status:** Alternative A / 方案比较见 `2026-10-29-chat-transcript-persistence-options.md`
 **Date:** 2026-10-29  
 **Scope:** sandbox 写 Redis Stream，CP consumer 落 MySQL，DP 保持数据代理
 

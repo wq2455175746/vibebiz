@@ -142,3 +142,16 @@ def test_stats_invalid_project_id(tmp_path):
 
     with pytest.raises(WorkspaceError):
         workspace.stats("bad id")
+
+
+def test_chathistory_is_internal(tmp_path):
+    workspace = make_workspace(tmp_path)
+    project = workspace.init_project("p1")
+    history = project / ".chathistory"
+    history.mkdir()
+    (history / "session.jsonl").write_text("{}", encoding="utf-8")
+
+    paths = {entry["path"] for entry in workspace.list_files("p1")}
+    assert all(not path.startswith(".chathistory") for path in paths)
+    with pytest.raises(WorkspaceError):
+        workspace.read_file("p1", ".chathistory/session.jsonl")

@@ -7,7 +7,15 @@ from pathlib import Path
 from app.errors import ConflictError, NotFoundError, TooLargeError, WorkspaceError
 
 PROJECT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
-IGNORED_PARTS = {".git", ".agent", "node_modules", "__pycache__", ".venv", ".pytest_cache"}
+IGNORED_PARTS = {
+    ".git",
+    ".agent",
+    ".chathistory",
+    "node_modules",
+    "__pycache__",
+    ".venv",
+    ".pytest_cache",
+}
 MAX_TEXT_BYTES = 5 * 1024 * 1024
 
 STARTER_FILES = {

@@ -64,8 +64,15 @@ async function load() {
     files.entries = []
   }
 
+  let hasHistory = false
+  try {
+    hasHistory = await chat.loadHistory(projectId)
+  } catch {
+    hasHistory = false
+  }
+
   const prompt = takeInitialPrompt(projectId)
-  if (prompt) {
+  if (prompt && !hasHistory) {
     openConsole()
     void chat.send(projectId, prompt)
   }
@@ -96,7 +103,7 @@ watch(
 )
 
 onMounted(load)
-onBeforeUnmount(() => chat.stop())
+onBeforeUnmount(() => chat.disconnect())
 </script>
 
 <template>

@@ -101,7 +101,7 @@ export interface WriteResult {
 export interface ToolState {
   id: string
   name: string
-  status: 'running' | 'done'
+  status: 'running' | 'done' | 'error'
 }
 
 export interface ChatMessage {

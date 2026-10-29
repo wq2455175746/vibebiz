@@ -1,15 +1,18 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { streamChat, type StreamEvent } from '@/api/chat'
+import { fetchChatHistory, streamChat, type StreamEvent } from '@/api/chat'
 import { useChatStore } from './chat'
 import { useLogStore } from './logs'
 
 vi.mock('@/api/chat', () => ({
   streamChat: vi.fn(),
+  fetchChatHistory: vi.fn(),
+  stopChat: vi.fn(),
 }))
 
 const streamMock = vi.mocked(streamChat)
+const historyMock = vi.mocked(fetchChatHistory)
 
 async function* events(items: StreamEvent[]): AsyncGenerator<StreamEvent> {
   for (const item of items) {
@@ -20,6 +23,7 @@ async function* events(items: StreamEvent[]): AsyncGenerator<StreamEvent> {
 beforeEach(() => {
   setActivePinia(createPinia())
   streamMock.mockReset()
+  historyMock.mockReset()
 })
 
 describe('chat store real stream', () => {
@@ -163,5 +167,55 @@ describe('chat store real stream', () => {
       level: 'error',
       message: '执行失败：upstream down',
     })
+  })
+})
+
+describe('chat store history', () => {
+  it('loads persisted history and marks it complete', async () => {
+    historyMock.mockResolvedValue({
+      messages: [
+        {
+          id: 'h1',
+          role: 'user',
+          text: '把标题改一下',
+          status: 'completed',
+          tools: [],
+          createdAt: '2026-10-29T10:00:00Z',
+        },
+        {
+          id: 'h2',
+          role: 'assistant',
+          text: '改好了',
+          status: 'completed',
+          tools: [{ id: 't1', name: 'Edit', status: 'done' }],
+          createdAt: '2026-10-29T10:00:01Z',
+        },
+      ],
+      truncated: false,
+      limit: 100,
+    })
+
+    const chat = useChatStore()
+    chat.reset()
+
+    await expect(chat.loadHistory('p1')).resolves.toBe(true)
+
+    expect(chat.messages.map((message) => message.role)).toEqual(['system', 'user', 'assistant'])
+    expect(chat.messages.at(-1)).toMatchObject({
+      id: 'h2',
+      text: '改好了',
+      pending: false,
+      tools: [{ id: 't1', name: 'Edit', status: 'done' }],
+    })
+  })
+
+  it('returns false when history is empty', async () => {
+    historyMock.mockResolvedValue({ messages: [], truncated: false, limit: 100 })
+
+    const chat = useChatStore()
+    chat.reset()
+
+    await expect(chat.loadHistory('p1')).resolves.toBe(false)
+    expect(chat.messages.map((message) => message.role)).toEqual(['system'])
   })
 })

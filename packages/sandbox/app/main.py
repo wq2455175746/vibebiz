@@ -12,6 +12,8 @@ from app.observability import configure_observability
 from app.response import envelope
 from app.routers import chat, files, preview, projects
 from app.services.agent import build_agent
+from app.services.chat_history import ChatHistory
+from app.services.chat_turns import ChatTurnManager
 from app.services.registry import ActiveRequestCounter, ActiveRequestsMiddleware, run_heartbeat
 from app.services.versioning import Versioning
 from app.services.workspace import Workspace
@@ -43,6 +45,16 @@ def create_app(
     app.state.workspace = Workspace(settings.workspaces_dir)
     app.state.versioning = Versioning()
     app.state.agent = build_agent(settings)
+    app.state.chat_history = ChatHistory(
+        app.state.workspace, max_bytes=settings.chat_history_max_bytes
+    )
+    app.state.chat_turns = ChatTurnManager(
+        app.state.agent,
+        app.state.chat_history,
+        app.state.versioning,
+        model=settings.agent_model,
+        timeout_seconds=settings.chat_turn_timeout_seconds,
+    )
     app.add_middleware(ActiveRequestsMiddleware)
 
     app.include_router(projects.router)

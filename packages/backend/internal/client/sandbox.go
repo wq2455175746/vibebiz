@@ -60,6 +60,12 @@ type ProjectStats struct {
 	LastModifiedAt int64 `json:"lastModifiedAt"`
 }
 
+type ChatHistoryTail struct {
+	Content   string `json:"content"`
+	Truncated bool   `json:"truncated"`
+	Version   string `json:"version"`
+}
+
 type Sandbox struct {
 	baseURL string
 	http    *http.Client
@@ -140,6 +146,25 @@ func (s *Sandbox) ProjectStats(ctx context.Context, id string) (ProjectStats, er
 		return ProjectStats{}, err
 	}
 	return stats, nil
+}
+
+func (s *Sandbox) ReadChatHistory(ctx context.Context, id string, limit int) (ChatHistoryTail, error) {
+	q := url.Values{}
+	q.Set("limit", strconv.Itoa(limit))
+	raw, err := s.doJSON(ctx, "read_chat_history", id, http.MethodGet, "/internal/projects/"+url.PathEscape(id)+"/chat/history?"+q.Encode(), nil)
+	if err != nil {
+		return ChatHistoryTail{}, err
+	}
+	var tail ChatHistoryTail
+	if err := json.Unmarshal(raw, &tail); err != nil {
+		return ChatHistoryTail{}, err
+	}
+	return tail, nil
+}
+
+func (s *Sandbox) StopChat(ctx context.Context, id string) error {
+	_, err := s.doJSON(ctx, "stop_chat", id, http.MethodPost, "/internal/projects/"+url.PathEscape(id)+"/chat/stop", map[string]string{})
+	return err
 }
 
 func (s *Sandbox) Chat(ctx context.Context, id string, payload []byte) (out io.ReadCloser, err error) {

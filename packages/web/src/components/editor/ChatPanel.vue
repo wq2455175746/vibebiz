@@ -38,7 +38,7 @@ function send() {
 }
 
 function stop() {
-  chat.stop()
+  chat.stop(props.projectId)
 }
 
 watch(

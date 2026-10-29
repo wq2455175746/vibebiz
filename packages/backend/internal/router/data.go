@@ -11,12 +11,14 @@ import (
 type DataSandbox interface {
 	handler.FileClient
 	handler.ChatClient
+	handler.ChatStopClient
 	handler.PreviewClient
 }
 
 func RegisterData(e *echo.Echo, sandbox DataSandbox, obs *observability.Provider, authn *auth.Authenticator, metas auth.ProjectMetaStore) {
 	files := handler.NewFileHandler(sandbox, obs)
 	chat := handler.NewChatHandler(sandbox, obs)
+	stopChat := handler.NewChatStopHandler(sandbox, obs)
 	preview := handler.NewPreviewHandler(sandbox, obs)
 
 	api := e.Group("/dp/api/v1")
@@ -25,6 +27,7 @@ func RegisterData(e *echo.Echo, sandbox DataSandbox, obs *observability.Provider
 	projects.GET("/file", files.Read)
 	projects.PUT("/file", files.Write)
 	projects.POST("/chat", chat.Chat)
+	projects.POST("/chat/stop", stopChat.Stop)
 	projects.GET("/preview/*", preview.Serve)
 
 	registerErrorHandler(e)

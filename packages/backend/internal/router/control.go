@@ -83,3 +83,8 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 
 	registerErrorHandler(e)
 }
+
+func RegisterChatHistory(e *echo.Echo, history *handler.ChatHistoryHandler, authn *auth.Authenticator) {
+	api := e.Group("/cp/api/v1/projects", authn.RequireUser)
+	api.GET("/:id/chat/history", history.Get)
+}

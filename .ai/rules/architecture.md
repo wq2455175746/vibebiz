@@ -88,6 +88,7 @@
 | GET | `/projects` | 用户登录 + 工作区过滤 |
 | GET | `/projects/:id` | 用户登录 + 工作区过滤；读取 MySQL `project` |
 | DELETE | `/projects/:id` | 用户登录 + 工作区过滤 |
+| GET | `/projects/:id/chat/history` | 用户登录 + 工作区过滤；`GET /internal/projects/{id}/chat/history` |
 | POST | `/admin/auth/login` | 公开，ops 登录 |
 | GET | `/admin/auth/me` | ops Cookie |
 | POST | `/admin/auth/logout` | ops Cookie |
@@ -108,6 +109,7 @@
 | GET | `/projects/:id/file?path=` | `GET /internal/projects/{id}/file` |
 | PUT | `/projects/:id/file` | `PUT /internal/projects/{id}/file` |
 | POST | `/projects/:id/chat` | `POST /internal/projects/{id}/chat` |
+| POST | `/projects/:id/chat/stop` | `POST /internal/projects/{id}/chat/stop` |
 | GET | `/projects/:id/preview/*` | `GET /internal/projects/{id}/preview/*` |
 
 DP 不注册项目列表 / 创建 / 详情，也不注册任何 admin 路由。CP 不注册任何 `/dp/*` 路由。
@@ -164,12 +166,14 @@ data/workspaces/<projectId>/
 ├── styles.css
 ├── app.js
 ├── README.md
+├── .chathistory/session.jsonl  (内部，文件树/预览不可见)
 └── .git/
 ```
 
 - `projectId` 必须匹配 `^[A-Za-z0-9_-]{1,64}$`。
 - 所有路径：`Path.resolve()` 后 `is_relative_to(project_dir)`。
-- 拒绝 `.git` / `.agent` / `node_modules` / `__pycache__` 访问。
+- 拒绝 `.git` / `.agent` / `.chathistory` / `node_modules` / `__pycache__` 访问。
+- 聊天历史由 sandbox 独占写；CP 只通过内部 history API 读取，sandbox 不访问 CP/DP。
 - 写入使用临时文件 + `os.replace`，避免半写。
 - 版本号：`sha256(content).hexdigest()[:12]`。
 - 二进制：前 8KB 含 NUL 即 `isBinary=true`，正文不返回。

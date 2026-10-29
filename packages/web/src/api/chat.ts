@@ -1,3 +1,4 @@
+import { cpHttp, dpHttp, request } from './client'
 import { splitSSE } from '@/utils/sse'
 
 export interface StreamEvent {
@@ -8,7 +9,43 @@ export interface StreamEvent {
   commit?: string | null
 }
 
+export interface HistoryTool {
+  id: string
+  name: string
+  status: 'running' | 'done' | 'error'
+}
+
+export interface HistoryMessage {
+  id: string
+  role: 'user' | 'assistant'
+  text: string
+  status: string
+  tools: HistoryTool[]
+  createdAt: string
+}
+
+export interface ChatHistory {
+  messages: HistoryMessage[]
+  truncated: boolean
+  limit: number
+}
+
 const API_BASE = import.meta.env.VITE_DP_BASE || '/dp/api/v1'
+
+export async function fetchChatHistory(projectId: string, limit = 100): Promise<ChatHistory> {
+  return request<ChatHistory>(cpHttp, {
+    method: 'get',
+    url: `/projects/${encodeURIComponent(projectId)}/chat/history`,
+    params: { limit },
+  })
+}
+
+export async function stopChat(projectId: string): Promise<void> {
+  await request<{ stopped: boolean }>(dpHttp, {
+    method: 'post',
+    url: `/projects/${encodeURIComponent(projectId)}/chat/stop`,
+  })
+}
 
 export async function* streamChat(
   projectId: string,

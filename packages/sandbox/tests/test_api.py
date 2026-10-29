@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -132,3 +133,28 @@ def test_chat_stream_updates_workspace(tmp_path):
         "result"
     ]
     assert "做一个贪吃蛇小游戏" in updated["content"]
+
+
+def test_chat_history_is_recorded_and_hidden(tmp_path):
+    client = make_client(tmp_path)
+    init_project(client)
+
+    with client.stream(
+        "POST",
+        "/internal/projects/p1/chat",
+        json={"message": "记录一下这次对话"},
+    ) as response:
+        assert response.status_code == 200
+        body = "".join(response.iter_text())
+    assert "data: [DONE]" in body
+
+    history = client.get("/internal/projects/p1/chat/history").json()["result"]
+    entries = [json.loads(line) for line in history["content"].splitlines() if line.strip()]
+    messages = [entry for entry in entries if entry["type"] == "message"]
+    assert [item["message"]["role"] for item in messages] == ["user", "assistant"]
+    assert messages[0]["message"]["content"] == "记录一下这次对话"
+    assert messages[1]["parentId"] == messages[0]["id"]
+
+    files = client.get("/internal/projects/p1/files").json()["result"]["files"]
+    assert all(not item["path"].startswith(".chathistory") for item in files)
+    assert client.get("/internal/projects/p1/preview/.chathistory/session.jsonl").status_code != 200

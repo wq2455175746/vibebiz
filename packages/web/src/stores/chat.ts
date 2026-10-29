@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
-import { streamChat, type StreamEvent } from '@/api/chat'
+import { fetchChatHistory, stopChat, streamChat, type StreamEvent } from '@/api/chat'
 import { useLogStore } from '@/stores/logs'
 import { buildMockChatSteps } from '@/utils/editorMock'
 import type { ChatMessage } from '@/types'
@@ -80,20 +80,43 @@ export const useChatStore = defineStore('chat', () => {
     mockRun += 1
   }
 
+  function systemMessage(): ChatMessage {
+    return {
+      id: nextId(),
+      role: 'system',
+      text: '描述你的需求，我会直接修改代码并刷新右侧预览。',
+      tools: [],
+      pending: false,
+    }
+  }
+
   function reset() {
-    controller?.abort()
-    controller = null
-    clearMockTimers()
+    disconnect()
+    revision.value = 0
+    messages.value = [systemMessage()]
+  }
+
+  async function loadHistory(projectId: string): Promise<boolean> {
+    const history = await fetchChatHistory(projectId)
+    if (history.messages.length === 0) {
+      return false
+    }
     messages.value = [
-      {
-        id: nextId(),
-        role: 'system',
-        text: '描述你的需求，我会直接修改代码并刷新右侧预览。',
-        tools: [],
+      systemMessage(),
+      ...history.messages.map((message) => ({
+        id: message.id,
+        role: message.role,
+        text: message.text,
+        tools: message.tools.map((tool) => ({
+          id: tool.id,
+          name: tool.name,
+          status: tool.status,
+        })),
         pending: false,
-      },
+      })),
     ]
-    streaming.value = false
+    revision.value += 1
+    return true
   }
 
   function sendMock(projectId: string, text: string) {
@@ -267,8 +290,9 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  function stop() {
+  function disconnect() {
     controller?.abort()
+    controller = null
     clearMockTimers()
     const pending = messages.value.find((message) => message.pending)
     if (pending) {
@@ -278,5 +302,20 @@ export const useChatStore = defineStore('chat', () => {
     revision.value += 1
   }
 
-  return { messages, streaming, revision, reset, send, sendMock, stop }
+  function stop(projectId: string) {
+    disconnect()
+    void stopChat(projectId).catch(() => undefined)
+  }
+
+  return {
+    messages,
+    streaming,
+    revision,
+    reset,
+    loadHistory,
+    send,
+    sendMock,
+    disconnect,
+    stop,
+  }
 })

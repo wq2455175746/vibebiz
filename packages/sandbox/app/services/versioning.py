@@ -8,6 +8,7 @@ class Versioning:
         self.git = shutil.which("git")
 
     def init(self, project_dir: Path) -> None:
+        self._ensure_gitignore(project_dir)
         if not self.git:
             return
         if (project_dir / ".git").exists():
@@ -15,9 +16,18 @@ class Versioning:
         self._run(project_dir, "init", "-q")
         self._run(project_dir, "config", "user.email", "agent@vibebiz.local")
         self._run(project_dir, "config", "user.name", "Vibebiz Agent")
+
+    def _ensure_gitignore(self, project_dir: Path) -> None:
         ignore = project_dir / ".gitignore"
-        if not ignore.exists():
-            ignore.write_text(".agent/\nnode_modules/\n__pycache__/\n", encoding="utf-8")
+        existing = ignore.read_text(encoding="utf-8") if ignore.exists() else ""
+        lines = existing.splitlines()
+        if ".chathistory/" not in lines:
+            suffix = "" if not existing or existing.endswith("\n") else "\n"
+            ignore.write_text(existing + suffix + ".chathistory/\n", encoding="utf-8")
+        if not existing:
+            ignore.write_text(
+                ".agent/\nnode_modules/\n__pycache__/\n.chathistory/\n", encoding="utf-8"
+            )
 
     def commit(self, project_dir: Path, message: str) -> str | None:
         if not self.git or not (project_dir / ".git").exists():

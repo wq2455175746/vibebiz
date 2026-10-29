@@ -68,6 +68,22 @@ func (r *Router) ProjectStats(ctx context.Context, id string) (ProjectStats, err
 	return sandbox.ProjectStats(ctx, id)
 }
 
+func (r *Router) ReadChatHistory(ctx context.Context, id string, limit int) (ChatHistoryTail, error) {
+	sandbox, err := r.client(ctx, id)
+	if err != nil {
+		return ChatHistoryTail{}, err
+	}
+	return sandbox.ReadChatHistory(ctx, id, limit)
+}
+
+func (r *Router) StopChat(ctx context.Context, id string) error {
+	sandbox, err := r.client(ctx, id)
+	if err != nil {
+		return err
+	}
+	return sandbox.StopChat(ctx, id)
+}
+
 func (r *Router) Chat(ctx context.Context, id string, payload []byte) (io.ReadCloser, error) {
 	sandbox, err := r.client(ctx, id)
 	if err != nil {
