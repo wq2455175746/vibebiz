@@ -68,6 +68,21 @@ describe('useNotificationsStore', () => {
     expect(store.loading).toBe(false)
   })
 
+  it('keeps cached items and no error when a silent reload fails', async () => {
+    vi.mocked(notificationsApi.listNotifications).mockResolvedValueOnce([notification])
+    const store = useNotificationsStore()
+    await store.load()
+
+    vi.mocked(notificationsApi.listNotifications).mockRejectedValueOnce(
+      new ApiError('网络错误', 500, 50001),
+    )
+    await store.load(true)
+
+    expect(store.items).toEqual([notification])
+    expect(store.error).toBe('')
+    expect(store.loading).toBe(false)
+  })
+
   it('clears items and error', async () => {
     vi.mocked(notificationsApi.listNotifications).mockRejectedValue(new ApiError('加载失败'))
     const store = useNotificationsStore()

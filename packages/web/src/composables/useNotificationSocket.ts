@@ -11,12 +11,19 @@ export function useNotificationSocket(onChange: () => void) {
 
   function open(): void {
     const base = import.meta.env.VITE_CP_BASE || '/cp/api/v1'
-    socket = new WebSocket(buildNotificationSocketUrl(base, window.location))
-    socket.onopen = () => {
+    const ws = new WebSocket(buildNotificationSocketUrl(base, window.location))
+    socket = ws
+    ws.onopen = () => {
+      if (ws !== socket) {
+        return
+      }
       connected.value = true
       retry = 1000
     }
-    socket.onmessage = (event) => {
+    ws.onmessage = (event) => {
+      if (ws !== socket) {
+        return
+      }
       try {
         const payload = JSON.parse(event.data) as { type?: string }
         if (payload.type === 'notifications.changed') {
@@ -26,24 +33,33 @@ export function useNotificationSocket(onChange: () => void) {
         // ignore malformed events
       }
     }
-    socket.onclose = () => {
+    ws.onclose = () => {
+      if (ws !== socket) {
+        return
+      }
       connected.value = false
       socket = null
       if (!stopped) {
         schedule()
       }
     }
-    socket.onerror = () => socket?.close()
+    ws.onerror = () => ws.close()
   }
 
   function schedule(): void {
-    timer = setTimeout(open, retry)
+    if (timer) {
+      return
+    }
+    timer = setTimeout(() => {
+      timer = null
+      open()
+    }, retry)
     retry = Math.min(retry * 2, 30_000)
   }
 
   function connect(): void {
     stopped = false
-    if (socket) {
+    if (socket || timer) {
       return
     }
     open()
@@ -55,9 +71,10 @@ export function useNotificationSocket(onChange: () => void) {
       clearTimeout(timer)
     }
     timer = null
-    socket?.close()
+    const ws = socket
     socket = null
     connected.value = false
+    ws?.close()
   }
 
   onBeforeUnmount(disconnect)

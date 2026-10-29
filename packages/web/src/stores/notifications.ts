@@ -12,12 +12,15 @@ export const useNotificationsStore = defineStore('notifications', () => {
   async function load(silent = false): Promise<void> {
     if (!silent) {
       loading.value = true
+      error.value = ''
     }
-    error.value = ''
     try {
       items.value = await listNotifications()
+      error.value = ''
     } catch (err) {
-      error.value = err instanceof Error ? err.message : '加载失败'
+      if (!silent) {
+        error.value = err instanceof Error ? err.message : '加载失败'
+      }
     } finally {
       if (!silent) {
         loading.value = false

@@ -10,7 +10,9 @@ import TabPanels from 'primevue/tabpanels'
 import Tabs from 'primevue/tabs'
 
 import { useNotificationsStore } from '@/stores/notifications'
+import type { NotificationItem } from '@/types'
 import { groupNotifications } from '@/utils/notificationGroups'
+import { safeNotificationLink } from '@/utils/notificationLink'
 import { formatDateTime } from '@/utils/storage'
 
 const props = defineProps<{ visible: boolean }>()
@@ -31,6 +33,10 @@ watch(
 
 function renderMarkdown(content: string): string {
   return DOMPurify.sanitize(marked.parse(content, { async: false }) as string)
+}
+
+function linkFor(item: NotificationItem): string {
+  return safeNotificationLink(item.link)
 }
 
 function close(): void {
@@ -68,9 +74,9 @@ function close(): void {
             <p class="notification-time">{{ formatDateTime(item.publishedAt) }}</p>
             <div class="notification-content" v-html="renderMarkdown(item.content)" />
             <a
-              v-if="item.link"
+              v-if="linkFor(item)"
               class="notification-link"
-              :href="item.link"
+              :href="linkFor(item)"
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -89,9 +95,9 @@ function close(): void {
             <p class="notification-time">{{ formatDateTime(item.publishedAt) }}</p>
             <div class="notification-content" v-html="renderMarkdown(item.content)" />
             <a
-              v-if="item.link"
+              v-if="linkFor(item)"
               class="notification-link"
-              :href="item.link"
+              :href="linkFor(item)"
               target="_blank"
               rel="noopener noreferrer"
             >
