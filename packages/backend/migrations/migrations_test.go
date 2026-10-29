@@ -42,6 +42,7 @@ func TestInitialSchemaCoversAllBusinessTables(t *testing.T) {
 		"user", "ops_user", "ops_audit_log", "workspace", "workspace_user", "user_quota",
 		"project_topic", "project_template", "project", "project_storage",
 		"external_resource", "project_external_resource", "llm_model", "agent_role",
+		"sandbox_instance",
 		"scheduled_task", "chat_conversation", "chat_message", "chat_memory",
 		"rag_knowledge_base", "project_rag",
 	}
@@ -176,14 +177,32 @@ func TestProjectPersistenceMigration(t *testing.T) {
 	}
 }
 
+func TestSandboxRegistryMigration(t *testing.T) {
+	body, err := fs.ReadFile(FS, "00010_sandbox_registry.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	for _, want := range []string{
+		"CREATE TABLE `sandbox_instance`", "active_requests", "max_concurrency",
+		"last_heartbeat_at", "last_health_at", "ALTER TABLE `project`",
+		"ADD COLUMN `sandbox_id`", "DROP TABLE IF EXISTS `sandbox_instance`",
+		"-- +goose Up", "-- +goose Down",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("sandbox registry migration missing %q", want)
+		}
+	}
+}
+
 func TestGooseCanCollectMigrations(t *testing.T) {
 	goose.SetBaseFS(FS)
 	migs, err := goose.CollectMigrations(".", 0, int64(^uint(0)>>1))
 	if err != nil {
 		t.Fatalf("collect migrations: %v", err)
 	}
-	if len(migs) != 9 {
-		t.Fatalf("collected %d migrations, want 9", len(migs))
+	if len(migs) != 10 {
+		t.Fatalf("collected %d migrations, want 10", len(migs))
 	}
 	for i, mig := range migs {
 		want := int64(i + 1)

@@ -22,11 +22,17 @@ type User struct {
 }
 
 type Sandbox struct {
-	ID        string    `json:"id"`
-	ProjectID string    `json:"projectId"`
-	Node      string    `json:"node"`
-	State     string    `json:"state"`
-	StartedAt time.Time `json:"startedAt"`
+	ID              string     `json:"id"`
+	Name            string     `json:"name"`
+	Host            string     `json:"host"`
+	Port            int        `json:"port"`
+	Status          string     `json:"status"`
+	HealthStatus    string     `json:"healthStatus"`
+	ActiveRequests  int        `json:"activeRequests"`
+	MaxConcurrency  int        `json:"maxConcurrency"`
+	LastHeartbeatAt *time.Time `json:"lastHeartbeatAt,omitempty"`
+	LastHealthAt    *time.Time `json:"lastHealthAt,omitempty"`
+	HealthError     string     `json:"healthError"`
 }
 
 type Quota struct {

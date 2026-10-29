@@ -7,17 +7,19 @@ import (
 
 	"vibebiz/internal/admin"
 	"vibebiz/internal/auth"
-	"vibebiz/internal/client"
 	"vibebiz/internal/handler"
 	"vibebiz/internal/observability"
 	"vibebiz/internal/store"
 )
 
-func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.ProjectStore, sandbox *client.Sandbox, obs *observability.Provider, authn *auth.Authenticator, authHandler *handler.AuthHandler, settingsHandler *handler.SettingsHandler, storageHandler *handler.StorageHandler, metas auth.ProjectMetaStore, notifications *handler.NotificationHandler) {
-	projectHandler := handler.NewProjectHandler(projects, sandbox, obs, metas)
+func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.ProjectStore, provisioner handler.ProjectInitializer, obs *observability.Provider, authn *auth.Authenticator, authHandler *handler.AuthHandler, settingsHandler *handler.SettingsHandler, storageHandler *handler.StorageHandler, metas auth.ProjectMetaStore, notifications *handler.NotificationHandler, registry *handler.SandboxRegistryHandler) {
+	projectHandler := handler.NewProjectHandler(projects, provisioner, obs, metas)
 	adminHandler := handler.NewAdminHandler(repo, projects)
 
 	api := e.Group("/cp/api/v1")
+	if registry != nil {
+		api.POST("/internal/sandboxes/heartbeat", registry.Heartbeat)
+	}
 	api.POST("/auth/login", authHandler.LoginUser)
 	api.GET("/auth/me", authHandler.MeUser)
 	api.POST("/auth/logout", authHandler.LogoutUser)

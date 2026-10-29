@@ -25,6 +25,13 @@ func (r *MySQLRepository) Overview(ctx context.Context, projectCount int) (Overv
 	if err := r.db.WithContext(ctx).Model(&model.User{}).Count(&users).Error; err != nil {
 		return Overview{}, fmt.Errorf("count users: %w", err)
 	}
+	var running int64
+	if err := r.db.WithContext(ctx).
+		Model(&model.SandboxInstance{}).
+		Where("status = ? AND health_status = ?", "online", "healthy").
+		Count(&running).Error; err != nil {
+		return Overview{}, fmt.Errorf("count sandboxes: %w", err)
+	}
 	today := int64(0)
 	if r.requests != nil {
 		if value, err := r.requests.Today(ctx); err == nil {
@@ -34,7 +41,7 @@ func (r *MySQLRepository) Overview(ctx context.Context, projectCount int) (Overv
 	return Overview{
 		Projects:         projectCount,
 		Users:            int(users),
-		RunningSandboxes: 0,
+		RunningSandboxes: int(running),
 		TodayRequests:    int(today),
 	}, nil
 }
@@ -81,8 +88,29 @@ func (r *MySQLRepository) Users(ctx context.Context) ([]User, error) {
 	return out, nil
 }
 
-func (r *MySQLRepository) Sandboxes(_ context.Context) ([]Sandbox, error) {
-	return []Sandbox{}, nil
+func (r *MySQLRepository) Sandboxes(ctx context.Context) ([]Sandbox, error) {
+	var rows []model.SandboxInstance
+	if err := r.db.WithContext(ctx).Order("name ASC").Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("list admin sandboxes: %w", err)
+	}
+	out := make([]Sandbox, 0, len(rows))
+	for i := range rows {
+		row := rows[i]
+		out = append(out, Sandbox{
+			ID:              row.PublicID,
+			Name:            row.Name,
+			Host:            row.Host,
+			Port:            row.Port,
+			Status:          row.Status,
+			HealthStatus:    row.HealthStatus,
+			ActiveRequests:  row.ActiveRequests,
+			MaxConcurrency:  row.MaxConcurrency,
+			LastHeartbeatAt: row.LastHeartbeatAt,
+			LastHealthAt:    row.LastHealthAt,
+			HealthError:     row.HealthError,
+		})
+	}
+	return out, nil
 }
 
 func (r *MySQLRepository) Quotas(ctx context.Context) ([]Quota, error) {

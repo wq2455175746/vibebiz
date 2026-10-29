@@ -14,17 +14,19 @@ import (
 
 	"vibebiz/internal/auth"
 	"vibebiz/internal/model"
+	"vibebiz/internal/sandboxregistry"
 	"vibebiz/internal/store"
 )
 
 type fakeInitializer struct {
-	err      error
-	calledID string
+	sandboxID int64
+	err       error
+	calledID  string
 }
 
-func (f *fakeInitializer) InitProject(_ context.Context, id string) error {
+func (f *fakeInitializer) InitProject(_ context.Context, id string) (int64, error) {
 	f.calledID = id
-	return f.err
+	return f.sandboxID, f.err
 }
 
 type fakeMetaStore struct {
@@ -102,7 +104,7 @@ func decodeProjectEnvelope(t *testing.T, rec *httptest.ResponseRecorder) model.P
 
 func TestCreateProjectUsesSessionWorkspaceAndOwner(t *testing.T) {
 	projectStore := store.NewMemoryProjectStore()
-	init := &fakeInitializer{}
+	init := &fakeInitializer{sandboxID: 42}
 	metas := newFakeMetaStore()
 	h := newProjectHandlerForTest(projectStore, init, metas)
 
@@ -123,6 +125,9 @@ func TestCreateProjectUsesSessionWorkspaceAndOwner(t *testing.T) {
 	}
 	if init.calledID != project.ID {
 		t.Fatalf("sandbox called with %q, project id %q", init.calledID, project.ID)
+	}
+	if project.SandboxID == nil || *project.SandboxID != 42 {
+		t.Fatalf("sandbox id = %+v, want 42", project.SandboxID)
 	}
 	if meta, ok := metas.items[project.ID]; !ok || meta.WorkspaceID != 3 || meta.OwnerUserID != 7 {
 		t.Fatalf("meta = %+v, ok = %v", meta, ok)
@@ -214,6 +219,25 @@ func TestCreateProjectSandboxFailure(t *testing.T) {
 	}
 	if len(projectStore.List(context.Background())) != 0 {
 		t.Fatal("project should not be stored when init fails")
+	}
+}
+
+func TestCreateProjectNoSandboxReturns503(t *testing.T) {
+	projectStore := store.NewMemoryProjectStore()
+	h := newProjectHandlerForTest(projectStore, &fakeInitializer{err: sandboxregistry.ErrNoHealthySandbox}, newFakeMetaStore())
+	e := echo.New()
+	routeWithSession(e, http.MethodPost, "/cp/api/v1/projects", h.Create, sessionForTest(3))
+
+	req := httptest.NewRequest(http.MethodPost, "/cp/api/v1/projects", strings.NewReader(`{"prompt":"hello"}`))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503", rec.Code)
+	}
+	if len(projectStore.List(context.Background())) != 0 {
+		t.Fatal("project should not be stored without a sandbox")
 	}
 }
 

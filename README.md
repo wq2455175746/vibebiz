@@ -36,7 +36,7 @@
                             CP · :8080
 ```
 
-- **控制面 CP**：项目创建 / 列表 / 详情、运营后台 API、创建项目时调用 sandbox 初始化。
+- **控制面 CP**：项目创建 / 列表 / 详情、运营后台 API、sandbox 注册与健康检查；创建项目时按实例压力选择健康节点并调用初始化。
 - **数据面 DP**：文件树、文件读写、SSE 对话、预览反代；不持有项目元数据，也不承载 admin。
 - **单一真相源**：项目代码只存在于沙箱工作区；聊天、代码、预览都是它的投影。
 - **CP / DP 保持哑管道**：只做校验、转发、反代，不解析 Agent 消息。
@@ -230,11 +230,11 @@ make -C packages/ops-web test quality
 
 ## 当前已打通的最小链路
 
-1. 首页输入 prompt → `POST /cp/api/v1/projects` → CP 创建项目并调用 sandbox 初始化工作区。
+1. 首页输入 prompt → `POST /cp/api/v1/projects` → CP 从注册表选择最低压力健康节点并调用 sandbox 初始化工作区。
 2. 跳转编辑器 → 通过 DP 加载文件树与预览 iframe。
 3. 发送消息 → `POST /dp/api/v1/projects/{id}/chat` → DP SSE 透传 → sandbox stub agent 修改 `index.html` → 前端刷新预览。
 4. 代码视图通过 DP 读取 / 保存文件，带版本号校验（409 冲突）。
-5. ops-web 从 `/cp/api/v1/admin/*` 读取概览、用户、项目、沙箱、配额、审计；项目来自 MySQL，其余 admin 数据仍为内存 seed。
+5. ops-web 从 `/cp/api/v1/admin/*` 读取概览、用户、项目、沙箱、配额、审计；项目、admin 用户/配额/审计与 sandbox 实例均来自 MySQL。
 
 Stub agent 只做确定性的演示改写，**不具备真实生成能力**；真实 LLM agent 是下一个里程碑。
 
@@ -261,6 +261,7 @@ Stub agent 只做确定性的演示改写，**不具备真实生成能力**；�
 | GET | `/admin/sandboxes` | 沙箱节点列表 |
 | GET | `/admin/quotas` | 配额列表 |
 | GET | `/admin/audit` | 审计事件列表 |
+| POST | `/internal/sandboxes/heartbeat` | sandbox 心跳注册，`X-Sandbox-Token` 鉴权 |
 
 ### DP · `/dp/api/v1`
 
@@ -299,12 +300,23 @@ data: [DONE]
 - Prometheus 只从三个服务的 `/metrics` 拉取；生产环境不要把该端点暴露到公网。
 - 配置项见各 package 的 `.env.example`：`packages/{backend,sandbox,web,ops-web}/.env.example`。
 
+## Sandbox 注册中心
+
+- sandbox 通过 `POST /cp/api/v1/internal/sandboxes/heartbeat` 每 5 秒上报名称、host/port、当前并发和最大并发，使用 `X-Sandbox-Token` 鉴权。
+- CP 使用 asynq Scheduler 每 10 秒投递健康检查任务，请求 sandbox `/health`；心跳超时或健康失败会标记 `offline`。
+- 新项目选择 `active_requests / max_concurrency` 最低的 online + healthy 节点，并写入 `project.sandbox_id`。
+- 项目后续文件、聊天、预览优先固定在该节点；节点离线后自动改绑到其他健康节点，旧节点恢复不抢回。
+- sandbox 是无状态编码服务，项目工作区必须位于所有节点共享的 NFS/RWX 目录；切换节点不复制工作区。
+- 本次未实现 `project_leases`、epoch fencing 和项目 flock；同一项目跨节点并发写仍需后续硬化。
+
+相关配置见 `packages/backend/.env.example`（`SANDBOX_REGISTRY_TOKEN`、`SANDBOX_HEARTBEAT_TTL`、`SANDBOX_HEALTH_*`、`ASYNQ_*`）与 `packages/sandbox/.env.example`（`SANDBOX_NAME`、`SANDBOX_ADVERTISE_*`、`CP_REGISTRY_URL`、`SANDBOX_REGISTRY_TOKEN`、`SANDBOX_HEARTBEAT_INTERVAL`）。
+
 ## 数据与存储
 
-- CP 的项目目录已持久化到 MySQL `project` 表；admin 用户/沙箱/配额/审计仍为内存 seed。
-- sandbox 工作区在磁盘持久化，是项目代码的唯一真相源。
-- 目标数据库为 **MySQL 8**；GORM DAO 与 goose 版本化迁移已加入 `packages/backend`，但尚未接入 `ProjectStore` / `admin.Repository`。
-- 数据库凭据只存在于 CP 服务端环境变量，禁止进入前端、日志或仓库。
+- CP 的项目目录持久化到 MySQL `project` 表，`sandbox_id` 保存粘性调度节点；admin 用户/配额/审计来自 MySQL，sandbox 页面来自 `sandbox_instance`。
+- sandbox 工作区在共享磁盘持久化，是项目代码的唯一真相源。
+- 目标数据库为 **MySQL 8**；GORM DAO 与 goose 版本化迁移见 `packages/backend/migrations`。
+- 数据库凭据只存在于 CP / DP 服务端环境变量，禁止进入前端、日志或仓库。
 
 ## 里程碑
 

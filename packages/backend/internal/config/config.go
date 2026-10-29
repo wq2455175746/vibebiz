@@ -8,13 +8,12 @@ import (
 )
 
 type Config struct {
-	Host           string
-	Port           int
-	Debug          bool
-	SandboxBaseURL string
-	CorsOrigins    []string
-	Plane          string
-	ServiceName    string
+	Host        string
+	Port        int
+	Debug       bool
+	CorsOrigins []string
+	Plane       string
+	ServiceName string
 
 	MySQLHost         string
 	MySQLUsername     string
@@ -26,6 +25,13 @@ type Config struct {
 	RedisHost     string
 	RedisPassword string
 	RedisDB       int
+
+	SandboxRegistryToken  string
+	SandboxHeartbeatTTL   time.Duration
+	SandboxHealthInterval time.Duration
+	SandboxHealthTimeout  time.Duration
+	AsynqRedisDB          int
+	AsynqConcurrency      int
 
 	CookieSecure   bool
 	SessionUserTTL time.Duration
@@ -43,13 +49,12 @@ type Config struct {
 func Load(plane string) Config {
 	plane = normalizePlane(plane)
 	return Config{
-		Host:           getString("HOST", "127.0.0.1"),
-		Port:           getInt("PORT", defaultPort(plane)),
-		Debug:          getBool("DEBUG", true),
-		SandboxBaseURL: getString("SANDBOX_BASE_URL", "http://localhost:8000"),
-		CorsOrigins:    splitCSV(getString("CORS_ORIGINS", "http://vibebiz-dev.com:5173,http://vibebiz-dev-ops.com:5174")),
-		Plane:          plane,
-		ServiceName:    "vibebiz-" + plane,
+		Host:        getString("HOST", "127.0.0.1"),
+		Port:        getInt("PORT", defaultPort(plane)),
+		Debug:       getBool("DEBUG", true),
+		CorsOrigins: splitCSV(getString("CORS_ORIGINS", "http://vibebiz-dev.com:5173,http://vibebiz-dev-ops.com:5174")),
+		Plane:       plane,
+		ServiceName: "vibebiz-" + plane,
 
 		MySQLHost:         getString("MYSQL_HOST", "127.0.0.1:3306"),
 		MySQLUsername:     getString("MYSQL_USERNAME", ""),
@@ -61,6 +66,13 @@ func Load(plane string) Config {
 		RedisHost:     getString("REDIS_HOST", "127.0.0.1:6379"),
 		RedisPassword: getString("REDIS_PASSWORD", ""),
 		RedisDB:       getInt("REDIS_DB", 0),
+
+		SandboxRegistryToken:  getString("SANDBOX_REGISTRY_TOKEN", ""),
+		SandboxHeartbeatTTL:   getDuration("SANDBOX_HEARTBEAT_TTL", 15*time.Second),
+		SandboxHealthInterval: getDuration("SANDBOX_HEALTH_INTERVAL", 10*time.Second),
+		SandboxHealthTimeout:  getDuration("SANDBOX_HEALTH_TIMEOUT", 2*time.Second),
+		AsynqRedisDB:          getInt("ASYNQ_REDIS_DB", 1),
+		AsynqConcurrency:      getInt("ASYNQ_CONCURRENCY", 4),
 
 		CookieSecure:   getBool("COOKIE_SECURE", false),
 		SessionUserTTL: getDuration("SESSION_USER_TTL", 168*time.Hour),

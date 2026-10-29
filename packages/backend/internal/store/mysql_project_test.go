@@ -50,8 +50,8 @@ func TestMySQLProjectStoreGetMapsPublicFields(t *testing.T) {
 		WithArgs("d5f5e1d0-0000-4000-8000-000000000001", 1).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "public_id", "workspace_id", "user_id", "name", "prompt", "status",
-			"created_at", "updated_at",
-		}).AddRow(42, "d5f5e1d0-0000-4000-8000-000000000001", 3, 7, "demo", "make a game", "ready", now, now))
+			"sandbox_id", "created_at", "updated_at",
+		}).AddRow(42, "d5f5e1d0-0000-4000-8000-000000000001", 3, 7, "demo", "make a game", "ready", 9, now, now))
 
 	got, err := s.Get(context.Background(), "d5f5e1d0-0000-4000-8000-000000000001")
 	if err != nil {
@@ -62,6 +62,9 @@ func TestMySQLProjectStoreGetMapsPublicFields(t *testing.T) {
 	}
 	if got.WorkspaceID != 3 || got.OwnerUserID != 7 || got.Name != "demo" {
 		t.Fatalf("mapped project = %+v", got)
+	}
+	if got.SandboxID == nil || *got.SandboxID != 9 {
+		t.Fatalf("sandbox id = %+v, want 9", got.SandboxID)
 	}
 }
 
@@ -104,6 +107,23 @@ func TestMySQLProjectStoreListByWorkspaces(t *testing.T) {
 	list := s.ListByWorkspaces(context.Background(), []int64{1, 2})
 	if len(list) != 2 || list[0].ID != "p-new" || list[1].ID != "p-old" {
 		t.Fatalf("list = %+v", list)
+	}
+}
+
+func TestMySQLProjectStoreUpdateSandboxID(t *testing.T) {
+	db, mock := newMockProjectDB(t)
+	s := newMySQLProjectStore(t, db, mock)
+	sandboxID := int64(9)
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE `project` SET .*sandbox_id.*").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	if err := s.Update(context.Background(), &model.Project{ID: "p1", Name: "demo", SandboxID: &sandboxID}); err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
 	}
 }
 

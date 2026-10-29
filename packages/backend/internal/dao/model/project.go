@@ -54,6 +54,7 @@ type Project struct {
 	TemplateID         *int64     `gorm:"column:template_id" json:"templateId,omitempty"`
 	S3Path             string     `gorm:"column:s3_path" json:"s3Path"`
 	LocalPath          string     `gorm:"column:local_path" json:"localPath"`
+	SandboxID          *int64     `gorm:"column:sandbox_id" json:"sandboxId,omitempty"`
 	ProjectStructure   JSON       `gorm:"column:project_structure;type:json" json:"projectStructure,omitempty"`
 	IsPublic           int8       `gorm:"column:is_public" json:"isPublic"`
 	Status             string     `gorm:"column:status" json:"status"`

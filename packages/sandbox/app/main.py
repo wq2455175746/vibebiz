@@ -1,3 +1,6 @@
+import asyncio
+from contextlib import asynccontextmanager, suppress
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -9,6 +12,7 @@ from app.observability import configure_observability
 from app.response import envelope
 from app.routers import chat, files, preview, projects
 from app.services.agent import build_agent
+from app.services.registry import ActiveRequestCounter, ActiveRequestsMiddleware, run_heartbeat
 from app.services.versioning import Versioning
 from app.services.workspace import Workspace
 
@@ -18,12 +22,28 @@ def create_app(
     tracer_provider: TracerProvider | None = None,
 ) -> FastAPI:
     settings = settings or load_settings()
+    active_requests = ActiveRequestCounter()
 
-    app = FastAPI(title="vibebiz-sandbox", version="0.1.0")
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        heartbeat = None
+        if settings.cp_registry_url:
+            heartbeat = asyncio.create_task(run_heartbeat(settings, active_requests))
+        try:
+            yield
+        finally:
+            if heartbeat is not None:
+                heartbeat.cancel()
+                with suppress(asyncio.CancelledError):
+                    await heartbeat
+
+    app = FastAPI(title="vibebiz-sandbox", version="0.1.0", lifespan=lifespan)
     app.state.settings = settings
+    app.state.active_requests = active_requests
     app.state.workspace = Workspace(settings.workspaces_dir)
     app.state.versioning = Versioning()
     app.state.agent = build_agent(settings)
+    app.add_middleware(ActiveRequestsMiddleware)
 
     app.include_router(projects.router)
     app.include_router(files.router)

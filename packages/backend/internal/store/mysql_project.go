@@ -41,6 +41,7 @@ func (s *MySQLProjectStore) Create(ctx context.Context, project *model.Project) 
 		UserID:      project.OwnerUserID,
 		Name:        project.Name,
 		Prompt:      project.Prompt,
+		SandboxID:   project.SandboxID,
 		TopicID:     s.commonTopicID,
 		Status:      status,
 		Base: daomodel.Base{
@@ -100,6 +101,7 @@ func (s *MySQLProjectStore) Update(ctx context.Context, project *model.Project) 
 		Updates(map[string]any{
 			"name":         project.Name,
 			"prompt":       project.Prompt,
+			"sandbox_id":   project.SandboxID,
 			"status":       project.State,
 			"workspace_id": project.WorkspaceID,
 			"user_id":      project.OwnerUserID,
@@ -135,6 +137,7 @@ func toProject(row *daomodel.Project) *model.Project {
 		State:       row.Status,
 		WorkspaceID: row.WorkspaceID,
 		OwnerUserID: row.UserID,
+		SandboxID:   row.SandboxID,
 		CreatedAt:   row.CreatedAt,
 		UpdatedAt:   row.UpdatedAt,
 	}

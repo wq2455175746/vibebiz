@@ -18,11 +18,12 @@ import (
 	"vibebiz/internal/model"
 	"vibebiz/internal/observability"
 	"vibebiz/internal/response"
+	"vibebiz/internal/sandboxregistry"
 	"vibebiz/internal/store"
 )
 
 type ProjectInitializer interface {
-	InitProject(ctx context.Context, id string) error
+	InitProject(ctx context.Context, id string) (int64, error)
 }
 
 type ProjectHandler struct {
@@ -95,12 +96,17 @@ func (h *ProjectHandler) Create(c echo.Context) error {
 		defer span.End()
 	}
 
-	if err := h.Sandbox.InitProject(ctx, id); err != nil {
+	sandboxID, err := h.Sandbox.InitProject(ctx, id)
+	if err != nil {
 		if h.Obs != nil {
 			h.Obs.Log(ctx, slog.LevelError, "project.create", "project_id", id, "status", "error", "error", err.Error())
 		}
+		if errors.Is(err, sandboxregistry.ErrNoHealthySandbox) {
+			return response.Fail(c, http.StatusServiceUnavailable, 50302, "sandbox unavailable")
+		}
 		return response.Fail(c, http.StatusBadGateway, 50201, "workspace init failed")
 	}
+	project.SandboxID = &sandboxID
 
 	if err := h.Store.Create(ctx, project); err != nil {
 		if h.Obs != nil {

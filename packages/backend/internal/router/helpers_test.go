@@ -209,12 +209,27 @@ func newRouterAuth(t *testing.T) *routerAuth {
 	}
 }
 
+type staticProvisioner struct {
+	id  int64
+	err error
+}
+
+func (s staticProvisioner) InitProject(context.Context, string) (int64, error) {
+	return s.id, s.err
+}
+
+type singleResolver string
+
+func (s singleResolver) ResolveBaseURL(context.Context, string) (string, error) {
+	return string(s), nil
+}
+
 func newCP(t *testing.T, projects store.ProjectStore) (*echo.Echo, *observability.Provider, *routerAuth) {
 	t.Helper()
 	obs := newProvider(t, "cp")
 	authState := newRouterAuth(t)
 	e := server.New(config.Config{Plane: "cp", ServiceName: "vibebiz-cp"}, obs)
-	RegisterControl(e, admin.NewMemoryRepository(), projects, client.NewSandbox("http://127.0.0.1:1", obs), obs, authState.authn, authState.handler, &handler.SettingsHandler{}, &handler.StorageHandler{}, authState.metas, newNotificationHandler(t))
+	RegisterControl(e, admin.NewMemoryRepository(), projects, staticProvisioner{id: 1}, obs, authState.authn, authState.handler, &handler.SettingsHandler{}, &handler.StorageHandler{}, authState.metas, newNotificationHandler(t), nil)
 	return e, obs, authState
 }
 
@@ -224,7 +239,7 @@ func newDP(t *testing.T, sandboxURL string) (*echo.Echo, *observability.Provider
 	authState := newRouterAuth(t)
 	authState.metas.items["p1"] = auth.ProjectMeta{WorkspaceID: 1, OwnerUserID: 7}
 	e := server.New(config.Config{Plane: "dp", ServiceName: "vibebiz-dp"}, obs)
-	RegisterData(e, client.NewSandbox(sandboxURL, obs), obs, authState.authn, authState.metas)
+	RegisterData(e, client.NewRouter(singleResolver(sandboxURL), obs), obs, authState.authn, authState.metas)
 	return e, obs, authState
 }
 
@@ -260,4 +275,10 @@ func serveWithAuth(e *echo.Echo, method, target string, cookie *http.Cookie) *ht
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	return rec
+}
+
+type mapResolver map[string]string
+
+func (m mapResolver) ResolveBaseURL(_ context.Context, projectID string) (string, error) {
+	return m[projectID], nil
 }

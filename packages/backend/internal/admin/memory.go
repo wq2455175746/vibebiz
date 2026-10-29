@@ -20,8 +20,8 @@ func NewMemoryRepository() Repository {
 			{ID: "2", Name: "vistor", Email: "vistor_vibebiz@qq.com", Plan: "free", Status: "active", CreatedAt: created},
 		},
 		sandboxes: []Sandbox{
-			{ID: "sbx_01", ProjectID: "p_01", Node: "local-1", State: "running", StartedAt: created},
-			{ID: "sbx_02", ProjectID: "p_02", Node: "local-1", State: "stopped", StartedAt: created},
+			{ID: "sb-1", Name: "sandbox-a", Host: "127.0.0.1", Port: 8000, Status: "online", HealthStatus: "healthy", ActiveRequests: 2, MaxConcurrency: 8, LastHeartbeatAt: &created, LastHealthAt: &created},
+			{ID: "sb-2", Name: "sandbox-b", Host: "127.0.0.1", Port: 8001, Status: "offline", HealthStatus: "unhealthy", ActiveRequests: 0, MaxConcurrency: 8, LastHeartbeatAt: &created, LastHealthAt: &created, HealthError: "timeout"},
 		},
 		quotas: []Quota{
 			{UserID: "1", Plan: "free", LLMTokens: 12000, SandboxMinutes: 45, StorageMB: 12},

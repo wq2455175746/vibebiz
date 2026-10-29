@@ -123,3 +123,40 @@ func TestLoadS3Defaults(t *testing.T) {
 		t.Fatalf("presign expiry = %d/%v", cfg.S3PresignExpiryMinutes, cfg.S3PresignExpiry())
 	}
 }
+
+func TestLoadSandboxRegistryConfig(t *testing.T) {
+	t.Setenv("SANDBOX_REGISTRY_TOKEN", "secret")
+	t.Setenv("SANDBOX_HEARTBEAT_TTL", "20s")
+	t.Setenv("SANDBOX_HEALTH_INTERVAL", "12s")
+	t.Setenv("SANDBOX_HEALTH_TIMEOUT", "3s")
+	t.Setenv("ASYNQ_REDIS_DB", "2")
+	t.Setenv("ASYNQ_CONCURRENCY", "6")
+
+	cfg := Load("cp")
+	if cfg.SandboxRegistryToken != "secret" {
+		t.Fatalf("token = %q", cfg.SandboxRegistryToken)
+	}
+	if cfg.SandboxHeartbeatTTL != 20*time.Second || cfg.SandboxHealthInterval != 12*time.Second || cfg.SandboxHealthTimeout != 3*time.Second {
+		t.Fatalf("durations = %v/%v/%v", cfg.SandboxHeartbeatTTL, cfg.SandboxHealthInterval, cfg.SandboxHealthTimeout)
+	}
+	if cfg.AsynqRedisDB != 2 || cfg.AsynqConcurrency != 6 {
+		t.Fatalf("asynq = %d/%d", cfg.AsynqRedisDB, cfg.AsynqConcurrency)
+	}
+}
+
+func TestLoadSandboxRegistryDefaults(t *testing.T) {
+	t.Setenv("SANDBOX_REGISTRY_TOKEN", "")
+	t.Setenv("SANDBOX_HEARTBEAT_TTL", "")
+	t.Setenv("SANDBOX_HEALTH_INTERVAL", "")
+	t.Setenv("SANDBOX_HEALTH_TIMEOUT", "")
+	t.Setenv("ASYNQ_REDIS_DB", "")
+	t.Setenv("ASYNQ_CONCURRENCY", "")
+
+	cfg := Load("cp")
+	if cfg.SandboxHeartbeatTTL != 15*time.Second || cfg.SandboxHealthInterval != 10*time.Second || cfg.SandboxHealthTimeout != 2*time.Second {
+		t.Fatalf("durations = %v/%v/%v", cfg.SandboxHeartbeatTTL, cfg.SandboxHealthInterval, cfg.SandboxHealthTimeout)
+	}
+	if cfg.AsynqRedisDB != 1 || cfg.AsynqConcurrency != 4 {
+		t.Fatalf("asynq = %d/%d", cfg.AsynqRedisDB, cfg.AsynqConcurrency)
+	}
+}

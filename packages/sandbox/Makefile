@@ -3,6 +3,14 @@ SHELL := /bin/bash
 -include .env
 WORKSPACES_DIR ?= ../../data/workspaces
 SANDBOX_PORT ?= 8000
+SANDBOX_NAME ?=
+SANDBOX_ADVERTISE_SCHEME ?= http
+SANDBOX_ADVERTISE_HOST ?= 127.0.0.1
+SANDBOX_ADVERTISE_PORT ?= $(SANDBOX_PORT)
+SANDBOX_MAX_CONCURRENCY ?= 8
+CP_REGISTRY_URL ?= http://127.0.0.1:8080/cp/api/v1/internal/sandboxes/heartbeat
+SANDBOX_REGISTRY_TOKEN ?= change-me
+SANDBOX_HEARTBEAT_INTERVAL ?= 5s
 AGENT_MODE ?= stub
 ANTHROPIC_BASE_URL ?= https://api.deepseek.com/anthropic
 ANTHROPIC_API_KEY ?=

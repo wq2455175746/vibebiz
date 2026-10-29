@@ -12,6 +12,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/hibiken/asynq"
+
 	"vibebiz/internal/account"
 	"vibebiz/internal/admin"
 	"vibebiz/internal/auth"
@@ -24,6 +26,7 @@ import (
 	"vibebiz/internal/requestcount"
 	"vibebiz/internal/router"
 	storages3 "vibebiz/internal/s3"
+	"vibebiz/internal/sandboxregistry"
 	"vibebiz/internal/server"
 	"vibebiz/internal/store"
 )
@@ -110,11 +113,15 @@ func main() {
 		obs.Logger.Error("project store init failed", "error", err)
 		os.Exit(1)
 	}
-	sandbox := client.NewSandbox(cfg.SandboxBaseURL, obs)
-	storageHandler := &handler.StorageHandler{Projects: projectStore, Sandbox: sandbox, Account: accountService}
-
 	requestCounter := requestcount.NewCounter(redisClient, redisPrefix)
 	adminRepo := admin.NewMySQLRepository(db, requestCounter)
+	registryRepo := sandboxregistry.NewMySQLRepository(db)
+	selector := sandboxregistry.NewSelector(registryRepo, cfg.SandboxHeartbeatTTL, time.Now)
+	resolver := sandboxregistry.NewResolver(registryRepo, selector, cfg.SandboxHeartbeatTTL, time.Now)
+	provisioner := sandboxregistry.NewProvisioner(selector, sandboxregistry.NewHTTPInitializer(obs), 3)
+	sandboxRouter := client.NewRouter(resolver, obs)
+	registryHandler := handler.NewSandboxRegistryHandler(registryRepo, cfg.SandboxRegistryToken, obs)
+	storageHandler := &handler.StorageHandler{Projects: projectStore, Sandbox: sandboxRouter, Account: accountService}
 
 	notificationRepo := dao.NewNotificationRepository(db)
 	notificationCache := notification.NewCache(redisClient, redisPrefix)
@@ -134,13 +141,35 @@ func main() {
 	notificationService := notification.NewService(notificationRepo, notificationCache, notificationBus)
 	notificationHandler := handler.NewNotificationHandler(notificationService, notificationHub, cfg.CorsOrigins)
 
+	healthChecker := sandboxregistry.NewHealthChecker(registryRepo, cfg.SandboxHeartbeatTTL, cfg.SandboxHealthTimeout, obs)
+	asynqLogger := sandboxregistry.NewAsyncLogger(obs.Logger)
+	asynqRedis := asynq.RedisClientOpt{Addr: cfg.RedisHost, Password: cfg.RedisPassword, DB: cfg.AsynqRedisDB}
+	asynqWorker := asynq.NewServer(asynqRedis, asynq.Config{Concurrency: cfg.AsynqConcurrency, Logger: asynqLogger})
+	asynqMux := asynq.NewServeMux()
+	asynqMux.HandleFunc(sandboxregistry.TaskTypeHealthCheck, healthChecker.HandleTask)
+	asynqScheduler := asynq.NewScheduler(asynqRedis, &asynq.SchedulerOpts{Logger: asynqLogger})
+	if _, err := asynqScheduler.Register("@every "+cfg.SandboxHealthInterval.String(), asynq.NewTask(sandboxregistry.TaskTypeHealthCheck, nil), asynq.MaxRetry(0), asynq.Timeout(15*time.Second), asynq.Unique(cfg.SandboxHealthInterval)); err != nil {
+		obs.Logger.Error("sandbox health scheduler register failed", "error", err)
+		os.Exit(1)
+	}
+	if err := asynqScheduler.Start(); err != nil {
+		obs.Logger.Error("sandbox health scheduler start failed", "error", err)
+		os.Exit(1)
+	}
+	defer asynqScheduler.Shutdown()
+	if err := asynqWorker.Start(asynqMux); err != nil {
+		obs.Logger.Error("sandbox health worker start failed", "error", err)
+		os.Exit(1)
+	}
+	defer asynqWorker.Shutdown()
+
 	e := server.New(cfg, obs)
 	e.Use(requestCounter.Middleware())
-	router.RegisterControl(e, adminRepo, projectStore, sandbox, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler)
+	router.RegisterControl(e, adminRepo, projectStore, provisioner, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler, registryHandler)
 
 	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
 	go func() {
-		obs.Logger.Info("cp listening", "host", cfg.Host, "port", cfg.Port, "sandbox", cfg.SandboxBaseURL)
+		obs.Logger.Info("cp listening", "host", cfg.Host, "port", cfg.Port, "sandbox_registry", "mysql")
 		if err := e.Start(addr); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			obs.Logger.Error("server stopped", "error", err)
 			os.Exit(1)

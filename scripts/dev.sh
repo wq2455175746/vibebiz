@@ -23,7 +23,8 @@ env_value() {
 CP_PORT=$(env_value "$BACKEND/.env" CP_PORT 8080)
 DP_PORT=$(env_value "$BACKEND/.env" DP_PORT 8081)
 SANDBOX_PORT=$(env_value "$SANDBOX/.env" SANDBOX_PORT 8000)
-SANDBOX_BASE_URL=$(env_value "$BACKEND/.env" SANDBOX_BASE_URL "http://localhost:${SANDBOX_PORT}")
+SANDBOX_REGISTRY_TOKEN=$(env_value "$BACKEND/.env" SANDBOX_REGISTRY_TOKEN "change-me")
+CP_REGISTRY_URL="http://127.0.0.1:${CP_PORT}/cp/api/v1/internal/sandboxes/heartbeat"
 CORS_ORIGINS=$(env_value "$BACKEND/.env" CORS_ORIGINS "http://vibebiz-dev.com:5173,http://vibebiz-dev-ops.com:5174")
 
 mkdir -p "$ROOT/data/workspaces"
@@ -48,6 +49,11 @@ trap cleanup EXIT INT TERM
   set +a
   mkdir -p "$WORKSPACES_DIR"
   WORKSPACES_DIR="$WORKSPACES_DIR" \
+    SANDBOX_NAME="${SANDBOX_NAME:-sandbox-local}" \
+    SANDBOX_ADVERTISE_HOST="${SANDBOX_ADVERTISE_HOST:-127.0.0.1}" \
+    SANDBOX_ADVERTISE_PORT="$SANDBOX_PORT" \
+    CP_REGISTRY_URL="$CP_REGISTRY_URL" \
+    SANDBOX_REGISTRY_TOKEN="$SANDBOX_REGISTRY_TOKEN" \
     .venv/bin/python -m uvicorn app.main:app --reload --host 127.0.0.1 --no-access-log --port "$SANDBOX_PORT"
 ) &
 pids+=($!)
@@ -59,7 +65,7 @@ pids+=($!)
   set +a
   HOST=127.0.0.1 \
     PORT="$CP_PORT" \
-    SANDBOX_BASE_URL="$SANDBOX_BASE_URL" \
+    SANDBOX_REGISTRY_TOKEN="$SANDBOX_REGISTRY_TOKEN" \
     CORS_ORIGINS="$CORS_ORIGINS" \
     OTEL_SERVICE_NAME=vibebiz-cp \
     go run ./cmd/cp
@@ -73,7 +79,6 @@ pids+=($!)
   set +a
   HOST=127.0.0.1 \
     PORT="$DP_PORT" \
-    SANDBOX_BASE_URL="$SANDBOX_BASE_URL" \
     CORS_ORIGINS="$CORS_ORIGINS" \
     OTEL_SERVICE_NAME=vibebiz-dp \
     go run ./cmd/dp
