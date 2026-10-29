@@ -51,6 +51,8 @@ type CacheStore interface {
 	Remove(ctx context.Context, id int64) error
 	List(ctx context.Context) ([]Published, error)
 	Rebuild(ctx context.Context, items []model.OpsNotification) error
+	LastRead(ctx context.Context, userID int64) (time.Time, error)
+	MarkRead(ctx context.Context, userID int64, readAt time.Time) error
 }
 
 type Service struct {
@@ -224,10 +226,15 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
-func (s *Service) Published(ctx context.Context) ([]Published, error) {
+type PublishedResult struct {
+	Notifications []Published `json:"notifications"`
+	Unread        bool        `json:"unread"`
+}
+
+func (s *Service) Published(ctx context.Context, userID int64) (PublishedResult, error) {
 	stored, err := s.Repo.Published(ctx, s.Now())
 	if err != nil {
-		return nil, err
+		return PublishedResult{}, err
 	}
 	dbItems := make([]Published, 0, len(stored))
 	for _, item := range stored {
@@ -236,22 +243,46 @@ func (s *Service) Published(ctx context.Context) ([]Published, error) {
 	cached, cacheErr := s.Cache.List(ctx)
 	if cacheErr != nil {
 		if !errors.Is(cacheErr, ErrIndexMissing) {
-			return nil, ErrCacheUnavailable
+			return PublishedResult{}, ErrCacheUnavailable
 		}
-		if len(dbItems) == 0 {
-			return []Published{}, nil
+		if len(dbItems) > 0 {
+			if err := s.Cache.Rebuild(ctx, stored); err != nil {
+				return PublishedResult{}, ErrCacheUnavailable
+			}
 		}
+	} else if !samePublished(cached, dbItems) {
 		if err := s.Cache.Rebuild(ctx, stored); err != nil {
-			return nil, ErrCacheUnavailable
-		}
-		return dbItems, nil
-	}
-	if !samePublished(cached, dbItems) {
-		if err := s.Cache.Rebuild(ctx, stored); err != nil {
-			return nil, ErrCacheUnavailable
+			return PublishedResult{}, ErrCacheUnavailable
 		}
 	}
-	return dbItems, nil
+	lastRead, err := s.Cache.LastRead(ctx, userID)
+	if err != nil {
+		return PublishedResult{}, ErrCacheUnavailable
+	}
+	return PublishedResult{Notifications: dbItems, Unread: hasUnread(dbItems, lastRead)}, nil
+}
+
+func (s *Service) MarkRead(ctx context.Context, userID int64, readAt time.Time) error {
+	now := s.Now()
+	if readAt.IsZero() || readAt.After(now) {
+		readAt = now
+	}
+	if err := s.Cache.MarkRead(ctx, userID, readAt); err != nil {
+		return ErrCacheUnavailable
+	}
+	return nil
+}
+
+func hasUnread(items []Published, lastRead time.Time) bool {
+	if lastRead.IsZero() {
+		return len(items) > 0
+	}
+	for _, item := range items {
+		if item.PublishedAt.After(lastRead) {
+			return true
+		}
+	}
+	return false
 }
 
 func samePublished(cached, db []Published) bool {

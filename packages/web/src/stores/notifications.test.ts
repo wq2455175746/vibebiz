@@ -4,11 +4,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as notificationsApi from '@/api/notifications'
 import { ApiError } from '@/api/client'
 import type { NotificationItem } from '@/types'
+import type { NotificationListResult } from '@/api/notifications'
 
 import { useNotificationsStore } from './notifications'
 
 vi.mock('@/api/notifications', () => ({
   listNotifications: vi.fn(),
+  markNotificationsRead: vi.fn(),
 }))
 
 const notification: NotificationItem = {
@@ -29,12 +31,13 @@ beforeEach(() => {
 
 describe('useNotificationsStore', () => {
   it('loads notifications and clears the error', async () => {
-    vi.mocked(notificationsApi.listNotifications).mockResolvedValue([notification])
+    vi.mocked(notificationsApi.listNotifications).mockResolvedValue({ notifications: [notification], unread: true })
     const store = useNotificationsStore()
 
     await store.load()
 
     expect(store.items).toEqual([notification])
+    expect(store.unread).toBe(true)
     expect(store.loading).toBe(false)
     expect(store.error).toBe('')
   })
@@ -51,7 +54,7 @@ describe('useNotificationsStore', () => {
   })
 
   it('does not toggle loading on a silent reload', async () => {
-    let resolveLoad: (items: NotificationItem[]) => void = () => {}
+    let resolveLoad: (result: NotificationListResult) => void = () => {}
     vi.mocked(notificationsApi.listNotifications).mockReturnValue(
       new Promise((resolve) => {
         resolveLoad = resolve
@@ -62,14 +65,15 @@ describe('useNotificationsStore', () => {
     const pending = store.load(true)
     expect(store.loading).toBe(false)
 
-    resolveLoad([notification])
+    resolveLoad({ notifications: [notification], unread: false })
     await pending
     expect(store.items).toEqual([notification])
+    expect(store.unread).toBe(false)
     expect(store.loading).toBe(false)
   })
 
   it('keeps cached items and no error when a silent reload fails', async () => {
-    vi.mocked(notificationsApi.listNotifications).mockResolvedValueOnce([notification])
+    vi.mocked(notificationsApi.listNotifications).mockResolvedValueOnce({ notifications: [notification], unread: true })
     const store = useNotificationsStore()
     await store.load()
 
@@ -79,11 +83,27 @@ describe('useNotificationsStore', () => {
     await store.load(true)
 
     expect(store.items).toEqual([notification])
+    expect(store.unread).toBe(true)
     expect(store.error).toBe('')
     expect(store.loading).toBe(false)
   })
 
-  it('clears items and error', async () => {
+  it('marks unread notifications as read using the newest timestamp', async () => {
+    vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+      notifications: [notification],
+      unread: true,
+    })
+    vi.mocked(notificationsApi.markNotificationsRead).mockResolvedValue()
+    const store = useNotificationsStore()
+    await store.load()
+
+    await store.markRead()
+
+    expect(notificationsApi.markNotificationsRead).toHaveBeenCalledWith(notification.publishedAt)
+    expect(store.unread).toBe(false)
+  })
+
+  it('clears items, unread state and error', async () => {
     vi.mocked(notificationsApi.listNotifications).mockRejectedValue(new ApiError('加载失败'))
     const store = useNotificationsStore()
     await store.load()
@@ -91,6 +111,7 @@ describe('useNotificationsStore', () => {
     store.clear()
 
     expect(store.items).toEqual([])
+    expect(store.unread).toBe(false)
     expect(store.error).toBe('')
   })
 })

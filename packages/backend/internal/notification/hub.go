@@ -10,16 +10,21 @@ import (
 )
 
 const (
-	writeWait      = 10 * time.Second
-	pongWait       = 60 * time.Second
-	pingPeriod     = 30 * time.Second
-	maxSendBacklog = 16
+	writeWait             = 10 * time.Second
+	pongWait              = 60 * time.Second
+	pingPeriod            = 30 * time.Second
+	maxSendBacklog        = 16
+	defaultBatchSize      = 200
+	defaultBroadcastDelay = 10 * time.Millisecond
 )
 
 type Hub struct {
-	mu      sync.Mutex
-	clients map[*hubClient]struct{}
-	closed  bool
+	mu         sync.Mutex
+	clients    map[*hubClient]struct{}
+	closed     bool
+	batchSize  int
+	batchDelay time.Duration
+	onBatch    func(size int)
 }
 
 type hubClient struct {
@@ -28,7 +33,11 @@ type hubClient struct {
 }
 
 func NewHub() *Hub {
-	return &Hub{clients: make(map[*hubClient]struct{})}
+	return &Hub{
+		clients:    make(map[*hubClient]struct{}),
+		batchSize:  defaultBatchSize,
+		batchDelay: defaultBroadcastDelay,
+	}
 }
 
 func (h *Hub) Handle(conn *websocket.Conn) {
@@ -57,8 +66,41 @@ func (h *Hub) Broadcast(event Event) {
 		return
 	}
 	h.mu.Lock()
-	defer h.mu.Unlock()
+	clients := make([]*hubClient, 0, len(h.clients))
 	for client := range h.clients {
+		clients = append(clients, client)
+	}
+	h.mu.Unlock()
+
+	batchSize := h.batchSize
+	if batchSize <= 0 {
+		batchSize = defaultBatchSize
+	}
+	for start := 0; start < len(clients); start += batchSize {
+		end := start + batchSize
+		if end > len(clients) {
+			end = len(clients)
+		}
+		h.broadcastBatch(data, clients[start:end])
+		if h.onBatch != nil {
+			h.onBatch(end - start)
+		}
+		if end < len(clients) && h.batchDelay > 0 {
+			time.Sleep(h.batchDelay)
+		}
+	}
+}
+
+func (h *Hub) broadcastBatch(data []byte, clients []*hubClient) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.closed {
+		return
+	}
+	for _, client := range clients {
+		if _, ok := h.clients[client]; !ok {
+			continue
+		}
 		select {
 		case client.send <- data:
 		default:

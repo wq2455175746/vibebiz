@@ -464,6 +464,21 @@
   text-decoration: none;
 }
 
+.sidebar-bell {
+  position: relative;
+}
+
+.sidebar-unread-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 7px;
+  height: 7px;
+  background: var(--blue);
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
 .sidebar-icon-btn:hover {
   background: rgba(17, 17, 17, 0.05);
   color: var(--ink);

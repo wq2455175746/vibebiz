@@ -24,7 +24,7 @@ web 首页左侧栏底部已有“帮助”和“通知”两个占位按钮，�
 
 ## 2. 非目标
 
-- 不做未读角标、已读状态、消息回执或按用户/工作区定向。
+- 不做消息回执、按用户/工作区定向；未读状态只记录每用户最近已读时间，用于铃铛红点。
 - 不做用户提交反馈；收集箱与版本发布一样是运营群发通知。
 - 不做消息多语言、定时发布、草稿协作或审批流。
 - 不做跨集群消息总线或消息持久化；多实例广播使用 Redis Pub/Sub，订阅端断线期间的即时事件不补发，由下次拉取兜底。
@@ -43,7 +43,7 @@ web 首页左侧栏底部已有“帮助”和“通知”两个占位按钮，�
 | D6 | 过期时间在创建/编辑时选绝对日期，范围 `(now, now+30d]` | 用户确认按日期选择；后端统一校验上限 |
 | D7 | 消息全体广播，不建用户消息关系表 | 当前需求是全员公告 |
 | D8 | WebSocket 使用 Cookie 鉴权，复用 `RequireUser` | 与现有 web 登录态一致，不引入额外 token |
-| D9 | CP 进程内 Hub + Redis Pub/Sub 跨实例广播 | 多实例部署时所有 CP 都能收到变更事件；Redis 不可用时降级为仅本实例广播 |
+| D9 | CP 进程内 Hub + Redis Pub/Sub 跨实例广播，Hub 按连接分批发送 | 多实例部署时所有 CP 都能收到变更事件；单实例按 200 个连接一批、批间 10ms 发送，避免一次性遍历大量连接；Redis 不可用时降级为仅本实例广播 |
 | D10 | 帮助按钮使用普通外链，新窗口打开 | 静态外链，无需后端 |
 
 ## 4. 目标架构
@@ -130,6 +130,7 @@ web (:5173)
 Key 前缀沿用 CP 的 `vibebiz`：
 
 - 索引：`vibebiz:notification:index`，ZSET，member 为消息 ID，score 为 `publishedAt` 的 Unix 毫秒。
+- 已读状态：`vibebiz:notification:read:{userId}`，STRING，值为最近已读的 `publishedAt` Unix 毫秒；TTL 90 天，单调递增。
 - 消息：`vibebiz:notification:item:{id}`，STRING，JSON 值：
 
 ```json
@@ -241,7 +242,24 @@ Key 前缀沿用 CP 的 `vibebiz`：
 }
 ```
 
-只返回 Redis 中当前有效的已发布消息，不返回草稿与已取消发布消息。
+只返回 Redis 中当前有效的已发布消息，不返回草稿与已取消发布消息。响应额外包含 `unread`：
+
+```json
+{
+  "notifications": [],
+  "unread": true
+}
+```
+
+`POST /cp/api/v1/notifications/read`
+
+```json
+{ "readAt": "2026-10-29T08:00:00Z" }
+```
+
+- `readAt` 为 Web 当前看到的最新 `publishedAt`；后端取 `max(已有已读时间, min(readAt, now))` 写入 Redis。
+- 打开通知弹窗后调用；成功返回 `{ "unread": false }`。
+- 铃铛显示红点条件：存在 `publishedAt > lastReadAt` 的已发布消息；没有已读记录时，只要列表非空就显示。
 
 ### 7.3 WebSocket
 
@@ -336,14 +354,16 @@ proxy_read_timeout 3600s;
 - Cache：miniredis 覆盖写入后 TTL、ZSET 顺序、过期后读取过滤（同时包含一条存活与一条过期成员）、非法 JSON 清理、已过期 item 不写入、取消发布删除、索引缺失回填。
 - Service：状态机（草稿发布、重复发布、已发布编辑、过期发布、取消发布、删除已发布）、校验边界（30 天、标题/内容/版本长度、链接协议与 host、类型、inbox 清空版本）；读时对账覆盖“缓存有残留但 DB 没有”“DB 有但缓存缺失”“缓存读取失败”三类场景；取消发布/删除的缓存清理失败返回 503。
 - Handler：httptest 覆盖 ops 权限、web 权限、参数错误、状态冲突、Redis 503；WebSocket `CheckOrigin` 覆盖配置来源、同 Host、空 Origin 与拒绝场景，未登录升级返回 401，升级失败只记录日志不二次写响应。
-- Hub：httptest + gorilla dialer 覆盖连接、广播、断开；慢客户端发送缓冲占满后被移除用单元测试。
+- Hub：httptest + gorilla dialer 覆盖连接、广播、断开；慢客户端发送缓冲占满后被移除用单元测试；分批发送覆盖批次划分与全部客户端收到。
+- 已读状态：miniredis 覆盖首次无记录、标记已读、已读时间不回退、TTL；Service 覆盖未读→已读→新消息再次未读。
 - EventBus：miniredis 覆盖跨实例订阅投递、Redis 不可用时的本地降级。
 - 分页：DAO count + limit/offset、Service 参数归一化、handler 分页响应与前端 API/Paginator。
 - Router：CP 注册通知路由，DP 不注册；管理员 POST 通知缺少请求体返回 400，WS 路由未登录返回 401。
 
 ### 11.2 web
 
-- `notifications` API 解包。
+- `notifications` API 解包与 `unread` 状态。
+- 打开弹窗后按最新 `publishedAt` 标记已读，红点消失。
 - Tab 过滤与空状态。
 - Markdown 渲染清洗：`<script>` 被移除。
 - `buildNotificationSocketUrl` 相对/绝对 base。
@@ -364,12 +384,14 @@ proxy_read_timeout 3600s;
   3. ops 取消发布 → web 列表消失。
   4. ops 删除 → DB 软删除、Redis 清理。
   5. Redis 中 item TTL 等于 `expire_at`。
-  6. 帮助按钮新窗口打开 `https://help.atoms.dev/zh`。
+  6. 未读时铃铛显示红点，打开弹窗后红点消失；再次发布后红点重新出现。
+  7. 帮助按钮新窗口打开 `https://help.atoms.dev/zh`。
 
 ## 12. 风险与后续
 
 - 多实例广播依赖 Redis Pub/Sub；订阅端断线期间遗漏的事件不补发，依赖用户下次打开弹窗或重新拉取。
 - Pub/Sub 发布失败时仅本实例收到事件；通知正文仍以 HTTP 拉取为准。
+- 分批广播不是“按用户定向”，只是按连接分批发送；同一用户的多个 WebSocket 连接各计一批。
 - WS 依赖反向代理正确透传 `Upgrade`；已在本轮修改 Vite 与 nginx。
 - Markdown 渲染必须经过 DOMPurify，禁止直接 `v-html` 原始内容。
 - 过期消息不自动清理 DB 行；如需归档策略，后续增加定时任务或运营筛选。

@@ -110,7 +110,8 @@ func (r *notificationRepo) Published(_ context.Context, now time.Time) ([]model.
 }
 
 type notificationCache struct {
-	items []notification.Published
+	items    []notification.Published
+	lastRead time.Time
 }
 
 func (c *notificationCache) Put(_ context.Context, _ model.OpsNotification) error {
@@ -123,6 +124,17 @@ func (c *notificationCache) Remove(_ context.Context, _ int64) error {
 
 func (c *notificationCache) List(_ context.Context) ([]notification.Published, error) {
 	return c.items, nil
+}
+
+func (c *notificationCache) LastRead(_ context.Context, _ int64) (time.Time, error) {
+	return c.lastRead, nil
+}
+
+func (c *notificationCache) MarkRead(_ context.Context, _ int64, readAt time.Time) error {
+	if readAt.After(c.lastRead) {
+		c.lastRead = readAt
+	}
+	return nil
 }
 
 func (c *notificationCache) Rebuild(_ context.Context, items []model.OpsNotification) error {
@@ -162,6 +174,7 @@ func notificationRouter(h *NotificationHandler, session *auth.Session) *echo.Ech
 	ops.DELETE("/notifications/:id", h.AdminDelete)
 	e.GET("/notifications", h.WebList, sessionMiddleware(session), requireSession)
 	e.GET("/notifications/ws", h.Socket, sessionMiddleware(session), requireSession)
+	e.POST("/notifications/read", h.MarkRead, sessionMiddleware(session), requireSession)
 	return e
 }
 
@@ -370,11 +383,49 @@ func TestNotificationWebListReturnsPublished(t *testing.T) {
 	env := decodeAuthEnvelope(t, rec)
 	var result struct {
 		Notifications []notification.Published `json:"notifications"`
+		Unread        bool                     `json:"unread"`
 	}
 	if err := json.Unmarshal(env.Result, &result); err != nil {
 		t.Fatalf("decode result: %v", err)
 	}
 	if len(result.Notifications) != 1 || result.Notifications[0].ID != item.ID {
 		t.Fatalf("unexpected notifications: %+v", result.Notifications)
+	}
+	if !result.Unread {
+		t.Fatal("unread = false, want true")
+	}
+}
+
+func TestNotificationMarkRead(t *testing.T) {
+	repo, cache, h, _ := notificationFixture(t)
+	item := repo.add(model.OpsNotification{
+		Title: "Release", Content: "body", Type: model.NotificationInbox,
+		Status: model.NotificationPublished, PublishedAt: &notificationTestNow,
+		ExpireAt: notificationTestNow.Add(time.Hour),
+	})
+	cache.items = []notification.Published{{
+		ID: item.ID, Title: item.Title, Content: item.Content, Type: item.Type,
+		PublishedAt: notificationTestNow, ExpireAt: item.ExpireAt,
+	}}
+	e := notificationRouter(h, opsSession())
+
+	readAt := notificationTestNow.Format(time.RFC3339)
+	rec := notificationRequestRecorder(e, http.MethodPost, "/notifications/read", `{"readAt":"`+readAt+`"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if !cache.lastRead.Equal(notificationTestNow) {
+		t.Fatalf("lastRead = %v", cache.lastRead)
+	}
+
+	rec = notificationRequestRecorder(e, http.MethodGet, "/notifications", "")
+	var result struct {
+		Unread bool `json:"unread"`
+	}
+	if err := json.Unmarshal(decodeAuthEnvelope(t, rec).Result, &result); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if result.Unread {
+		t.Fatal("unread = true, want false after mark read")
 	}
 }

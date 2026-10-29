@@ -120,6 +120,8 @@ type fakeCache struct {
 	rebuilds  []model.OpsNotification
 	putErr    error
 	removeErr error
+	lastRead  time.Time
+	marked    []time.Time
 }
 
 func (c *fakeCache) Put(ctx context.Context, item model.OpsNotification) error {
@@ -143,6 +145,18 @@ func (c *fakeCache) List(ctx context.Context) ([]Published, error) {
 		return nil, c.listErr
 	}
 	return c.items, nil
+}
+
+func (c *fakeCache) LastRead(_ context.Context, _ int64) (time.Time, error) {
+	return c.lastRead, nil
+}
+
+func (c *fakeCache) MarkRead(_ context.Context, _ int64, readAt time.Time) error {
+	c.marked = append(c.marked, readAt)
+	if readAt.After(c.lastRead) {
+		c.lastRead = readAt
+	}
+	return nil
 }
 
 func (c *fakeCache) Rebuild(ctx context.Context, items []model.OpsNotification) error {
@@ -417,15 +431,15 @@ func TestServicePublishedRebuildsMissingIndex(t *testing.T) {
 	published.PublishedAt = &testNow
 	published = repo.add(published)
 
-	items, err := svc.Published(context.Background())
+	result, err := svc.Published(context.Background(), 7)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
 	if len(cache.rebuilds) != 1 {
 		t.Fatalf("rebuilds = %d, want 1", len(cache.rebuilds))
 	}
-	if len(items) != 1 || items[0].ID != published.ID {
-		t.Fatalf("items = %+v", items)
+	if len(result.Notifications) != 1 || result.Notifications[0].ID != published.ID {
+		t.Fatalf("items = %+v", result.Notifications)
 	}
 }
 
@@ -435,12 +449,12 @@ func TestServicePublishedNoRowsReturnsEmpty(t *testing.T) {
 	hub := &fakeHub{}
 	svc := newTestServiceWith(repo, cache, hub)
 
-	items, err := svc.Published(context.Background())
+	result, err := svc.Published(context.Background(), 7)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
-	if items == nil || len(items) != 0 {
-		t.Fatalf("items = %#v, want empty non-nil", items)
+	if result.Notifications == nil || len(result.Notifications) != 0 {
+		t.Fatalf("items = %#v, want empty non-nil", result.Notifications)
 	}
 	if len(cache.rebuilds) != 0 {
 		t.Fatalf("rebuilds = %d, want 0", len(cache.rebuilds))
@@ -460,12 +474,12 @@ func TestServicePublishedDropsStaleCacheItem(t *testing.T) {
 		{ID: 99, Title: "stale", Content: "stale", Type: model.NotificationInbox, PublishedAt: testNow, ExpireAt: item.ExpireAt},
 	}
 
-	items, err := svc.Published(context.Background())
+	result, err := svc.Published(context.Background(), 7)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
-	if len(items) != 1 || items[0].ID != item.ID {
-		t.Fatalf("items = %+v, want only id %d", items, item.ID)
+	if len(result.Notifications) != 1 || result.Notifications[0].ID != item.ID {
+		t.Fatalf("items = %+v, want only id %d", result.Notifications, item.ID)
 	}
 	if len(cache.rebuilds) != 1 || cache.rebuilds[0].ID != item.ID {
 		t.Fatalf("rebuilds = %+v, want db row %d", cache.rebuilds, item.ID)
@@ -481,12 +495,12 @@ func TestServicePublishedRestoresMissingCacheItem(t *testing.T) {
 	published.PublishedAt = &testNow
 	item := repo.add(published)
 
-	items, err := svc.Published(context.Background())
+	result, err := svc.Published(context.Background(), 7)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
-	if len(items) != 1 || items[0].ID != item.ID || !items[0].PublishedAt.Equal(testNow) {
-		t.Fatalf("items = %+v, want restored row %d", items, item.ID)
+	if len(result.Notifications) != 1 || result.Notifications[0].ID != item.ID || !result.Notifications[0].PublishedAt.Equal(testNow) {
+		t.Fatalf("items = %+v, want restored row %d", result.Notifications, item.ID)
 	}
 	if len(cache.rebuilds) != 1 {
 		t.Fatalf("rebuilds = %d, want 1", len(cache.rebuilds))
@@ -502,7 +516,7 @@ func TestServicePublishedCacheFailureReturnsUnavailable(t *testing.T) {
 	item.PublishedAt = &testNow
 	repo.add(item)
 
-	if _, err := svc.Published(context.Background()); !errors.Is(err, ErrCacheUnavailable) {
+	if _, err := svc.Published(context.Background(), 7); !errors.Is(err, ErrCacheUnavailable) {
 		t.Fatalf("err = %v, want ErrCacheUnavailable", err)
 	}
 }
@@ -567,6 +581,50 @@ func TestServiceListPaginates(t *testing.T) {
 	}
 	if page.Total != 25 || page.Page != 2 || page.PageSize != 10 || len(page.Items) != 10 {
 		t.Fatalf("page = %+v", page)
+	}
+}
+
+func TestServicePublishedTracksUnreadPerUser(t *testing.T) {
+	repo := newFakeRepo()
+	cache := &fakeCache{}
+	svc := newTestServiceWith(repo, cache, &fakeHub{})
+	item := draftNotification(svc.Now())
+	item.Status = model.NotificationPublished
+	item.PublishedAt = &testNow
+	item = repo.add(item)
+	cache.items = []Published{publishedFromModel(item)}
+
+	result, err := svc.Published(context.Background(), 7)
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if !result.Unread {
+		t.Fatal("unread = false, want true before read")
+	}
+
+	if err := svc.MarkRead(context.Background(), 7, testNow); err != nil {
+		t.Fatalf("mark read: %v", err)
+	}
+	result, err = svc.Published(context.Background(), 7)
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if result.Unread {
+		t.Fatal("unread = true, want false after read")
+	}
+
+	newer := testNow.Add(time.Minute)
+	newItem := draftNotification(svc.Now())
+	newItem.Status = model.NotificationPublished
+	newItem.PublishedAt = &newer
+	newItem = repo.add(newItem)
+	cache.items = append([]Published{publishedFromModel(newItem)}, cache.items...)
+	result, err = svc.Published(context.Background(), 7)
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if !result.Unread {
+		t.Fatal("unread = false, want true after newer notification")
 	}
 }
 

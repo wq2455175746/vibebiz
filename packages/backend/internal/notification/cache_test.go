@@ -214,3 +214,33 @@ func TestCacheRebuild(t *testing.T) {
 		t.Fatalf("list = %+v, want ids [3 2]", list)
 	}
 }
+
+func TestCacheReadState(t *testing.T) {
+	cache, mr := newTestCache(t)
+	ctx := context.Background()
+
+	last, err := cache.LastRead(ctx, 7)
+	if err != nil || !last.IsZero() {
+		t.Fatalf("last = %v, err = %v, want zero", last, err)
+	}
+
+	readAt := time.Now().UTC().Truncate(time.Millisecond)
+	if err := cache.MarkRead(ctx, 7, readAt); err != nil {
+		t.Fatal(err)
+	}
+	last, err = cache.LastRead(ctx, 7)
+	if err != nil || !last.Equal(readAt) {
+		t.Fatalf("last = %v, err = %v, want %v", last, err, readAt)
+	}
+	if ttl := mr.TTL("vibebiz:notification:read:7"); ttl <= 0 || ttl > 90*24*time.Hour {
+		t.Fatalf("ttl = %v", ttl)
+	}
+
+	if err := cache.MarkRead(ctx, 7, readAt.Add(-time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	last, err = cache.LastRead(ctx, 7)
+	if err != nil || !last.Equal(readAt) {
+		t.Fatalf("last = %v, err = %v, want previous read time", last, err)
+	}
+}
