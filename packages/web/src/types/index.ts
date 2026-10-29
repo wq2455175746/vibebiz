@@ -104,12 +104,34 @@ export interface ToolState {
   status: 'running' | 'done' | 'error'
 }
 
+export interface ChatReference {
+  kind: 'resource' | 'project_file'
+  id?: string
+  name: string
+  path: string
+  contentType?: string
+  resourceKind?: string
+}
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant' | 'system'
   text: string
   tools: ToolState[]
+  references?: ChatReference[]
   pending: boolean
+}
+
+export interface ProjectResource {
+  id: string
+  name: string
+  displayName: string
+  storageName: string
+  path: string
+  contentType: string
+  size: number
+  kind: 'document' | 'text' | 'image'
+  createdAt: string
 }
 
 export type LogLevel = 'info' | 'warn' | 'error'

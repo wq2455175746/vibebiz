@@ -46,7 +46,7 @@ func TestChatHistoryParsesJSONL(t *testing.T) {
 	}
 	content := strings.Join([]string{
 		`{"type":"session","version":1}`,
-		`{"type":"message","id":"a1","parentId":null,"timestamp":"2026-10-29T10:00:00Z","message":{"role":"user","content":"hi","status":"completed","tools":[]}}`,
+		`{"type":"message","id":"a1","parentId":null,"timestamp":"2026-10-29T10:00:00Z","message":{"role":"user","content":"hi","status":"completed","tools":[],"references":[{"kind":"resource","id":"r1","name":"需求.pdf","path":".resources/r1.pdf","contentType":"application/pdf","resourceKind":"document"}]}}`,
 		`not-json`,
 		`{"type":"message","id":"b2","parentId":"a1","timestamp":"2026-10-29T10:00:01Z","message":{"role":"assistant","content":"ok","status":"completed","tools":[{"id":"t1","name":"Read","status":"done"}]}}`,
 	}, "\n")
@@ -72,6 +72,9 @@ func TestChatHistoryParsesJSONL(t *testing.T) {
 	}
 	if env.Result.Messages[1].Text != "ok" || env.Result.Messages[1].Tools[0].Name != "Read" {
 		t.Fatalf("messages = %+v", env.Result.Messages)
+	}
+	if len(env.Result.Messages[0].References) != 1 || env.Result.Messages[0].References[0].Name != "需求.pdf" {
+		t.Fatalf("references = %+v", env.Result.Messages[0].References)
 	}
 	if sandbox.limit != defaultChatHistoryLimit {
 		t.Fatalf("limit = %d", sandbox.limit)

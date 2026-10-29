@@ -2,6 +2,7 @@
 
 interface ImportMetaEnv {
   readonly VITE_OPS_API_BASE?: string
+  readonly VITE_DEMO_LOGIN?: string
 }
 
 interface ImportMeta {

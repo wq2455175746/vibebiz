@@ -2,8 +2,10 @@ import asyncio
 import json
 from pathlib import Path
 
+import pytest
+
 from app.services.chat_history import ChatHistory
-from app.services.chat_turns import ChatTurnManager
+from app.services.chat_turns import ChatTurnManager, TurnLocked
 from app.services.workspace import Workspace
 
 
@@ -54,3 +56,21 @@ def test_turn_completes_without_sse_subscriber(tmp_path):
     assert messages[1]["message"]["content"] == "done"
     assert messages[1]["message"]["status"] == "completed"
     assert messages[1]["parentId"] == messages[0]["id"]
+
+
+def test_turn_guard_blocks_workspace_writes_while_active(tmp_path):
+    workspace = Workspace(tmp_path / "workspaces")
+    workspace.init_project("p1")
+    history = ChatHistory(workspace)
+    manager = ChatTurnManager(SlowAgent(), history, FakeVersioning(), model="deepseek-flash")
+
+    async def run() -> None:
+        turn = await manager.start("p1", "hello", workspace)
+        assert await manager.status("p1") == {"active": True, "turnId": turn.id}
+        with pytest.raises(TurnLocked):
+            async with manager.write_guard("p1"):
+                pass
+        await turn.task
+        assert await manager.status("p1") == {"active": False, "turnId": None}
+
+    asyncio.run(run())

@@ -110,6 +110,7 @@
 | PUT | `/projects/:id/file` | `PUT /internal/projects/{id}/file` |
 | POST | `/projects/:id/chat` | `POST /internal/projects/{id}/chat` |
 | POST | `/projects/:id/chat/stop` | `POST /internal/projects/{id}/chat/stop` |
+| GET | `/projects/:id/chat/status` | `GET /internal/projects/{id}/chat/status` |
 | GET | `/projects/:id/preview/*` | `GET /internal/projects/{id}/preview/*` |
 
 DP 不注册项目列表 / 创建 / 详情，也不注册任何 admin 路由。CP 不注册任何 `/dp/*` 路由。
@@ -199,6 +200,8 @@ data/workspaces/<projectId>/
 - SSE 分帧是纯函数，必须有 vitest。
 - 颜色仅黑 / 白 / 灰 / 蓝。
 - 预览 iframe 不给 `allow-top-navigation`；生产使用独立 origin。
+- Agent 运行中 sandbox 拒绝手动文件写入（HTTP 423），前端编辑入口提示等待完成；状态以 sandbox `/chat/status` 为准，不能只看本地 SSE。
+- 项目资料元数据存 MySQL `project_resource`，资源文件在工作区 `.resources/`，S3 保留 staging 和最终副本；`.resources` 不进入文件树、普通文件 API、预览或 git。
 - 前端不缓存权威代码；打开文件从 sandbox 读取。
 - web / ops-web 不引入 OpenTelemetry、Prometheus 或日志 SDK。
 
@@ -221,6 +224,7 @@ data/workspaces/<projectId>/
 | `VITE_CP_BASE` | web | 默认 `/cp/api/v1` |
 | `VITE_DP_BASE` | web | 默认 `/dp/api/v1` |
 | `VITE_OPS_API_BASE` | ops-web | 默认 `/cp/api/v1/admin` |
+| `VITE_DEMO_LOGIN` | web / ops-web | 默认 `true`，预填本地测试账号；生产设 `false` |
 | `LOG_LEVEL` | CP / DP / sandbox | 默认 `info` |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | CP / DP / sandbox | 空 = 关闭 trace 导出 |
 | `OTEL_EXPORTER_OTLP_PROTOCOL` | CP / DP / sandbox | 默认 `http/protobuf` |
@@ -273,10 +277,10 @@ data/workspaces/<projectId>/
 ## 12. 部署规则
 
 - 五个服务：`sandbox` / `cp` / `dp` / `web` / `ops-web`。
-- `cp` / `dp` 共用 `packages/backend` 构建上下文，通过 `build.args.SERVICE=cp|dp` 选择入口。
+- 默认 compose 使用 `packages/backend` 的 `combined` target，一个容器内同时运行 `cp` / `dp`；Dockerfile 保留 `cp` / `dp` target 供后续多镜像多容器部署。
 - 所有服务提供 `/health`；CP / DP / sandbox 提供 `/metrics`。
-- web 容器 nginx 反代 `/cp/` → `cp:8080`、`/dp/` → `dp:8081`，SSE 关闭 buffering。
-- ops-web 容器 nginx 只反代 `/cp/` → `cp:8080`。
+- web 容器 nginx 反代 `/cp/` → `backend:8080`、`/dp/` → `backend:8081`，SSE 关闭 buffering。
+- ops-web 容器 nginx 只反代 `/cp/` → `backend:8080`。
 - sandbox 使用非 root 用户，工作区挂载卷。
-- 当前不做 K8s / CI/CD；M5 再评估。
-- 多类型 sandbox、项目独占租约、RWX 共享工作区、DP/SSE 扩容的目标态见 `.ai/rules/sandbox-architecture.md`。
+- Helm charts 位于 `deployment/helm`；当前未在真实 K8s 集群验证，CI/CD 仍未接入。
+- Helm 中 sandbox 使用 RWX workspace；多类型 sandbox、项目独占租约、DP/SSE 扩容的目标态见 `.ai/rules/sandbox-architecture.md`。

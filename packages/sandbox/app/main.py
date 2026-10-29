@@ -10,11 +10,12 @@ from app.config import Settings, load_settings
 from app.errors import WorkspaceError
 from app.observability import configure_observability
 from app.response import envelope
-from app.routers import chat, files, preview, projects
+from app.routers import chat, files, preview, projects, resources, skills
 from app.services.agent import build_agent
 from app.services.chat_history import ChatHistory
 from app.services.chat_turns import ChatTurnManager
 from app.services.registry import ActiveRequestCounter, ActiveRequestsMiddleware, run_heartbeat
+from app.services.resources import ResourceStore
 from app.services.versioning import Versioning
 from app.services.workspace import Workspace
 
@@ -48,6 +49,7 @@ def create_app(
     app.state.chat_history = ChatHistory(
         app.state.workspace, max_bytes=settings.chat_history_max_bytes
     )
+    app.state.resources = ResourceStore(app.state.workspace)
     app.state.chat_turns = ChatTurnManager(
         app.state.agent,
         app.state.chat_history,
@@ -60,6 +62,8 @@ def create_app(
     app.include_router(projects.router)
     app.include_router(files.router)
     app.include_router(chat.router)
+    app.include_router(skills.router)
+    app.include_router(resources.router)
     app.include_router(preview.router)
 
     configure_observability(app, tracer_provider)

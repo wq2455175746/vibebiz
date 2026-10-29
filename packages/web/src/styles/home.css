@@ -635,6 +635,50 @@
   color: var(--muted);
 }
 
+.composer-file-input {
+  display: none;
+}
+
+.composer-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.composer-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 4px 7px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 11px;
+}
+
+.composer-file span {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-file button {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.composer-file-error {
+  margin: 0;
+}
+
 .composer-bar {
   display: flex;
   align-items: center;
@@ -941,6 +985,16 @@
   width: 100%;
 }
 
+.login-demo {
+  margin: 0;
+  padding: 8px 10px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .login-error {
   margin: 0;
   padding: 9px 12px;
@@ -953,4 +1007,77 @@
 
 .login-submit {
   width: 100%;
+}
+
+.hero-composer {
+  position: relative;
+}
+
+.composer-target {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--blue-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.composer-target button {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.composer-hint {
+  margin-right: auto;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.project-search {
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  color: var(--text);
+  outline: none;
+}
+
+.project-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.project-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.project-option span {
+  color: var(--muted);
+  font-size: 11px;
 }

@@ -1,7 +1,14 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
-import { fetchChatHistory, stopChat, streamChat, type StreamEvent } from '@/api/chat'
+import {
+  fetchChatHistory,
+  fetchChatStatus,
+  stopChat,
+  streamChat,
+  type ChatReferenceInput,
+  type StreamEvent,
+} from '@/api/chat'
 import { useLogStore } from '@/stores/logs'
 import { buildMockChatSteps } from '@/utils/editorMock'
 import type { ChatMessage } from '@/types'
@@ -69,6 +76,8 @@ function nextId() {
 export const useChatStore = defineStore('chat', () => {
   const messages = ref<ChatMessage[]>([])
   const streaming = ref(false)
+  const agentRunning = ref(false)
+  const busy = computed(() => streaming.value || agentRunning.value)
   const revision = ref(0)
   let controller: AbortController | null = null
   let mockRun = 0
@@ -92,8 +101,15 @@ export const useChatStore = defineStore('chat', () => {
 
   function reset() {
     disconnect()
+    agentRunning.value = false
     revision.value = 0
     messages.value = [systemMessage()]
+  }
+
+  async function syncStatus(projectId: string): Promise<boolean> {
+    const status = await fetchChatStatus(projectId)
+    agentRunning.value = status.active
+    return status.active
   }
 
   async function loadHistory(projectId: string): Promise<boolean> {
@@ -112,6 +128,7 @@ export const useChatStore = defineStore('chat', () => {
           name: tool.name,
           status: tool.status,
         })),
+        references: message.references ?? [],
         pending: false,
       })),
     ]
@@ -179,8 +196,8 @@ export const useChatStore = defineStore('chat', () => {
     })
   }
 
-  async function send(projectId: string, text: string) {
-    if (streaming.value) {
+  async function send(projectId: string, text: string, references: ChatReferenceInput[] = []) {
+    if (streaming.value || agentRunning.value) {
       return
     }
     const logs = useLogStore()
@@ -189,6 +206,14 @@ export const useChatStore = defineStore('chat', () => {
       role: 'user',
       text,
       tools: [],
+      references: references.map((item) => ({
+        kind: item.kind,
+        id: item.id,
+        name: item.name ?? item.id ?? item.path ?? '',
+        path: item.path ?? '',
+        contentType: item.contentType,
+        resourceKind: item.resourceKind,
+      })),
       pending: false,
     })
     messages.value.push({
@@ -201,11 +226,12 @@ export const useChatStore = defineStore('chat', () => {
 
     const assistant = messages.value[messages.value.length - 1]
     streaming.value = true
+    agentRunning.value = true
     controller = new AbortController()
     logs.append({ level: 'info', source: 'agent', message: 'Agent 开始执行' })
 
     try {
-      for await (const event of streamChat(projectId, text, controller.signal)) {
+      for await (const event of streamChat(projectId, text, controller.signal, references)) {
         applyEvent(assistant, event, logs)
       }
     } catch (error) {
@@ -218,6 +244,7 @@ export const useChatStore = defineStore('chat', () => {
     } finally {
       assistant.pending = false
       streaming.value = false
+      agentRunning.value = false
       revision.value += 1
       controller = null
     }
@@ -302,15 +329,22 @@ export const useChatStore = defineStore('chat', () => {
     revision.value += 1
   }
 
-  function stop(projectId: string) {
+  async function stop(projectId: string) {
     disconnect()
-    void stopChat(projectId).catch(() => undefined)
+    try {
+      await stopChat(projectId)
+    } finally {
+      await syncStatus(projectId).catch(() => undefined)
+    }
   }
 
   return {
     messages,
     streaming,
+    agentRunning,
+    busy,
     revision,
+    syncStatus,
     reset,
     loadHistory,
     send,

@@ -7,13 +7,15 @@ import Password from 'primevue/password'
 
 import { ApiError } from '@/api/client'
 import { useOpsAuthStore } from '@/stores/auth'
+import { demoLoginEnabled, loginDefaults } from '@/utils/demoLogin'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useOpsAuthStore()
 
-const identifier = ref('')
-const password = ref('')
+const defaults = loginDefaults(demoLoginEnabled)
+const identifier = ref(defaults.identifier)
+const password = ref(defaults.password)
 const error = ref('')
 
 const redirect = computed(() => {
@@ -58,6 +60,8 @@ async function submit(): Promise<void> {
       </div>
 
       <form class="login-form" @submit.prevent="submit">
+        <p v-if="demoLoginEnabled" class="login-demo">测试账号已填入，点击登录即可。</p>
+
         <label class="login-field">
           <span>账号或邮箱</span>
           <InputText
@@ -196,6 +200,16 @@ async function submit(): Promise<void> {
 .login-field :deep(.p-password input:enabled:focus) {
   border-color: var(--blue);
   box-shadow: 0 0 0 2px var(--blue-soft);
+}
+
+.login-demo {
+  margin: 0;
+  padding: 9px 11px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .login-error {

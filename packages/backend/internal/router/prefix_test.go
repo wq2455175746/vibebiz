@@ -14,6 +14,7 @@ func TestControlDoesNotServeDataOrUnprefixedRoutes(t *testing.T) {
 		"/dp/api/v1/projects",
 		"/api/v1/projects",
 		"/cp/api/v1/projects/p1/files",
+		"/cp/api/v1/projects/p1/skills",
 		"/cp/api/v1/projects/p1/preview/index.html",
 	} {
 		rec := serveWithAuth(e, http.MethodGet, target, authState.userCookie)

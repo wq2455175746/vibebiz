@@ -75,6 +75,7 @@ PACKAGES = {
         "required_files": [
             "go.mod",
             "Dockerfile",
+            "docker-entrypoint.sh",
             "Makefile",
             ".env.example",
             ".dockerignore",
@@ -368,7 +369,9 @@ def validate_contracts() -> None:
             "test-ops-web:",
         ],
     )
-    require_contains("docker-compose.yml", ["sandbox:", "cp:", "dp:", "web:", "ops-web:", "SERVICE: cp", "SERVICE: dp"])
+    require_contains("docker-compose.yml", ["sandbox:", "backend:", "web:", "ops-web:", "target: combined"])
+    require_contains("packages/backend/Dockerfile", ["AS cp", "AS dp", "AS combined", "docker-entrypoint.sh"])
+    require_contains("packages/backend/docker-entrypoint.sh", ["CP_PORT", "DP_PORT", "/app/cp", "/app/dp"])
     require_contains(
         "scripts/dev.sh",
         ["packages/backend", "packages/sandbox", "packages/web", "packages/ops-web", ".env.example", "source ./.env"],

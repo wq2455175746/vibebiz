@@ -55,6 +55,10 @@ const folderError = ref('')
 
 const rootFolders = computed(() => folders.value.filter((folder) => folder.parentId === 0))
 
+function openProject(id: string) {
+  void router.push({ name: 'editor', params: { id } })
+}
+
 async function loadFolders() {
   try {
     folders.value = await listFolders()
@@ -270,6 +274,7 @@ const navigation = [
           :key="project.id"
           class="sidebar-recent"
           type="button"
+          @click="openProject(project.id)"
         >
           {{ project.name }}
         </button>

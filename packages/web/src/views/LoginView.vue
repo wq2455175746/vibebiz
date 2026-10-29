@@ -6,6 +6,7 @@ import InputText from 'primevue/inputtext'
 import Password from 'primevue/password'
 
 import { sanitizeRedirect } from '@/router/redirect'
+import { demoLoginEnabled, loginDefaults } from '@/utils/demoLogin'
 import { useAuthStore } from '@/stores/auth'
 import '@/styles/home.css'
 
@@ -13,8 +14,9 @@ const auth = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 
-const identifier = ref('')
-const password = ref('')
+const defaults = loginDefaults(demoLoginEnabled)
+const identifier = ref(defaults.identifier)
+const password = ref(defaults.password)
 const error = ref('')
 const submitting = ref(false)
 
@@ -47,6 +49,7 @@ async function submit() {
       <div class="login-head">
         <h1 class="login-title">登录</h1>
         <p class="login-subtitle">使用用户名或邮箱继续</p>
+        <p v-if="demoLoginEnabled" class="login-demo">测试账号已填入，点击登录即可。</p>
       </div>
 
       <div class="login-field">

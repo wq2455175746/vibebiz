@@ -123,3 +123,90 @@ func TestHeadObjectMissing(t *testing.T) {
 		t.Fatal("head missing err = nil")
 	}
 }
+
+func TestCopyObject(t *testing.T) {
+	var method, path, copySource, contentType string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		method = r.Method
+		path = r.URL.Path
+		copySource = r.Header.Get("X-Amz-Copy-Source")
+		contentType = r.Header.Get("Content-Type")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`<CopyObjectResult><ETag>"etag"</ETag></CopyObjectResult>`))
+	}))
+	defer srv.Close()
+
+	p := newTestPresigner(t, srv.URL)
+	if err := p.Copy(context.Background(), "staging/a.pdf", "resources/p/a.pdf", "application/pdf"); err != nil {
+		t.Fatalf("copy: %v", err)
+	}
+	if method != http.MethodPut || path != "/vibebiz/resources/p/a.pdf" {
+		t.Fatalf("request = %s %s", method, path)
+	}
+	if copySource != "vibebiz/staging/a.pdf" || contentType != "application/pdf" {
+		t.Fatalf("headers = %q/%q", copySource, contentType)
+	}
+}
+
+func TestGetAndDeleteObject(t *testing.T) {
+	var getPath, deletePath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			getPath = r.URL.Path
+			w.Header().Set("Content-Length", "5")
+			_, _ = w.Write([]byte("hello"))
+		case http.MethodDelete:
+			deletePath = r.URL.Path
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
+	}))
+	defer srv.Close()
+
+	p := newTestPresigner(t, srv.URL)
+	body, size, err := p.Get(context.Background(), "resources/p/a.pdf")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	data, err := io.ReadAll(body)
+	_ = body.Close()
+	if err != nil || string(data) != "hello" || size != 5 {
+		t.Fatalf("get = %q/%d/%v", data, size, err)
+	}
+	if err := p.Delete(context.Background(), "resources/p/a.pdf"); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	if getPath != "/vibebiz/resources/p/a.pdf" || deletePath != "/vibebiz/resources/p/a.pdf" {
+		t.Fatalf("paths = %q/%q", getPath, deletePath)
+	}
+}
+
+func TestRemoteDirPrefixAppliesToObjectKeys(t *testing.T) {
+	var path string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	p, err := NewPresigner(context.Background(), Config{
+		Bucket:          "vibebiz",
+		Region:          "us-east-1",
+		Endpoint:        srv.URL,
+		AccessKey:       "test-access",
+		SecretKey:       "test-secret",
+		RemoteDirPrefix: "/tmp/vibebiz/",
+		ForcePathStyle:  true,
+	})
+	if err != nil {
+		t.Fatalf("new presigner: %v", err)
+	}
+	if err := p.Put(context.Background(), "avatar/7/a.png", "image/png", 1, strings.NewReader("x")); err != nil {
+		t.Fatalf("put: %v", err)
+	}
+	if path != "/vibebiz/tmp/vibebiz/avatar/7/a.png" {
+		t.Fatalf("path = %q", path)
+	}
+}

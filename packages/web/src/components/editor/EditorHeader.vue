@@ -4,13 +4,11 @@ import Button from 'primevue/button'
 defineProps<{
   projectName: string
   projectState: string
-  consoleOpen: boolean
   modelLabel: string
 }>()
 
 const emit = defineEmits<{
   (event: 'back'): void
-  (event: 'toggle-console'): void
 }>()
 </script>
 
@@ -24,15 +22,6 @@ const emit = defineEmits<{
 
     <div class="editor-meta">
       <span class="model-chip"><i class="pi pi-sparkles" /> {{ modelLabel }}</span>
-      <button
-        class="console-toggle"
-        type="button"
-        :class="{ active: consoleOpen }"
-        @click="emit('toggle-console')"
-      >
-        <i class="pi pi-desktop" />
-        控制台
-      </button>
     </div>
 
     <div class="editor-actions">

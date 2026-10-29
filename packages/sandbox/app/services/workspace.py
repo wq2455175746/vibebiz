@@ -11,6 +11,7 @@ IGNORED_PARTS = {
     ".git",
     ".agent",
     ".chathistory",
+    ".resources",
     "node_modules",
     "__pycache__",
     ".venv",

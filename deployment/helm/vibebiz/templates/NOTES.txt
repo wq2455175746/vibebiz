@@ -1,0 +1,11 @@
+Vibebiz installed.
+
+Web ingress enabled: {{ .Values.web.ingress.enabled }}
+Ops ingress enabled: {{ index .Values "ops-web" "ingress" "enabled" }}
+
+Required Secrets:
+  {{ .Values.backend.existingSecret }} in namespace {{ .Release.Namespace }}
+  {{ .Values.sandbox.existingSecret }} in namespace {{ .Release.Namespace }}
+
+Sandbox requires a ReadWriteMany workspace volume. Set sandbox.persistence.storageClassName
+or sandbox.persistence.existingClaim before installing.

@@ -12,7 +12,7 @@ services:
       SANDBOX_NAME: sandbox
       SANDBOX_ADVERTISE_HOST: sandbox
       SANDBOX_ADVERTISE_PORT: 8000
-      CP_REGISTRY_URL: http://cp:8080/cp/api/v1/internal/sandboxes/heartbeat
+      CP_REGISTRY_URL: http://backend:8080/cp/api/v1/internal/sandboxes/heartbeat
       SANDBOX_REGISTRY_TOKEN: ${SANDBOX_REGISTRY_TOKEN:-change-me}
       SANDBOX_HEARTBEAT_INTERVAL: ${SANDBOX_HEARTBEAT_INTERVAL:-5s}
       AGENT_MODE: ${AGENT_MODE:-stub}
@@ -31,21 +31,20 @@ services:
       - "127.0.0.1:8000:8000"
     restart: unless-stopped
 
-  cp:
+  backend:
     build:
       context: ./packages/backend
-      args:
-        SERVICE: cp
-    image: vibebiz/cp:local
+      target: combined
+    image: vibebiz/backend:local
     env_file:
       - ./packages/backend/.env
     environment:
       HOST: 0.0.0.0
-      PORT: 8080
+      CP_PORT: 8080
+      DP_PORT: 8081
       SANDBOX_REGISTRY_TOKEN: ${SANDBOX_REGISTRY_TOKEN:-change-me}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://vibebiz-dev.com:5173,http://vibebiz-dev-ops.com:5174}
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      OTEL_SERVICE_NAME: vibebiz-cp
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       OTEL_EXPORTER_OTLP_PROTOCOL: ${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}
       OTEL_RESOURCE_ATTRIBUTES: ${OTEL_RESOURCE_ATTRIBUTES:-deployment.environment=local,service.namespace=vibebiz}
@@ -54,39 +53,20 @@ services:
       - sandbox
     ports:
       - "127.0.0.1:8080:8080"
-    restart: unless-stopped
-
-  dp:
-    build:
-      context: ./packages/backend
-      args:
-        SERVICE: dp
-    image: vibebiz/dp:local
-    env_file:
-      - ./packages/backend/.env
-    environment:
-      HOST: 0.0.0.0
-      PORT: 8081
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://vibebiz-dev.com:5173,http://vibebiz-dev-ops.com:5174}
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      OTEL_SERVICE_NAME: vibebiz-dp
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
-      OTEL_EXPORTER_OTLP_PROTOCOL: ${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}
-      OTEL_RESOURCE_ATTRIBUTES: ${OTEL_RESOURCE_ATTRIBUTES:-deployment.environment=local,service.namespace=vibebiz}
-      OTEL_TRACES_SAMPLER: ${OTEL_TRACES_SAMPLER:-parentbased_always_on}
-    depends_on:
-      - sandbox
-    ports:
       - "127.0.0.1:8081:8081"
     restart: unless-stopped
 
   web:
     build:
       context: ./packages/web
+      args:
+        VITE_CP_BASE: ${VITE_CP_BASE:-/cp/api/v1}
+        VITE_DP_BASE: ${VITE_DP_BASE:-/dp/api/v1}
+        VITE_DEMO_LOGIN: ${VITE_DEMO_LOGIN:-true}
     image: vibebiz/web:local
     depends_on:
-      - cp
-      - dp
+      backend:
+        condition: service_healthy
     ports:
       - "127.0.0.1:5173:80"
     restart: unless-stopped
@@ -94,9 +74,13 @@ services:
   ops-web:
     build:
       context: ./packages/ops-web
+      args:
+        VITE_OPS_API_BASE: ${VITE_OPS_API_BASE:-/cp/api/v1/admin}
+        VITE_DEMO_LOGIN: ${VITE_DEMO_LOGIN:-true}
     image: vibebiz/ops-web:local
     depends_on:
-      - cp
+      backend:
+        condition: service_healthy
     ports:
       - "127.0.0.1:5174:80"
     restart: unless-stopped

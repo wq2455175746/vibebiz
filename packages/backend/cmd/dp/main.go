@@ -16,8 +16,11 @@ import (
 	"vibebiz/internal/client"
 	"vibebiz/internal/config"
 	"vibebiz/internal/dao"
+	"vibebiz/internal/handler"
 	"vibebiz/internal/observability"
+	"vibebiz/internal/resource"
 	"vibebiz/internal/router"
+	storages3 "vibebiz/internal/s3"
 	"vibebiz/internal/sandboxregistry"
 	"vibebiz/internal/server"
 )
@@ -81,8 +84,29 @@ func main() {
 	resolver := sandboxregistry.NewResolver(registryRepo, selector, cfg.SandboxHeartbeatTTL, time.Now)
 	sandbox := client.NewRouter(resolver, obs)
 
+	var resourceS3 resource.S3
+	if cfg.S3Bucket != "" {
+		presigner, err := storages3.NewPresigner(ctx, storages3.Config{
+			Bucket:          cfg.S3Bucket,
+			Region:          cfg.S3Region,
+			Endpoint:        cfg.S3Endpoint,
+			AccessKey:       cfg.S3AccessKey,
+			SecretKey:       cfg.S3SecretKey,
+			RemoteDirPrefix: cfg.S3RemoteDirPrefix,
+			ForcePathStyle:  cfg.S3ForcePathStyle,
+		})
+		if err != nil {
+			obs.Logger.Error("s3 presigner init failed", "error", err)
+		} else {
+			resourceS3 = presigner
+		}
+	}
+	resourceService := resource.NewService(dao.NewProjectResourceRepository(db), resourceS3, sandbox)
+	resourceService.Expiry = cfg.S3PresignExpiry()
+	resourceHandler := handler.NewResourceHandler(resourceService, obs)
+
 	e := server.New(cfg, obs)
-	router.RegisterData(e, sandbox, obs, authn, metas)
+	router.RegisterData(e, sandbox, obs, authn, metas, resourceHandler)
 
 	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
 	go func() {

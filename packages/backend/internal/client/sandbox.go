@@ -18,6 +18,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"vibebiz/internal/observability"
+	"vibebiz/internal/resource"
 )
 
 type APIError struct {
@@ -64,6 +65,17 @@ type ChatHistoryTail struct {
 	Content   string `json:"content"`
 	Truncated bool   `json:"truncated"`
 	Version   string `json:"version"`
+}
+
+type ChatStatus struct {
+	Active bool   `json:"active"`
+	TurnID string `json:"turnId"`
+}
+
+type SkillInfo struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Source      string `json:"source"`
 }
 
 type Sandbox struct {
@@ -136,6 +148,58 @@ func (s *Sandbox) WriteFile(ctx context.Context, id, path, content, baseVersion 
 	return &result, nil
 }
 
+func (s *Sandbox) WriteResource(ctx context.Context, projectID string, meta resource.ResourceMeta, body io.Reader, size int64) (err error) {
+	start := time.Now()
+	ctx, span := s.startSpan(ctx, "write_resource", projectID)
+	status := 0
+	defer func() {
+		s.finishSpan(ctx, span, "write_resource", projectID, status, start, err)
+	}()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut,
+		s.baseURL+"/internal/projects/"+url.PathEscape(projectID)+"/resources/"+url.PathEscape(meta.ID), body)
+	if err != nil {
+		return err
+	}
+	req.ContentLength = size
+	req.Header.Set("Content-Type", "application/octet-stream")
+	req.Header.Set("X-Resource-Id", meta.ID)
+	req.Header.Set("X-Resource-Name", url.QueryEscape(meta.DisplayName))
+	req.Header.Set("X-Resource-Display-Name", url.QueryEscape(meta.DisplayName))
+	req.Header.Set("X-Resource-Storage-Name", meta.StorageName)
+	req.Header.Set("X-Resource-Content-Type", meta.ContentType)
+	req.Header.Set("X-Resource-S3-Key", meta.S3Key)
+	req.Header.Set("X-Resource-Size", strconv.FormatInt(size, 10))
+	req.Header.Set("X-Resource-Kind", meta.Kind)
+
+	resp, err := s.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	status = resp.StatusCode
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode >= http.StatusBadRequest {
+		var env envelope
+		_ = json.Unmarshal(raw, &env)
+		message := env.Message
+		if message == "" {
+			message = strings.TrimSpace(string(raw))
+		}
+		return &APIError{Status: resp.StatusCode, Code: env.Code, Message: message}
+	}
+	return nil
+}
+
+func (s *Sandbox) DeleteResource(ctx context.Context, projectID, resourceID string) error {
+	_, err := s.doJSON(ctx, "delete_resource", projectID, http.MethodDelete,
+		"/internal/projects/"+url.PathEscape(projectID)+"/resources/"+url.PathEscape(resourceID), nil)
+	return err
+}
+
 func (s *Sandbox) ProjectStats(ctx context.Context, id string) (ProjectStats, error) {
 	raw, err := s.doJSON(ctx, "project_stats", id, http.MethodGet, "/internal/projects/"+url.PathEscape(id)+"/stats", nil)
 	if err != nil {
@@ -165,6 +229,32 @@ func (s *Sandbox) ReadChatHistory(ctx context.Context, id string, limit int) (Ch
 func (s *Sandbox) StopChat(ctx context.Context, id string) error {
 	_, err := s.doJSON(ctx, "stop_chat", id, http.MethodPost, "/internal/projects/"+url.PathEscape(id)+"/chat/stop", map[string]string{})
 	return err
+}
+
+func (s *Sandbox) ChatStatus(ctx context.Context, id string) (ChatStatus, error) {
+	raw, err := s.doJSON(ctx, "chat_status", id, http.MethodGet, "/internal/projects/"+url.PathEscape(id)+"/chat/status", nil)
+	if err != nil {
+		return ChatStatus{}, err
+	}
+	var status ChatStatus
+	if err := json.Unmarshal(raw, &status); err != nil {
+		return ChatStatus{}, err
+	}
+	return status, nil
+}
+
+func (s *Sandbox) ListSkills(ctx context.Context, id string) ([]SkillInfo, error) {
+	raw, err := s.doJSON(ctx, "list_skills", id, http.MethodGet, "/internal/projects/"+url.PathEscape(id)+"/skills", nil)
+	if err != nil {
+		return nil, err
+	}
+	var payload struct {
+		Skills []SkillInfo `json:"skills"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, err
+	}
+	return payload.Skills, nil
 }
 
 func (s *Sandbox) Chat(ctx context.Context, id string, payload []byte) (out io.ReadCloser, err error) {

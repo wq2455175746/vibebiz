@@ -1,0 +1,87 @@
+mode: combined
+
+replicaCount: 1
+cpReplicaCount: 1
+dpReplicaCount: 1
+
+image:
+  repository: vibebiz/backend
+  tag: local
+  pullPolicy: IfNotPresent
+
+splitImages:
+  cp:
+    repository: vibebiz/cp
+    tag: local
+    pullPolicy: IfNotPresent
+  dp:
+    repository: vibebiz/dp
+    tag: local
+    pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+fullnameOverride: ""
+service:
+  name: backend
+  type: ClusterIP
+  cpPort: 8080
+  cpTargetPort: cp
+  dpPort: 8081
+  dpTargetPort: dp
+
+dpService:
+  name: backend-dp
+
+config:
+  host: 0.0.0.0
+  corsOrigins: "http://vibebiz.example.com,http://ops.vibebiz.example.com"
+  debug: "false"
+  mysqlHost: mysql:3306
+  mysqlDatabase: vibebiz
+  mysqlMaxOpenConns: "20"
+  mysqlMaxIdleConns: "10"
+  redisHost: redis:6379
+  redisDB: "0"
+  sandboxHeartbeatTTL: 15s
+  sandboxHealthInterval: 10s
+  sandboxHealthTimeout: 2s
+  asynqRedisDB: "1"
+  asynqConcurrency: "4"
+  cookieSecure: "true"
+  sessionUserTTL: 168h
+  sessionOpsTTL: 12h
+  s3Bucket: vibebiz
+  s3Region: default
+  s3Endpoint: ""
+  s3ForcePathStyle: "true"
+  s3PresignExpiryMinutes: "15"
+  otelExporterOtlpEndpoint: ""
+  otelExporterOtlpProtocol: http/protobuf
+  otelResourceAttributes: "deployment.environment=k8s,service.namespace=vibebiz"
+  otelTracesSampler: parentbased_always_on
+  otelTracesSamplerArg: ""
+
+existingSecret: vibebiz-backend
+
+podAnnotations: {}
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

@@ -29,3 +29,7 @@ packages/backend/coverage.out
 /docs/homepage.png
 /docs/editorpage.png
 /docs/designpic/
+
+deployment/helm/vibebiz/charts/
+deployment/helm/vibebiz/Chart.lock
+deployment/helm/vibebiz/tmpcharts/

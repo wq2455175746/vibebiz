@@ -14,6 +14,7 @@ export const useFileStore = defineStore('files', () => {
   const saving = ref(false)
   const conflict = ref(false)
   const error = ref('')
+  const revision = ref(0)
 
   const dirty = computed(() => active.value !== null && draft.value !== active.value.content)
 
@@ -39,9 +40,9 @@ export const useFileStore = defineStore('files', () => {
     }
   }
 
-  async function save(projectId: string) {
+  async function save(projectId: string): Promise<boolean> {
     if (!active.value || !activePath.value || saving.value) {
-      return
+      return false
     }
     saving.value = true
     error.value = ''
@@ -55,12 +56,17 @@ export const useFileStore = defineStore('files', () => {
         mtime: result.mtime,
       }
       conflict.value = false
+      revision.value += 1
+      return true
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         conflict.value = true
+      } else if (err instanceof ApiError && err.status === 423) {
+        error.value = 'Agent 正在开发，请等待完成后再编辑'
       } else {
         error.value = (err as Error).message
       }
+      return false
     } finally {
       saving.value = false
     }
@@ -68,6 +74,12 @@ export const useFileStore = defineStore('files', () => {
 
   function setDraft(value: string) {
     draft.value = value
+  }
+
+  function discard() {
+    draft.value = active.value?.content ?? ''
+    conflict.value = false
+    error.value = ''
   }
 
   async function reload(projectId: string) {
@@ -85,11 +97,13 @@ export const useFileStore = defineStore('files', () => {
     saving,
     conflict,
     error,
+    revision,
     dirty,
     loadTree,
     open,
     save,
     setDraft,
+    discard,
     reload,
   }
 })

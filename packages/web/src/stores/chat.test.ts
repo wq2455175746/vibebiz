@@ -1,18 +1,25 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { fetchChatHistory, streamChat, type StreamEvent } from '@/api/chat'
+import {
+  fetchChatHistory,
+  fetchChatStatus,
+  streamChat,
+  type StreamEvent,
+} from '@/api/chat'
 import { useChatStore } from './chat'
 import { useLogStore } from './logs'
 
 vi.mock('@/api/chat', () => ({
   streamChat: vi.fn(),
   fetchChatHistory: vi.fn(),
+  fetchChatStatus: vi.fn(),
   stopChat: vi.fn(),
 }))
 
 const streamMock = vi.mocked(streamChat)
 const historyMock = vi.mocked(fetchChatHistory)
+const statusMock = vi.mocked(fetchChatStatus)
 
 async function* events(items: StreamEvent[]): AsyncGenerator<StreamEvent> {
   for (const item of items) {
@@ -24,6 +31,7 @@ beforeEach(() => {
   setActivePinia(createPinia())
   streamMock.mockReset()
   historyMock.mockReset()
+  statusMock.mockReset()
 })
 
 describe('chat store real stream', () => {
@@ -216,6 +224,33 @@ describe('chat store history', () => {
     chat.reset()
 
     await expect(chat.loadHistory('p1')).resolves.toBe(false)
+    expect(chat.messages.map((message) => message.role)).toEqual(['system'])
+  })
+})
+
+
+describe('chat store agent status', () => {
+  it('tracks a server-side active turn as busy', async () => {
+    statusMock.mockResolvedValue({ active: true, turnId: 'turn-1' })
+
+    const chat = useChatStore()
+    chat.reset()
+
+    await expect(chat.syncStatus('p1')).resolves.toBe(true)
+    expect(chat.agentRunning).toBe(true)
+    expect(chat.busy).toBe(true)
+  })
+
+  it('does not send a second prompt while the server reports an active turn', async () => {
+    statusMock.mockResolvedValue({ active: true, turnId: 'turn-1' })
+
+    const chat = useChatStore()
+    chat.reset()
+    await chat.syncStatus('p1')
+
+    await chat.send('p1', 'second task')
+
+    expect(streamMock).not.toHaveBeenCalled()
     expect(chat.messages.map((message) => message.role)).toEqual(['system'])
   })
 })

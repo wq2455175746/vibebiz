@@ -1,0 +1,13 @@
+Backend deployed in {{ .Values.mode }} mode.
+
+CP service: {{ .Values.service.name }}:{{ .Values.service.cpPort }}
+DP service: {{ .Values.dpService.name }}:{{ .Values.service.dpPort }}
+
+Create the backend Secret before starting pods:
+  kubectl -n {{ .Release.Namespace }} create secret generic {{ .Values.existingSecret }} \
+    --from-literal=MYSQL_USERNAME=... \
+    --from-literal=MYSQL_PASSWORD=... \
+    --from-literal=REDIS_PASSWORD=... \
+    --from-literal=SANDBOX_REGISTRY_TOKEN=... \
+    --from-literal=S3_ACCESS_KEY=... \
+    --from-literal=S3_SECRET_KEY=...

@@ -1,0 +1,37 @@
+{{- include "backend.validate" . -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "backend.fullname" . }}
+  labels:
+    {{- include "backend.labels" . | nindent 4 }}
+data:
+  HOST: {{ .Values.config.host | quote }}
+  CP_PORT: {{ .Values.service.cpPort | quote }}
+  DP_PORT: {{ .Values.service.dpPort | quote }}
+  CORS_ORIGINS: {{ .Values.config.corsOrigins | quote }}
+  DEBUG: {{ .Values.config.debug | quote }}
+  MYSQL_HOST: {{ .Values.config.mysqlHost | quote }}
+  MYSQL_DATABASE: {{ .Values.config.mysqlDatabase | quote }}
+  MYSQL_MAX_OPEN_CONNS: {{ .Values.config.mysqlMaxOpenConns | quote }}
+  MYSQL_MAX_IDLE_CONNS: {{ .Values.config.mysqlMaxIdleConns | quote }}
+  REDIS_HOST: {{ .Values.config.redisHost | quote }}
+  REDIS_DB: {{ .Values.config.redisDB | quote }}
+  SANDBOX_HEARTBEAT_TTL: {{ .Values.config.sandboxHeartbeatTTL | quote }}
+  SANDBOX_HEALTH_INTERVAL: {{ .Values.config.sandboxHealthInterval | quote }}
+  SANDBOX_HEALTH_TIMEOUT: {{ .Values.config.sandboxHealthTimeout | quote }}
+  ASYNQ_REDIS_DB: {{ .Values.config.asynqRedisDB | quote }}
+  ASYNQ_CONCURRENCY: {{ .Values.config.asynqConcurrency | quote }}
+  COOKIE_SECURE: {{ .Values.config.cookieSecure | quote }}
+  SESSION_USER_TTL: {{ .Values.config.sessionUserTTL | quote }}
+  SESSION_OPS_TTL: {{ .Values.config.sessionOpsTTL | quote }}
+  S3_BUCKET: {{ .Values.config.s3Bucket | quote }}
+  S3_REGION: {{ .Values.config.s3Region | quote }}
+  S3_ENDPOINT: {{ .Values.config.s3Endpoint | quote }}
+  S3_FORCE_PATH_STYLE: {{ .Values.config.s3ForcePathStyle | quote }}
+  S3_PRESIGN_EXPIRY_MINUTES: {{ .Values.config.s3PresignExpiryMinutes | quote }}
+  OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.config.otelExporterOtlpEndpoint | quote }}
+  OTEL_EXPORTER_OTLP_PROTOCOL: {{ .Values.config.otelExporterOtlpProtocol | quote }}
+  OTEL_RESOURCE_ATTRIBUTES: {{ .Values.config.otelResourceAttributes | quote }}
+  OTEL_TRACES_SAMPLER: {{ .Values.config.otelTracesSampler | quote }}
+  OTEL_TRACES_SAMPLER_ARG: {{ .Values.config.otelTracesSamplerArg | quote }}

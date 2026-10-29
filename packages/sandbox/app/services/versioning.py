@@ -21,17 +21,22 @@ class Versioning:
         ignore = project_dir / ".gitignore"
         existing = ignore.read_text(encoding="utf-8") if ignore.exists() else ""
         lines = existing.splitlines()
-        if ".chathistory/" not in lines:
-            suffix = "" if not existing or existing.endswith("\n") else "\n"
-            ignore.write_text(existing + suffix + ".chathistory/\n", encoding="utf-8")
         if not existing:
             ignore.write_text(
-                ".agent/\nnode_modules/\n__pycache__/\n.chathistory/\n", encoding="utf-8"
+                ".agent/\nnode_modules/\n__pycache__/\n.chathistory/\n.resources/\n",
+                encoding="utf-8",
             )
+            return
+        for item in (".chathistory/", ".resources/"):
+            if item not in lines:
+                suffix = "" if existing.endswith("\n") else "\n"
+                existing += suffix + item + "\n"
+                ignore.write_text(existing, encoding="utf-8")
 
     def commit(self, project_dir: Path, message: str) -> str | None:
         if not self.git or not (project_dir / ".git").exists():
             return None
+        self._ensure_gitignore(project_dir)
         self._run(project_dir, "add", "-A")
         self._run(project_dir, "commit", "-q", "-m", message[:120], "--allow-empty")
         result = self._run(project_dir, "rev-parse", "--short", "HEAD")

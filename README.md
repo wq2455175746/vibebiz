@@ -1,222 +1,191 @@
-# vibebiz · AI Coding Platform Harness
+# Vibebiz · AI Coding Platform
 
-对话即开发平台的主流程复刻：用户输入一句话，Agent 在隔离工作区里生成 HTML 小应用 / 小游戏 / 网页，浏览器实时预览并可查看源码。
+用一句话描述需求，AI Agent 在隔离工作区中生成网页、小游戏或小应用；编辑器实时展示代码、预览与执行过程。
 
-当前仓库是 **harness（可运行骨架）**，不是最终功能全集。目标是把 CP / DP / sandbox / 两个前端的边界、通信契约、测试与部署骨架先固定下来，再按里程碑逐步填充业务。
+Vibebiz 是一个可运行的全栈 AI Coding Platform 原型，重点验证：
+
+- 对话驱动的代码生成与实时预览
+- 控制面 / 数据面 / 执行面的清晰拆分
+- 多用户、工作区、项目、会话与运营后台
+- MySQL 持久化、Redis 会话与多实例通知
+- sandbox 注册、健康检查与按压力调度
+- 本地可复现的测试、质量门禁与可观测性
+
+> 当前是可运行的产品原型，不是生产级 SaaS。生产部署前请阅读文末的「安全说明」与「当前限制」。
+
+## 功能特性
+
+- **AI 对话生成**：SSE 流式输出，支持生成中状态、停止生成、工具调用过程与聊天记录回看。
+- **代码与预览**：Monaco 代码视图、文件树、文件读写版本校验、iframe 实时预览。
+- **项目与工作区**：多工作区切换、项目归属隔离、文件夹、成员邀请、个人资料与头像。
+- **登录与会话**：web / ops-web 独立登录，HttpOnly Cookie + Redis Session。
+- **运营后台**：概览、用户、项目、沙箱、配额、审计、通知管理。
+- **数据持久化**：项目、用户、配额、审计、通知、sandbox 实例均落 MySQL。
+- **sandbox 注册中心**：心跳上报、asynq 健康复核、最低压力调度、项目粘性绑定与离线改绑。
+- **可观测性**：JSON 日志、OTLP Trace、Prometheus `/metrics`，`project_id` 贯穿调用链。
+- **质量门禁**：Go / Python / TypeScript 测试、lint、格式检查、分层依赖校验。
+- **Kubernetes**：`deployment/helm` 提供 backend / sandbox / web / ops-web 四个 chart 与 umbrella chart。
 
 ## 架构
 
-```
-                  ┌──────────────────────────────┐
-                  │ packages/web · Vue3 :5173    │
-                  │ 控制请求 /cp   数据请求 /dp   │
-                  └───────┬──────────────┬───────┘
-                          │              │
-           /cp/api/v1     │              │  /dp/api/v1
-                          ▼              ▼
-           ┌──────────────────┐   ┌──────────────────┐
-           │ CP · Go :8080    │   │ DP · Go :8081    │
-           │ 项目元数据        │   │ 文件树 / 读写     │
-           │ admin / 配额占位  │   │ SSE / 预览反代    │
-           │ 沙箱初始化编排    │   │ 无项目元数据      │
-           └────────┬─────────┘   └────────┬─────────┘
-                    │ init / orchestrate   │ files / chat / preview
-                    └──────────┬───────────┘
-                               ▼
-                  ┌──────────────────────────────┐
-                  │ packages/sandbox · Python    │
-                  │ 工作区 / Agent / 静态预览     │
-                  └──────────────────────────────┘
-
-                  ┌──────────────────────────────┐
-                  │ packages/ops-web · Vue3 :5174│
-                  │ 只访问 /cp/api/v1/admin/*    │
-                  └──────────────┬───────────────┘
-                                 ▼
-                            CP · :8080
-```
-
-- **控制面 CP**：项目创建 / 列表 / 详情、运营后台 API、sandbox 注册与健康检查；创建项目时按实例压力选择健康节点并调用初始化。
-- **数据面 DP**：文件树、文件读写、SSE 对话、预览反代；不持有项目元数据，也不承载 admin。
-- **单一真相源**：项目代码只存在于沙箱工作区；聊天、代码、预览都是它的投影。
-- **CP / DP 保持哑管道**：只做校验、转发、反代，不解析 Agent 消息。
-- **ops-web 只走 CP admin**：不访问 DP 或 sandbox；使用独立 admin 登录，生产必须接入 SSO + RBAC。
-
-## 目录
-
-```
-packages/
-  web/        Vue3 + Vite + TypeScript + PrimeVue + Pinia + Monaco
-  ops-web/    运营后台：Vue3 + Vite + TypeScript + PrimeVue + Pinia
-  backend/    Go + Echo：cmd/cp 控制面、cmd/dp 数据面、共享 internal/
-  sandbox/    Python + FastAPI：workspace、文件 API、agent、预览
-.ai/          AI harness：焦点、规则、记忆、失败记录、检查点
-docs/         规格、设计文档与实施计划
-templates/    Go / Python / TS / Vue / 文档模板
-scripts/      本地开发、校验、质量门禁、harness 自动维护脚本
+```text
+                       ┌─────────────────────────────────────┐
+                       │ web :5173        ops-web :5174       │
+                       │ 编辑器 / 聊天 / 预览   运营后台       │
+                       └──────────┬───────────────┬──────────┘
+                                  │               │
+                         /cp/api/v1│               │/cp/api/v1/admin
+                                  ▼               ▼
+                       ┌─────────────────────────────────────┐
+                       │ CP · Go :8080                       │
+                       │ 项目 / admin / 鉴权 / sandbox 注册   │
+                       └──────┬───────────────┬──────────────┘
+                              │               │
+                    /dp/api/v1│               │MySQL / Redis
+                              ▼               ▼
+                       ┌──────────────┐  ┌──────────────────┐
+                       │ DP · Go :8081│  │ MySQL 8          │
+                       │ 文件 / SSE   │  │ Redis            │
+                       │ 预览反代     │  └──────────────────┘
+                       └──────┬───────┘
+                              │ internal HTTP / SSE
+                              ▼
+              ┌──────────────────────────────────────────┐
+              │ sandbox · Python + FastAPI :8000         │
+              │ workspace / Agent / 文件 API / 静态预览   │
+              │ 无状态计算，工作区位于共享 NFS/RWX        │
+              └──────────────────────────────────────────┘
 ```
 
-依赖方向：`web → CP / DP`，`ops-web → CP`，`CP / DP → sandbox`。禁止 web / ops-web 直接访问 sandbox，禁止 ops-web 访问 DP。
+### 服务职责
 
-## 端口
+| 服务 | 职责 | 不负责 |
+|---|---|---|
+| CP | 项目元数据、登录与鉴权、运营后台、sandbox 注册与调度 | 文件字节、SSE、预览反代 |
+| DP | 文件树、文件读写、聊天 SSE、预览反代 | 项目列表、admin、项目创建 |
+| sandbox | 工作区、Agent 执行、文件 API、静态预览、并发上报 | 访问 CP/DP 内部实现或数据库 |
+| web | 首页、编辑器、聊天、预览、代码视图 | 直接访问 sandbox |
+| ops-web | 运营后台，只访问 CP admin API | 访问 DP 或 sandbox |
 
-| 服务 | dev | 容器 | 健康检查 | 业务前缀 |
-|---|---|---|---|---|
-| sandbox | 8000 | 8000 | `/health` | `/internal/*`（仅内网） |
-| cp | 8080 | 8080 | `/health` | `/cp/api/v1` |
-| dp | 8081 | 8081 | `/health` | `/dp/api/v1` |
-| web | 5173 | 80 | `/` | 代理 `/cp` `/dp` |
-| ops-web | 5174 | 80 | `/` | 代理 `/cp` |
+依赖方向固定为：
 
-`/health` 与 `/metrics` 不带业务前缀；业务 API 不使用无前缀的 `/api/v1`。
-
-## AI Harness (.ai)
-
-每次 AI 会话先读：
-
-```bash
-cat .ai/AGENTS.md
-cat .ai/CURRENT_FOCUS
-cat .ai/rules/architecture.md
-tail -20 .ai/traces/failures.log
-make validate
+```text
+web → CP / DP
+ops-web → CP
+CP / DP → sandbox
 ```
 
-任务结束：
+## 技术栈
 
-```bash
-make checkpoint      # 保存当前焦点快照
-make memory-add      # 记录可复用经验
-make harness-update  # 刷新焦点、归档检查点（保留最近 3 个）
-```
-
-| 文件 | 用途 |
-|---|---|
-| `.ai/CURRENT_FOCUS` | 当前任务与下一批任务 |
-| `.ai/TODO.md` | 待办 |
-| `.ai/rules/architecture.md` | 分层、契约、安全、可观测性、测试规则 |
-| `.ai/rules/{go,python,typescript}.md` | 三端语言级编码规范 |
-| `.ai/memory/` | lessons / anti-patterns / successful-patterns |
-| `.ai/traces/failures.log` | 失败与修复记录 |
-| `.ai/checkpoints/` | 任务检查点 |
-
-## 代码模板
-
-`templates/` 提供三端骨架与文档模板，统一 `{{ key }}` 占位符：
-
-```bash
-python3 scripts/generate_from_template.py \
-  templates/go-handler.go.j2 \
-  packages/backend/internal/handler/comment.go \
-  --var name=Comment --var method=ListComments --var description="list comments"
-```
-
-生成后按 `.ai/rules/{go,python,typescript}.md` 格式化并补测试；模板清单见 `templates/README.md`。
+- **前端**：Vue 3、Vite、TypeScript、Pinia、PrimeVue、Monaco Editor
+- **后端**：Go 1.24、Echo、GORM、MySQL 8、Redis、asynq、goose
+- **Sandbox**：Python 3.13、FastAPI、Uvicorn、Claude Agent SDK
+- **观测**：slog JSON、OpenTelemetry OTLP、Prometheus
+- **测试**：Go `testing` + `httptest` + `sqlmock`、pytest、vitest
 
 ## 快速开始
 
-要求：Go 1.24+、Node 20+、Python 3.13+、uv。
+### 环境要求
 
-本地开发使用固定域名，先配置 hosts（仅首次）：
+- Go 1.24+
+- Node.js 20+
+- Python 3.13+ 与 `uv`
+- MySQL 8
+- Redis 6+
+
+### 本地域名
+
+本地开发使用固定域名，首次运行前配置 hosts：
 
 ```text
 127.0.0.1 vibebiz-dev.com vibebiz-dev-ops.com
 ```
 
-登录与会话依赖 MySQL 8 + Redis：先执行 `make db-create && make db-migrate-up`，并确保 Redis 可连接。
+### 初始化
 
 ```bash
 make init
 make install
+```
+
+`make init` 会为各 package 生成 `.env`。按需修改：
+
+- `packages/backend/.env`：MySQL、Redis、S3、sandbox 注册 token
+- `packages/sandbox/.env`：工作区目录、Agent 模型、CP 注册地址
+- `packages/web/.env`、`packages/ops-web/.env`：前端 API 地址与演示登录开关
+
+所有 `.env` 均已被 `.gitignore` 忽略，不要提交真实密钥。
+
+### 初始化数据库
+
+```bash
+make db-create
+make db-migrate-up
+```
+
+当前迁移包含 10 个版本，覆盖身份/工作区、项目/资源、AI/聊天、种子数据、设置、文件夹、通知、项目持久化与 sandbox 注册。
+
+### 启动
+
+```bash
 make dev
 ```
 
-- Web: http://vibebiz-dev.com:5173
-- Ops Web: http://vibebiz-dev-ops.com:5174
-- CP health: http://vibebiz-dev.com:8080/health
-- DP health: http://vibebiz-dev.com:8081/health
-- Sandbox health: http://localhost:8000/health
+| 入口 | 地址 |
+|---|---|
+| Web | http://vibebiz-dev.com:5173 |
+| Ops Web | http://vibebiz-dev-ops.com:5174 |
+| CP health | http://vibebiz-dev.com:8080/health |
+| DP health | http://vibebiz-dev.com:8081/health |
+| Sandbox health | http://localhost:8000/health |
 
-每个 package 自带 `Makefile`、`.env.example` 和 `.dockerignore`；`make init` 生成各自的 `.env`，配置不集中在根目录，`.env` 不会进入镜像。
+也可以单独启动：
 
 ```bash
-make -C packages/backend dev-cp
-make -C packages/sandbox dev
-make -C packages/web dev
-make -C packages/ops-web dev
+make dev-sandbox
+make dev-cp
+make dev-dp
+make dev-web
+make dev-ops-web
 ```
 
-根目录仍保留单服务别名：`make dev-sandbox` / `make dev-cp` / `make dev-dp` / `make dev-web` / `make dev-ops-web`。
+## 默认测试账号
 
-`make dev` 通过 `scripts/dev.sh` 分别加载各 package 的 `.env`，启动五个进程；每个进程使用自己的 `OTEL_SERVICE_NAME`（`vibebiz-cp` / `vibebiz-dp` / `vibebiz-sandbox`）与 CORS 来源（`http://vibebiz-dev.com:5173` / `http://vibebiz-dev-ops.com:5174`）。
+仅用于本地演示与测试：
 
-## 登录与会话
+| 入口 | 账号 | 密码 |
+|---|---|---|
+| Web | `wanghg11` | `88888888` |
+| Web | `vistor` | `88888888` |
+| Ops Web | `admin` | `88888888` |
 
-- web 与 ops-web 都需要登录；登录分别使用 `/cp/api/v1/auth/login` 与 `/cp/api/v1/admin/auth/login`。
-- 身份保存在 HttpOnly Cookie，服务端 Session 存在 Redis；用户 Session TTL 7 天，ops Session 12 小时。前端不能读取 Session ID。
-- Cookie 不设置 Domain：web Cookie 属于 `vibebiz-dev.com`，ops Cookie 属于 `vibebiz-dev-ops.com`。
-- 登录与会话依赖 MySQL 8 + Redis；Redis 不可用时 fail closed 返回 503，不做内存降级。
-- 默认账号由 `packages/backend/migrations/00005_default_users.sql` seed；默认密码仅用于本地开发，不写入文档，生产必须重置或删除默认账号。
-- web 的项目按当前登录用户的工作区过滤；ops-web 的 admin 视角可见全部项目。
+- web 登录页默认填入 `wanghg11 / 88888888`
+- ops-web 登录页默认填入 `admin / 88888888`
+- 设置 `VITE_DEMO_LOGIN=false` 可关闭登录页预填
+- 生产环境必须删除默认账号或重置密码，并关闭演示登录
 
-## 设置页
-
-- 账户弹窗进入 `/settings/profile`，左侧包含个人信息、磁盘空间、工作区设置、成员。
-- 用户头像和工作区头像优先使用 S3 预签名 PUT；存储不支持浏览器 CORS 时自动回退到 CP 代理上传。读取使用预签名 GET。
-- 默认存储额度 10GB；磁盘统计来自 sandbox 项目目录扫描。
-- 首页左侧工作区下拉切换当前工作区；邀请成员后对方重新登录/刷新可看到共享工作区。
-- 首页左侧“文件夹”支持在当前工作区创建一级文件夹；文件夹是工作区下的逻辑目录节点，后续用于归档项目。
-- 编辑页采用两栏工作台：左侧任务对话，右侧“应用查看器 / 代码”与可展开执行日志；聊天走真实 DP SSE，日志暂由 SSE 派生，项目/文件/预览走真实 CP/DP API。
-
-## Sandbox Agent SDK
-
-- `AGENT_MODE=stub` 仍使用确定性 StubAgent；`AGENT_MODE=claude` 使用官方 `claude-agent-sdk`。
-- DeepSeek 直连：`ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic` + `ANTHROPIC_AUTH_TOKEN`，模型用 `deepseek-flash`。
-- Anthropic 官方：`ANTHROPIC_BASE_URL` 留空 + `ANTHROPIC_API_KEY`。
-- LiteLLM 仅用于没有 Anthropic 兼容端点的 OpenAI-only 模型；DeepSeek 不需要。
-- `ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN` 只放 sandbox/网关配置，不进入前端或项目目录。
-- `AGENT_SKILLS=all` 或逗号分隔技能名；`AGENT_PLUGINS` 为逗号分隔本地插件目录。
-- 切换真实模型前先启动 LiteLLM 网关并配置 DeepSeek key；未配置时保持 `AGENT_MODE=stub`。
-- `packages/sandbox/litellm.yaml` 仅作为 OpenAI-only 模型的备用适配配置，不是 DeepSeek 必需项。
-- 本地 sandbox 冒烟测试步骤见 `docs/sandbox-smoke-test.md`。
-
-## 数据库迁移
-
-MySQL schema 使用版本化 SQL + `goose` 管理；`AutoMigrate` 默认关闭。迁移 DSN 从 `packages/backend/.env` 的 `MYSQL_*` 读取。
+## 常用命令
 
 ```bash
-make db-create           # 创建 MYSQL_DATABASE（如不存在）
-make db-migrate-up       # 执行所有待执行迁移
-make db-migrate-status   # 查看版本状态
-make db-migrate-down     # 回滚一个迁移
-make db-migrate-version  # 当前版本
-make db-migrate-redo     # 回滚并重新执行一个迁移
+make dev            # 启动五个服务
+make test           # backend / sandbox / web / ops-web 全量测试
+make quality        # Go / Python / TS / Vue 质量门禁
+make validate       # 结构、契约、分层依赖、质量静态校验
+make build          # 构建后端二进制与两个前端
+make docker-build   # 构建合并版应用镜像
+make docker-up      # Docker Compose 启动
+make docker-down    # Docker Compose 停止
 ```
 
-迁移文件在 `packages/backend/migrations/`，执行器为 `packages/backend/cmd/migrate`。
-
-## Docker
+数据库：
 
 ```bash
-make docker-build
-make docker-up     # web :5173 / ops-web :5174 / cp :8080 / dp :8081 / sandbox :8000
-make docker-down
-```
-
-- `cp` / `dp` 共用 `packages/backend` 构建上下文，通过 `build.args.SERVICE=cp|dp` 选择入口。
-- `web` 依赖 `cp` + `dp`，`ops-web` 依赖 `cp`。
-- 不在本仓库交付 Prometheus / Jaeger / Grafana 等观测后端。
-
-## 测试
-
-```bash
-make test          # backend / sandbox / web / ops-web 全跑
-make test-backend  # go test ./...
-make test-sandbox  # pytest
-make test-web      # vitest
-make test-ops-web  # vitest
-make quality       # Go / Python / TypeScript 质量门禁（含两个前端）
-make validate      # 结构 / 契约 / 分层依赖 / 质量 静态校验
+make db-create
+make db-migrate-up
+make db-migrate-status
+make db-migrate-down
+make db-migrate-version
+make db-migrate-redo
 ```
 
 逐包执行：
@@ -228,19 +197,95 @@ make -C packages/web test quality
 make -C packages/ops-web test quality
 ```
 
-## 当前已打通的最小链路
+## Docker
 
-1. 首页输入 prompt → `POST /cp/api/v1/projects` → CP 从注册表选择最低压力健康节点并调用 sandbox 初始化工作区。
-2. 跳转编辑器 → 通过 DP 加载文件树与预览 iframe。
-3. 发送消息 → `POST /dp/api/v1/projects/{id}/chat` → DP SSE 透传 → sandbox stub agent 修改 `index.html` → 前端刷新预览。
-4. 代码视图通过 DP 读取 / 保存文件，带版本号校验（409 冲突）。
-5. ops-web 从 `/cp/api/v1/admin/*` 读取概览、用户、项目、沙箱、配额、审计；项目、admin 用户/配额/审计与 sandbox 实例均来自 MySQL。
+```bash
+make docker-build        # 合并版 backend + sandbox + web + ops-web
+make docker-build-split  # 独立 cp / dp 镜像，供后续多容器部署
+make docker-build-all    # 以上全部
+make docker-up           # 启动合并版 docker compose
+make docker-down         # 停止
+```
 
-Stub agent 只做确定性的演示改写，**不具备真实生成能力**；真实 LLM agent 是下一个里程碑。
+- 默认 `backend` 镜像包含 `cp`、`dp` 两个二进制，由 `docker-entrypoint.sh` 在一个容器内启动，分别监听 `8080` / `8081`。
+- 多阶段 target 保留拆分能力：`--target cp`、`--target dp`，对应 `make docker-build-split`。
+- `backend` 与 `sandbox` 容器使用非 root 用户运行。
+- `web` / `ops-web` 支持构建参数：`VITE_CP_BASE`、`VITE_DP_BASE`、`VITE_OPS_API_BASE`、`VITE_DEMO_LOGIN`。
+- 例如关闭演示登录构建：`make docker-build VITE_DEMO_LOGIN=false`。
+- 所有应用镜像带有 `/health` 健康检查；compose 中 web / ops-web 会等待合并版 backend healthy。
+- compose 只启动四个应用服务，MySQL 与 Redis 需要外部提供，并在 backend `.env` 中填写容器可访问的地址，不能使用 `127.0.0.1`。
 
-## API 契约
+## Kubernetes / Helm
 
-统一响应信封：
+Helm chart 位于 `deployment/helm`：
+
+```text
+deployment/helm/
+  backend/    CP/DP，默认合并，支持 split
+  sandbox/    sandbox + RWX 工作区
+  web/        用户端
+  ops-web/    运营后台
+  vibebiz/    umbrella
+```
+
+```bash
+helm dependency build deployment/helm/vibebiz
+helm upgrade --install vibebiz deployment/helm/vibebiz -n vibebiz --create-namespace
+```
+
+- backend 默认合并部署，Service `backend:8080` 与 `backend-dp:8081`
+- `backend.mode=split` 可切换 CP/DP 独立 Deployment
+- sandbox 支持 existingClaim 或创建 RWX PVC
+- web / ops-web Ingress 默认关闭
+- 真实密钥使用 `existingSecret`，chart 不保存 MySQL / Redis / LLM 密钥
+- 详细 values、Secret 与安装说明见 `deployment/helm/README.md`
+
+## 配置说明
+
+配置按 package 下沉到各自的 `.env`，`.env.example` 只包含占位值。
+
+### Backend
+
+| 变量 | 说明 |
+|---|---|
+| `HOST` / `CP_PORT` / `DP_PORT` | 监听地址与端口 |
+| `MYSQL_HOST` / `MYSQL_USERNAME` / `MYSQL_PASSWORD` / `MYSQL_DATABASE` | MySQL 连接 |
+| `REDIS_HOST` / `REDIS_PASSWORD` / `REDIS_DB` | Session、缓存、通知、请求计数 |
+| `SANDBOX_REGISTRY_TOKEN` | sandbox 心跳共享 token |
+| `SANDBOX_HEARTBEAT_TTL` | 心跳过期时间，默认 `15s` |
+| `SANDBOX_HEALTH_INTERVAL` / `SANDBOX_HEALTH_TIMEOUT` | 健康检查周期与超时 |
+| `ASYNQ_REDIS_DB` / `ASYNQ_CONCURRENCY` | asynq 独立 Redis DB 与并发 |
+| `S3_*` | 头像与项目资料存储；`S3_REMOTE_DIR_PREFIX` 为桶内统一前缀；`S3_FORCE_PATH_STYLE` MinIO 用 `true`、阿里云 OSS 用 `false`；浏览器直传失败时回退 CP 代理上传 |
+| `SESSION_USER_TTL` / `SESSION_OPS_TTL` | 用户 / 运营 Session 有效期 |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | 为空时关闭 Trace 导出 |
+
+### Sandbox
+
+| 变量 | 说明 |
+|---|---|
+| `WORKSPACES_DIR` | 工作区根目录，多节点必须挂载同一共享 NFS/RWX |
+| `SANDBOX_PORT` | sandbox 监听端口 |
+| `SANDBOX_NAME` | 实例唯一名称，默认 `<hostname>:<port>` |
+| `SANDBOX_ADVERTISE_HOST` / `SANDBOX_ADVERTISE_PORT` | 上报给 CP 的可访问地址 |
+| `SANDBOX_MAX_CONCURRENCY` | 上报最大并发 |
+| `CP_REGISTRY_URL` | CP 心跳地址；为空则关闭注册 |
+| `SANDBOX_HEARTBEAT_INTERVAL` | 心跳周期，默认 `5s` |
+| `AGENT_MODE` | `stub` 或 `claude` |
+| `ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_API_KEY` | Agent 模型凭据 |
+| `AGENT_MODEL` / `AGENT_SKILLS` / `AGENT_PLUGINS` / `AGENT_MAX_TURNS` | Agent 行为配置 |
+
+### Frontend
+
+| 变量 | 说明 |
+|---|---|
+| `VITE_CP_BASE` / `VITE_DP_BASE` | web 的 CP / DP API 前缀 |
+| `VITE_OPS_API_BASE` | ops-web 的 admin API 前缀 |
+| `VITE_CP_PROXY_TARGET` / `VITE_DP_PROXY_TARGET` | 本地 Vite 代理目标 |
+| `VITE_DEMO_LOGIN` | 默认 `true`，预填本地测试账号；生产设 `false` |
+
+## API 概览
+
+所有业务 API 使用统一响应信封：
 
 ```json
 { "code": 0, "message": "ok", "result": {} }
@@ -250,18 +295,22 @@ Stub agent 只做确定性的演示改写，**不具备真实生成能力**；�
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/projects` | 项目列表 |
-| POST | `/projects` | 创建项目 `{ prompt, name? }` |
-| GET | `/projects/:id` | 项目详情 |
-| GET | `/workspaces/current/folders` | 当前工作区文件夹列表 |
-| POST | `/workspaces/current/folders` | 创建文件夹 `{ name, parentId? }` |
+| POST | `/auth/login` | 用户登录 |
+| POST | `/auth/logout` | 退出登录 |
+| GET | `/auth/me` | 当前用户 |
+| GET / POST | `/projects` | 项目列表 / 创建项目 |
+| GET / DELETE | `/projects/:id` | 项目详情 / 删除 |
+| GET | `/projects/:id/chat/history` | 聊天记录 |
+| GET / PUT | `/workspaces/current` | 当前工作区 |
+| GET / POST | `/workspaces/current/members` | 成员列表 / 邀请 |
+| GET | `/storage` | 工作区存储统计 |
 | GET | `/admin/overview` | 运营概览 |
 | GET | `/admin/users` | 用户列表 |
 | GET | `/admin/projects` | 管理视角项目列表 |
-| GET | `/admin/sandboxes` | 沙箱节点列表 |
+| GET | `/admin/sandboxes` | sandbox 实例列表 |
 | GET | `/admin/quotas` | 配额列表 |
-| GET | `/admin/audit` | 审计事件列表 |
-| POST | `/internal/sandboxes/heartbeat` | sandbox 心跳注册，`X-Sandbox-Token` 鉴权 |
+| GET | `/admin/audit` | 审计事件 |
+| POST | `/internal/sandboxes/heartbeat` | sandbox 心跳注册 |
 
 ### DP · `/dp/api/v1`
 
@@ -269,23 +318,46 @@ Stub agent 只做确定性的演示改写，**不具备真实生成能力**；�
 |---|---|---|
 | GET | `/projects/:id/files` | 文件树 |
 | GET | `/projects/:id/file?path=` | 读取文件 |
-| PUT | `/projects/:id/file` | 写入文件 `{ path, content, baseVersion? }` |
+| PUT | `/projects/:id/file` | 写入文件，支持 `baseVersion` 冲突检测 |
 | POST | `/projects/:id/chat` | SSE 对话流 |
+| POST | `/projects/:id/chat/stop` | 停止当前生成 |
+| GET | `/projects/:id/chat/status` | 当前生成状态 |
+| POST | `/resources/presign` | workspace staging 预签名 |
+| DELETE | `/resources/staging/:resourceId` | 删除未 adopt 的 staging |
+| POST | `/projects/:id/resources/adopt` | staging 转入项目并落盘 |
+| GET | `/projects/:id/resources` | 项目资料列表 |
+| DELETE | `/projects/:id/resources/:resourceId` | 删除项目资料 |
 | GET | `/projects/:id/preview/*` | 预览反代 |
 
-SSE 事件：
+SSE 帧格式：
 
-```json
-{ "type": "agent", "payload": { "type": "assistant", "message": { "content": [] } } }
-{ "type": "sandbox-status", "state": "running" }
+```text
+data: {"type":"agent","payload":{...}}
+
 data: [DONE]
 ```
 
-文件读取返回 `content`、`version`（内容 sha256 前 12 位）、`size`、`mtime`、`isBinary`；写入带 `baseVersion` 时版本不一致返回 HTTP 409。
+文件读取返回 `content`、`version`、`size`、`mtime`、`isBinary`；写入版本不一致返回 HTTP 409。项目资料元数据存 MySQL `project_resource`，文件在 `.resources/`，不进入文件树、普通文件 API、预览或 git。
+
+## Sandbox 注册与调度
+
+- sandbox 每 5 秒向 CP 上报名称、地址、当前并发与最大并发。
+- CP 使用 asynq 每 10 秒请求一次 sandbox `/health`。
+- 心跳过期或健康检查失败会标记实例 `offline`。
+- 新项目按 `active_requests / max_concurrency` 选择最低压力的 `online + healthy` 节点，并写入 `project.sandbox_id`。
+- 项目在线期间固定使用该节点；节点离线后自动改绑到其他健康节点，旧节点恢复后不抢回。
+- sandbox 是无状态编码服务，项目工作区必须位于所有节点共享的 NFS/RWX 目录；切换节点不需要复制工作区。
+- 同一项目的跨节点并发写尚未加 `flock` / lease / epoch，属于后续硬化项。
+
+## 数据与存储
+
+- MySQL 8 保存用户、工作区、项目、配额、审计、通知与 sandbox 实例。
+- Redis 保存 Session、项目鉴权元数据、通知缓存 / PubSub、今日请求计数。
+- 项目代码只存在于 sandbox 工作区，是唯一真相源；前端只持有投影。
+- 本地默认工作区在 `data/workspaces`；多节点部署时改成统一 NFS/RWX 挂载。
+- 数据库迁移使用 goose，`AutoMigrate` 默认关闭。
 
 ## 可观测性
-
-观测只覆盖 CP / DP / sandbox：
 
 | 服务 | 日志 | Trace | Metrics |
 |---|---|---|---|
@@ -294,43 +366,64 @@ data: [DONE]
 | sandbox | stdout JSON | OTLP | `GET /metrics` |
 | web / ops-web | 不接入 | 不接入 | 不接入 |
 
-- 项目作用域的日志、span、指标标签必须带 `project_id`。
-- 日志禁止记录文件正文、聊天正文、密钥、Authorization。
-- `OTEL_EXPORTER_OTLP_ENDPOINT` 为空时关闭 trace 导出且不报错。
-- Prometheus 只从三个服务的 `/metrics` 拉取；生产环境不要把该端点暴露到公网。
-- 配置项见各 package 的 `.env.example`：`packages/{backend,sandbox,web,ops-web}/.env.example`。
+- 日志、span、指标标签带 `project_id`。
+- 不记录文件正文、聊天正文、密钥、Authorization。
+- `OTEL_EXPORTER_OTLP_ENDPOINT` 为空时正常启动并关闭导出。
+- `/metrics` 不应暴露到公网。
 
-## Sandbox 注册中心
+## 测试与质量
 
-- sandbox 通过 `POST /cp/api/v1/internal/sandboxes/heartbeat` 每 5 秒上报名称、host/port、当前并发和最大并发，使用 `X-Sandbox-Token` 鉴权。
-- CP 使用 asynq Scheduler 每 10 秒投递健康检查任务，请求 sandbox `/health`；心跳超时或健康失败会标记 `offline`。
-- 新项目选择 `active_requests / max_concurrency` 最低的 online + healthy 节点，并写入 `project.sandbox_id`。
-- 项目后续文件、聊天、预览优先固定在该节点；节点离线后自动改绑到其他健康节点，旧节点恢复不抢回。
-- sandbox 是无状态编码服务，项目工作区必须位于所有节点共享的 NFS/RWX 目录；切换节点不复制工作区。
-- 本次未实现 `project_leases`、epoch fencing 和项目 flock；同一项目跨节点并发写仍需后续硬化。
+```bash
+make test
+make quality
+make validate
+```
 
-相关配置见 `packages/backend/.env.example`（`SANDBOX_REGISTRY_TOKEN`、`SANDBOX_HEARTBEAT_TTL`、`SANDBOX_HEALTH_*`、`ASYNQ_*`）与 `packages/sandbox/.env.example`（`SANDBOX_NAME`、`SANDBOX_ADVERTISE_*`、`CP_REGISTRY_URL`、`SANDBOX_REGISTRY_TOKEN`、`SANDBOX_HEARTBEAT_INTERVAL`）。
+覆盖范围：
 
-## 数据与存储
+- Go：CP/DP 路由隔离、鉴权、admin、sandbox registry、调度与改绑、MySQL repository、`/metrics`
+- Python：路径穿越、文件版本冲突、SSE、聊天记录、停止/状态、sandbox 心跳与并发计数
+- web：SSE 分帧、API 信封解包、聊天状态、预览 URL、演示登录
+- ops-web：admin 信封解包、路由与导航、演示登录
 
-- CP 的项目目录持久化到 MySQL `project` 表，`sandbox_id` 保存粘性调度节点；admin 用户/配额/审计来自 MySQL，sandbox 页面来自 `sandbox_instance`。
-- sandbox 工作区在共享磁盘持久化，是项目代码的唯一真相源。
-- 目标数据库为 **MySQL 8**；GORM DAO 与 goose 版本化迁移见 `packages/backend/migrations`。
-- 数据库凭据只存在于 CP / DP 服务端环境变量，禁止进入前端、日志或仓库。
+## 目录结构
 
-## 里程碑
+```text
+packages/
+  web/         用户端：首页、编辑器、聊天、预览、设置
+  ops-web/     运营后台：概览、用户、项目、沙箱、配额、审计、通知
+  backend/     Go：cmd/cp、cmd/dp、cmd/migrate、共享 internal
+  sandbox/     Python：workspace、Agent、文件 API、预览、心跳
+deployment/    Docker Compose 与 Helm charts
+docs/          设计规格、实施计划、数据库与架构文档
+scripts/       本地开发、质量门禁、校验、harness 工具
+templates/     Go / Python / TypeScript / Vue / 文档模板
+.ai/           跨会话上下文、规则、记忆、检查点
+```
 
-- **M0 Harness（当前）**：CP / DP 拆分、ops-web 骨架、可观测性接线、端到端最小链路、Docker、测试脚手架。
-- **M1 真实生成**：OpenAI 兼容模型 + 工具调用（读/写/列目录），每轮自动 git commit。
-- **M2 编辑器体验**：Monaco 完整接入、文件树 CRUD、409 冲突合并、预览自动刷新。
-- **M3 产品化**：登录、多项目、项目 MySQL 持久化、版本列表/diff/回滚、Remix。
-- **M4 运行隔离**：每项目容器、卷持久化、预览独立 origin、资源限额。
-- **M5 交付**：Compose/K8s、CI/CD、观测后端接入。
+## 安全说明
 
-## 设计约束
+- 仓库只提交 `.env.example`，真实 `.env` 已被忽略。
+- 不要提交 MySQL / Redis 密码、S3 Access Key、LLM API Key、Session token。
+- 本地默认账号与演示登录仅用于测试；生产必须删除或重置，并设置 `VITE_DEMO_LOGIN=false`。
+- ops-web 当前使用本地 admin 账号，生产必须接入 SSO + RBAC，且 admin API 不得直接暴露公网。
+- CP / DP / sandbox 默认只监听 `127.0.0.1`；容器部署时通过内部网络访问。
+- 预览与主站同 origin 仅限本地原型；生产应使用独立子域并限制 iframe 权限。
 
-- 页面色彩仅使用黑、白、灰、蓝；新增颜色需产品确认。
-- TDD：先写失败测试，再实现。
-- CP / DP 不解析 Agent 消息；Agent 能力演进只改 sandbox。
-- ops-web 与 admin API 仅用于本地骨架；生产必须接 SSO + RBAC，admin 路由不得裸露公网。
-- 预览与主站同 origin 仅限本地 harness；生产必须独立子域。
+## 当前限制与后续方向
+
+- Agent 目前支持 `stub` 与 Claude Agent SDK；真实模型能力取决于 sandbox 配置。
+- 项目跨节点并发写还没有 lease/epoch/fencing，共享 NFS 场景下需要后续补强。
+- 已提供 Helm charts，但尚未在真实 Kubernetes 集群验证；项目租约、容器级资源隔离、预览独立 origin、CI/CD 仍未完成。
+- 运营后台写操作与权限模型仍是本地原型级。
+- 观测后端（Collector / Jaeger / Grafana）不在仓库内交付，只提供接入能力。
+
+## 相关文档
+
+- [技术设计](docs/AI-Coding-Platform-技术设计文档.md)
+- [业务数据库设计](docs/superpowers/specs/2026-10-28-business-database-design.md)
+- [Sandbox 多类型与扩容架构](.ai/rules/sandbox-architecture.md)
+- [Sandbox 注册中心设计](docs/superpowers/specs/2026-10-29-sandbox-registry-design.md)
+- [架构与编码规则](.ai/rules/architecture.md)
+- [Helm 部署说明](deployment/helm/README.md)
+- [本地 sandbox 冒烟测试](docs/sandbox-smoke-test.md)

@@ -1,0 +1,82 @@
+{{- if eq .Values.mode "split" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "backend.fullname" . }}-cp
+  labels:
+    {{- include "backend.labels" . | nindent 4 }}
+    vibebiz.io/role: cp
+spec:
+  replicas: {{ .Values.cpReplicaCount }}
+  selector:
+    matchLabels:
+      {{- include "backend.selectorLabels" . | nindent 6 }}
+      vibebiz.io/role: cp
+  template:
+    metadata:
+      labels:
+        {{- include "backend.selectorLabels" . | nindent 8 }}
+        vibebiz.io/role: cp
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      terminationGracePeriodSeconds: 30
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: cp
+          image: "{{ .Values.splitImages.cp.repository }}:{{ .Values.splitImages.cp.tag }}"
+          imagePullPolicy: {{ .Values.splitImages.cp.pullPolicy }}
+          ports:
+            - name: cp
+              containerPort: {{ .Values.service.cpPort }}
+              protocol: TCP
+          env:
+            - name: PORT
+              value: {{ .Values.service.cpPort | quote }}
+          envFrom:
+            {{- include "backend.envFrom" . | nindent 12 }}
+          startupProbe:
+            httpGet:
+              path: /health
+              port: cp
+            failureThreshold: 30
+            periodSeconds: 2
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: cp
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: cp
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 3
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

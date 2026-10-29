@@ -239,7 +239,7 @@ func newDP(t *testing.T, sandboxURL string) (*echo.Echo, *observability.Provider
 	authState := newRouterAuth(t)
 	authState.metas.items["p1"] = auth.ProjectMeta{WorkspaceID: 1, OwnerUserID: 7}
 	e := server.New(config.Config{Plane: "dp", ServiceName: "vibebiz-dp"}, obs)
-	RegisterData(e, client.NewRouter(singleResolver(sandboxURL), obs), obs, authState.authn, authState.metas)
+	RegisterData(e, client.NewRouter(singleResolver(sandboxURL), obs), obs, authState.authn, authState.metas, nil)
 	return e, obs, authState
 }
 
@@ -252,6 +252,8 @@ func newSandboxServer(t *testing.T) *httptest.Server {
 			_, _ = w.Write([]byte(`{"code":0,"message":"ok","result":{"files":[]}}`))
 		case strings.HasSuffix(r.URL.Path, "/file"):
 			_, _ = w.Write([]byte(`{"code":0,"message":"ok","result":{"path":"index.html","content":"x","version":"v1","size":1,"mtime":1,"isBinary":false}}`))
+		case strings.HasSuffix(r.URL.Path, "/skills"):
+			_, _ = w.Write([]byte(`{"code":0,"message":"ok","result":{"skills":[{"name":"demo","description":"demo skill","source":"project"}]}}`))
 		default:
 			_, _ = w.Write([]byte(`{"code":0,"message":"ok","result":{}}`))
 		}

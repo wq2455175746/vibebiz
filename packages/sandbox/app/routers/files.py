@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from app.errors import WorkspaceError
 from app.observability import SANDBOX_REQUESTS, get_tracer
 from app.response import envelope
+from app.services.chat_turns import ChatTurnManager
 from app.services.workspace import Workspace
 
 router = APIRouter(prefix="/internal/projects", tags=["files"])
@@ -41,14 +42,16 @@ def read_file(project_id: str, request: Request, path: str = Query(min_length=1)
 
 
 @router.put("/{project_id}/file")
-def write_file(project_id: str, body: WriteFileRequest, request: Request) -> dict:
+async def write_file(project_id: str, body: WriteFileRequest, request: Request) -> dict:
     workspace: Workspace = request.app.state.workspace
+    turns: ChatTurnManager = request.app.state.chat_turns
     tracer = get_tracer()
     with tracer.start_as_current_span("workspace.write") as span:
         span.set_attribute("project.id", project_id)
         span.set_attribute("file.path", body.path)
         try:
-            result = workspace.write_file(project_id, body.path, body.content, body.baseVersion)
+            async with turns.write_guard(project_id):
+                result = workspace.write_file(project_id, body.path, body.content, body.baseVersion)
         except WorkspaceError as exc:
             SANDBOX_REQUESTS.labels(
                 operation="file.write", status=str(exc.status), project_id=project_id

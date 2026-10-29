@@ -2,7 +2,7 @@
 import Button from 'primevue/button'
 import { computed, ref, watch } from 'vue'
 
-import { buildPreviewUrl } from '@/utils/preview'
+import { PREVIEW_SANDBOX, buildPreviewUrl } from '@/utils/preview'
 
 const props = defineProps<{ projectId: string; refreshToken: number }>()
 
@@ -56,7 +56,7 @@ watch(
         :key="frameKey"
         :src="src"
         title="应用预览"
-        sandbox="allow-scripts allow-forms"
+        :sandbox="PREVIEW_SANDBOX"
         referrerpolicy="no-referrer"
         @load="loading = false"
       />

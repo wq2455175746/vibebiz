@@ -1,0 +1,51 @@
+backend:
+  fullnameOverride: backend
+  mode: combined
+  existingSecret: vibebiz-backend
+  config:
+    corsOrigins: "https://vibebiz.example.com,https://ops.vibebiz.example.com"
+    mysqlHost: mysql:3306
+    mysqlDatabase: vibebiz
+    redisHost: redis:6379
+    cookieSecure: "true"
+
+sandbox:
+  fullnameOverride: sandbox
+  existingSecret: vibebiz-sandbox
+  config:
+    cpRegistryUrl: http://backend:8080/cp/api/v1/internal/sandboxes/heartbeat
+    agentMode: stub
+  persistence:
+    existingClaim: ""
+    accessMode: ReadWriteMany
+    size: 20Gi
+    storageClassName: ""
+
+web:
+  fullnameOverride: web
+  upstreams:
+    cp: backend:8080
+    dp: backend-dp:8081
+  ingress:
+    enabled: false
+    className: nginx
+    hosts:
+      - host: vibebiz.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+
+ops-web:
+  fullnameOverride: ops-web
+  upstreams:
+    cp: backend:8080
+  ingress:
+    enabled: false
+    className: nginx
+    hosts:
+      - host: ops.vibebiz.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []

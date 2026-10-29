@@ -33,7 +33,13 @@ class ChatHistory:
         project_dir = self.workspace.project_dir(project_id)
         return project_dir / HISTORY_DIR / HISTORY_FILE
 
-    async def append_user(self, project_id: str, message: str, turn_id: str) -> str:
+    async def append_user(
+        self,
+        project_id: str,
+        message: str,
+        turn_id: str,
+        references: list[dict[str, Any]] | None = None,
+    ) -> str:
         async with self._lock(project_id):
             parent_id = self._last_message_id(project_id)
             entry = self._message_entry(
@@ -44,6 +50,7 @@ class ChatHistory:
                 content=message,
                 status="completed",
                 tools=[],
+                extra={"references": references} if references else None,
             )
             self._append(project_id, entry)
             return entry["id"]

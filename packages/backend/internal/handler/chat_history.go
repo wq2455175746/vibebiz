@@ -35,12 +35,22 @@ func NewChatHistoryHandler(sandbox ChatHistoryClient, projects store.ProjectStor
 }
 
 type chatHistoryMessage struct {
-	ID        string            `json:"id"`
-	Role      string            `json:"role"`
-	Text      string            `json:"text"`
-	Status    string            `json:"status"`
-	Tools     []chatHistoryTool `json:"tools"`
-	CreatedAt string            `json:"createdAt"`
+	ID         string                 `json:"id"`
+	Role       string                 `json:"role"`
+	Text       string                 `json:"text"`
+	Status     string                 `json:"status"`
+	Tools      []chatHistoryTool      `json:"tools"`
+	References []chatHistoryReference `json:"references"`
+	CreatedAt  string                 `json:"createdAt"`
+}
+
+type chatHistoryReference struct {
+	Kind         string `json:"kind"`
+	ID           string `json:"id,omitempty"`
+	Name         string `json:"name"`
+	Path         string `json:"path"`
+	ContentType  string `json:"contentType,omitempty"`
+	ResourceKind string `json:"resourceKind,omitempty"`
 }
 
 type chatHistoryTool struct {
@@ -64,10 +74,11 @@ type historyEntry struct {
 }
 
 type historyMessage struct {
-	Role    string            `json:"role"`
-	Content string            `json:"content"`
-	Status  string            `json:"status"`
-	Tools   []chatHistoryTool `json:"tools"`
+	Role       string                 `json:"role"`
+	Content    string                 `json:"content"`
+	Status     string                 `json:"status"`
+	Tools      []chatHistoryTool      `json:"tools"`
+	References []chatHistoryReference `json:"references"`
 }
 
 func (h *ChatHistoryHandler) Get(c echo.Context) error {
@@ -134,13 +145,18 @@ func parseHistory(content string) []chatHistoryMessage {
 		if tools == nil {
 			tools = []chatHistoryTool{}
 		}
+		references := entry.Message.References
+		if references == nil {
+			references = []chatHistoryReference{}
+		}
 		messages = append(messages, chatHistoryMessage{
-			ID:        entry.ID,
-			Role:      entry.Message.Role,
-			Text:      entry.Message.Content,
-			Status:    entry.Message.Status,
-			Tools:     tools,
-			CreatedAt: entry.Timestamp,
+			ID:         entry.ID,
+			Role:       entry.Message.Role,
+			Text:       entry.Message.Content,
+			Status:     entry.Message.Status,
+			Tools:      tools,
+			References: references,
+			CreatedAt:  entry.Timestamp,
 		})
 	}
 	return messages

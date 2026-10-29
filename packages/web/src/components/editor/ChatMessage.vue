@@ -14,6 +14,12 @@ defineProps<{ message: ChatMessage }>()
       <p class="chat-role">{{ message.role === 'user' ? '你' : 'Vibebiz' }}</p>
       <div class="chat-bubble">
         <p v-if="message.text" class="chat-text">{{ message.text }}</p>
+        <div v-if="message.references?.length" class="chat-reference-list">
+          <span v-for="reference in message.references" :key="`${reference.kind}:${reference.id ?? reference.path}`" class="chat-reference-chip">
+            <i :class="reference.resourceKind === 'image' ? 'pi pi-image' : 'pi pi-file'" />
+            {{ reference.name }}
+          </span>
+        </div>
         <div v-if="message.tools.length > 0" class="tool-list">
           <ToolCallCard v-for="tool in message.tools" :key="tool.id" :tool="tool" />
         </div>

@@ -76,3 +76,153 @@ input {
   color: var(--muted);
   text-align: center;
 }
+
+.slash-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  margin: 0;
+  padding: 5px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(17, 17, 17, 0.12);
+  list-style: none;
+}
+
+.slash-menu button {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 7px 8px;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.slash-menu button.active {
+  background: var(--blue-soft);
+}
+
+.slash-menu button.disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.slash-title {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.slash-description {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(17, 17, 17, 0.35);
+}
+
+.dialog-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(520px, 100%);
+  max-height: min(640px, calc(100vh - 48px));
+  padding: 20px;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 24px 64px rgba(17, 17, 17, 0.2);
+}
+
+.dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dialog-eyebrow {
+  margin: 0 0 4px;
+  color: var(--blue);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+}
+
+.dialog-head h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.dialog-close {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.dialog-state {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.dialog-retry {
+  margin-top: 8px;
+  padding: 4px 10px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.skill-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.skill-item {
+  padding: 10px 12px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.skill-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.skill-item p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}

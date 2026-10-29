@@ -5,13 +5,19 @@ SANDBOX := $(ROOT)/packages/sandbox
 WEB := $(ROOT)/packages/web
 OPS_WEB := $(ROOT)/packages/ops-web
 
+VITE_CP_BASE ?= /cp/api/v1
+VITE_DP_BASE ?= /dp/api/v1
+VITE_OPS_API_BASE ?= /cp/api/v1/admin
+VITE_DEMO_LOGIN ?= true
+export VITE_CP_BASE VITE_DP_BASE VITE_OPS_API_BASE VITE_DEMO_LOGIN
+
 .PHONY: help init install install-web install-ops-web install-backend install-sandbox \
 	dev dev-web dev-ops-web dev-cp dev-dp dev-sandbox stop \
 	test test-web test-ops-web test-backend test-sandbox \
 	lint quality validate validate-web validate-ops-web validate-backend validate-sandbox \
 	checkpoint memory-add harness-update harness-failure deps-check \
 	db-create db-migrate-up db-migrate-down db-migrate-status db-migrate-version db-migrate-redo \
-	build docker-build docker-up docker-down clean
+	build docker-build docker-build-split docker-build-all docker-up docker-down clean
 
 help:
 	@echo "vibebiz harness"
@@ -36,7 +42,8 @@ help:
 	@echo "  make db-create       - 创建 MySQL database（如不存在）"
 	@echo "  make db-migrate-up   - 执行所有待执行迁移"
 	@echo "  make db-migrate-status - 查看迁移状态"
-	@echo "  make docker-build    - 构建五份镜像"
+	@echo "  make docker-build    - 构建合并版 backend + sandbox + web + ops-web"
+	@echo "  make docker-build-split - 构建独立 cp / dp 镜像（后续多容器模式）"
 	@echo "  make docker-up       - docker compose 启动"
 	@echo "  make docker-down     - docker compose 停止"
 	@echo "  make clean           - 清理构建产物与本地数据"
@@ -175,11 +182,23 @@ build:
 	@$(MAKE) --no-print-directory -C $(OPS_WEB) build
 
 docker-build: init
-	@docker build -t vibebiz/cp:local --build-arg SERVICE=cp $(BACKEND)
-	@docker build -t vibebiz/dp:local --build-arg SERVICE=dp $(BACKEND)
+	@docker build -t vibebiz/backend:local --target combined $(BACKEND)
 	@docker build -t vibebiz/sandbox:local $(SANDBOX)
-	@docker build -t vibebiz/web:local $(WEB)
-	@docker build -t vibebiz/ops-web:local $(OPS_WEB)
+	@docker build -t vibebiz/web:local \
+		--build-arg VITE_CP_BASE=$(VITE_CP_BASE) \
+		--build-arg VITE_DP_BASE=$(VITE_DP_BASE) \
+		--build-arg VITE_DEMO_LOGIN=$(VITE_DEMO_LOGIN) \
+		$(WEB)
+	@docker build -t vibebiz/ops-web:local \
+		--build-arg VITE_OPS_API_BASE=$(VITE_OPS_API_BASE) \
+		--build-arg VITE_DEMO_LOGIN=$(VITE_DEMO_LOGIN) \
+		$(OPS_WEB)
+
+docker-build-split: init
+	@docker build -t vibebiz/cp:local --target cp $(BACKEND)
+	@docker build -t vibebiz/dp:local --target dp $(BACKEND)
+
+docker-build-all: docker-build docker-build-split
 
 docker-up: init
 	@docker compose up --build -d

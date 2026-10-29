@@ -15,19 +15,43 @@ export interface HistoryTool {
   status: 'running' | 'done' | 'error'
 }
 
+export interface HistoryReference {
+  kind: 'resource' | 'project_file'
+  id?: string
+  name: string
+  path: string
+  contentType?: string
+  resourceKind?: string
+}
+
 export interface HistoryMessage {
   id: string
   role: 'user' | 'assistant'
   text: string
   status: string
   tools: HistoryTool[]
+  references?: HistoryReference[]
   createdAt: string
+}
+
+export interface ChatReferenceInput {
+  kind: 'resource' | 'project_file'
+  id?: string
+  path?: string
+  name?: string
+  contentType?: string
+  resourceKind?: string
 }
 
 export interface ChatHistory {
   messages: HistoryMessage[]
   truncated: boolean
   limit: number
+}
+
+export interface ChatStatus {
+  active: boolean
+  turnId: string | null
 }
 
 const API_BASE = import.meta.env.VITE_DP_BASE || '/dp/api/v1'
@@ -37,6 +61,13 @@ export async function fetchChatHistory(projectId: string, limit = 100): Promise<
     method: 'get',
     url: `/projects/${encodeURIComponent(projectId)}/chat/history`,
     params: { limit },
+  })
+}
+
+export async function fetchChatStatus(projectId: string): Promise<ChatStatus> {
+  return request<ChatStatus>(dpHttp, {
+    method: 'get',
+    url: `/projects/${encodeURIComponent(projectId)}/chat/status`,
   })
 }
 
@@ -51,6 +82,7 @@ export async function* streamChat(
   projectId: string,
   message: string,
   signal?: AbortSignal,
+  references: ChatReferenceInput[] = [],
 ): AsyncGenerator<StreamEvent> {
   const response = await fetch(`${API_BASE}/projects/${encodeURIComponent(projectId)}/chat`, {
     method: 'POST',
@@ -58,7 +90,7 @@ export async function* streamChat(
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
     },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, references }),
     credentials: 'include',
     signal,
   })

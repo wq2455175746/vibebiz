@@ -1,0 +1,78 @@
+replicaCount: 2
+
+image:
+  repository: vibebiz/sandbox
+  tag: local
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+fullnameOverride: ""
+service:
+  type: ClusterIP
+  port: 8000
+
+config:
+  workspacesDir: /data/workspaces
+  sandboxPort: "8000"
+  advertiseScheme: http
+  advertisePort: "8000"
+  maxConcurrency: "8"
+  cpRegistryUrl: http://backend:8080/cp/api/v1/internal/sandboxes/heartbeat
+  heartbeatInterval: 5s
+  agentMode: stub
+  anthropicBaseUrl: https://api.deepseek.com/anthropic
+  agentModel: deepseek-flash
+  agentSkills: all
+  agentPlugins: ""
+  agentMaxTurns: "40"
+  llmBaseUrl: https://api.deepseek.com
+  llmModelName: deepseek-flash
+  logLevel: info
+  otelExporterOtlpEndpoint: ""
+  otelExporterOtlpProtocol: http/protobuf
+  otelResourceAttributes: "deployment.environment=k8s,service.namespace=vibebiz"
+  otelTracesSampler: parentbased_always_on
+  otelTracesSamplerArg: ""
+
+existingSecret: vibebiz-sandbox
+
+persistence:
+  existingClaim: ""
+  accessMode: ReadWriteMany
+  size: 20Gi
+  storageClassName: ""
+  mountPath: /data/workspaces
+
+podAnnotations: {}
+podSecurityContext:
+  runAsNonRoot: true
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: "2"
+    memory: 2Gi
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

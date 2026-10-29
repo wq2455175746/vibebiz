@@ -42,7 +42,7 @@ func TestInitialSchemaCoversAllBusinessTables(t *testing.T) {
 		"user", "ops_user", "ops_audit_log", "workspace", "workspace_user", "user_quota",
 		"project_topic", "project_template", "project", "project_storage",
 		"external_resource", "project_external_resource", "llm_model", "agent_role",
-		"sandbox_instance",
+		"sandbox_instance", "project_resource",
 		"scheduled_task", "chat_conversation", "chat_message", "chat_memory",
 		"rag_knowledge_base", "project_rag",
 	}
@@ -201,13 +201,30 @@ func TestGooseCanCollectMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("collect migrations: %v", err)
 	}
-	if len(migs) != 10 {
-		t.Fatalf("collected %d migrations, want 10", len(migs))
+	if len(migs) != 11 {
+		t.Fatalf("collected %d migrations, want 11", len(migs))
 	}
 	for i, mig := range migs {
 		want := int64(i + 1)
 		if mig.Version != want {
 			t.Errorf("migration %d version = %d, want %d", i, mig.Version, want)
+		}
+	}
+}
+
+func TestProjectResourceMigration(t *testing.T) {
+	body, err := fs.ReadFile(FS, "00011_project_resource.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	for _, want := range []string{
+		"CREATE TABLE `project_resource`", "resource_id", "original_name",
+		"display_name", "storage_name", "s3_staging_key", "s3_key", "status",
+		"DROP TABLE IF EXISTS `project_resource`", "-- +goose Up", "-- +goose Down",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("project resource migration missing %q", want)
 		}
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"vibebiz/internal/observability"
+	"vibebiz/internal/resource"
 )
 
 type ProjectResolver interface {
@@ -60,6 +61,22 @@ func (r *Router) WriteFile(ctx context.Context, id, path, content, baseVersion s
 	return sandbox.WriteFile(ctx, id, path, content, baseVersion)
 }
 
+func (r *Router) WriteResource(ctx context.Context, projectID string, meta resource.ResourceMeta, body io.Reader, size int64) error {
+	sandbox, err := r.client(ctx, projectID)
+	if err != nil {
+		return err
+	}
+	return sandbox.WriteResource(ctx, projectID, meta, body, size)
+}
+
+func (r *Router) DeleteResource(ctx context.Context, projectID, resourceID string) error {
+	sandbox, err := r.client(ctx, projectID)
+	if err != nil {
+		return err
+	}
+	return sandbox.DeleteResource(ctx, projectID, resourceID)
+}
+
 func (r *Router) ProjectStats(ctx context.Context, id string) (ProjectStats, error) {
 	sandbox, err := r.client(ctx, id)
 	if err != nil {
@@ -82,6 +99,22 @@ func (r *Router) StopChat(ctx context.Context, id string) error {
 		return err
 	}
 	return sandbox.StopChat(ctx, id)
+}
+
+func (r *Router) ChatStatus(ctx context.Context, id string) (ChatStatus, error) {
+	sandbox, err := r.client(ctx, id)
+	if err != nil {
+		return ChatStatus{}, err
+	}
+	return sandbox.ChatStatus(ctx, id)
+}
+
+func (r *Router) ListSkills(ctx context.Context, id string) ([]SkillInfo, error) {
+	sandbox, err := r.client(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return sandbox.ListSkills(ctx, id)
 }
 
 func (r *Router) Chat(ctx context.Context, id string, payload []byte) (io.ReadCloser, error) {

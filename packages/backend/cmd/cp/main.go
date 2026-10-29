@@ -90,12 +90,13 @@ func main() {
 	var avatarPresigner account.Presigner
 	if cfg.S3Bucket != "" {
 		presigner, err := storages3.NewPresigner(ctx, storages3.Config{
-			Bucket:         cfg.S3Bucket,
-			Region:         cfg.S3Region,
-			Endpoint:       cfg.S3Endpoint,
-			AccessKey:      cfg.S3AccessKey,
-			SecretKey:      cfg.S3SecretKey,
-			ForcePathStyle: cfg.S3ForcePathStyle,
+			Bucket:          cfg.S3Bucket,
+			Region:          cfg.S3Region,
+			Endpoint:        cfg.S3Endpoint,
+			AccessKey:       cfg.S3AccessKey,
+			SecretKey:       cfg.S3SecretKey,
+			RemoteDirPrefix: cfg.S3RemoteDirPrefix,
+			ForcePathStyle:  cfg.S3ForcePathStyle,
 		})
 		if err != nil {
 			obs.Logger.Error("s3 presigner init failed", "error", err)

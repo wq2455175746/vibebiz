@@ -70,7 +70,7 @@
 ## M5 · 交付与可观测
 
 - [ ] Docker Compose 生产编排
-- [ ] K8s / Helm（后续迭代）
+- [x] Helm charts（deployment/helm，支持合并/拆分；未在真实集群验证）
 - [ ] CI/CD（构建、测试、镜像发布）
 - [ ] 指标：首 token 延迟、单轮耗时、冷启动、HMR 断连
 - [x] 基础指标：HTTP / sandbox / agent / SSE

@@ -11,6 +11,7 @@ import { useChatStore } from '@/stores/chat'
 import { useFileStore } from '@/stores/files'
 import { useLogStore } from '@/stores/logs'
 import { useProjectStore } from '@/stores/project'
+import { shouldSendInitialPrompt, takeInitialAppend } from '@/utils/initialPrompt'
 import '@/styles/editor.css'
 
 const route = useRoute()
@@ -21,11 +22,40 @@ const chat = useChatStore()
 const logs = useLogStore()
 
 const id = computed(() => String(route.params.id))
-const activeTab = ref<'preview' | 'code'>('preview')
-const consoleOpen = ref(false)
+const activeTab = ref<'preview' | 'code' | 'console'>('preview')
+const previewRevision = computed(() => chat.revision + files.revision)
+const tabMeta = computed(() => {
+  if (activeTab.value === 'preview') {
+    return '实时预览'
+  }
+  return activeTab.value === 'code' ? '只读文件' : '执行日志'
+})
+let statusTimer: ReturnType<typeof setInterval> | null = null
+
+function stopStatusPolling() {
+  if (statusTimer !== null) {
+    clearInterval(statusTimer)
+    statusTimer = null
+  }
+}
 
 function promptKey(projectId: string) {
   return `vibebiz:initial-prompt:${projectId}`
+}
+
+function takeInitialReferences(projectId: string) {
+  const key = `vibebiz:initial-references:${projectId}`
+  const raw = sessionStorage.getItem(key)
+  sessionStorage.removeItem(key)
+  if (!raw) {
+    return []
+  }
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
 }
 
 function takeInitialPrompt(projectId: string) {
@@ -43,21 +73,18 @@ function takeInitialPrompt(projectId: string) {
   return fromHistory.trim() || stored?.trim() || ''
 }
 
-function openConsole() {
-  consoleOpen.value = true
-}
-
 async function load() {
   const projectId = id.value
   activeTab.value = 'preview'
-  consoleOpen.value = false
   logs.clear()
   chat.reset()
   await projectStore.load(projectId)
 
+  stopStatusPolling()
   files.entries = []
   files.active = null
   files.activePath = null
+  files.revision = 0
   try {
     await files.loadTree(projectId)
   } catch {
@@ -70,11 +97,17 @@ async function load() {
   } catch {
     hasHistory = false
   }
+  await chat.syncStatus(projectId).catch(() => undefined)
 
   const prompt = takeInitialPrompt(projectId)
-  if (prompt && !hasHistory) {
-    openConsole()
-    void chat.send(projectId, prompt)
+  const references = takeInitialReferences(projectId)
+  const append = takeInitialAppend(projectId)
+  if (shouldSendInitialPrompt(prompt, hasHistory, append)) {
+    if (chat.busy) {
+      logs.append({ level: 'error', source: 'agent', message: '目标项目正在执行，消息未发送' })
+    } else {
+      void chat.send(projectId, prompt, references)
+    }
   }
 }
 
@@ -84,26 +117,37 @@ function goHome() {
 
 watch(id, load)
 watch(
-  () => chat.streaming,
-  (streaming) => {
-    if (streaming) {
-      openConsole()
-    }
-  },
-)
-watch(
   () => chat.revision,
   async () => {
     try {
       await files.loadTree(id.value)
+      if (files.active && !files.dirty) {
+        await files.reload(id.value)
+      }
     } catch {
       files.entries = []
     }
   },
 )
 
+watch(
+  () => chat.agentRunning,
+  (running) => {
+    stopStatusPolling()
+    if (!running || chat.streaming) {
+      return
+    }
+    statusTimer = setInterval(() => {
+      void chat.syncStatus(id.value).catch(() => undefined)
+    }, 2500)
+  },
+)
+
 onMounted(load)
-onBeforeUnmount(() => chat.disconnect())
+onBeforeUnmount(() => {
+  stopStatusPolling()
+  chat.disconnect()
+})
 </script>
 
 <template>
@@ -111,10 +155,8 @@ onBeforeUnmount(() => chat.disconnect())
     <EditorHeader
       :project-name="projectStore.current?.name || '加载中'"
       :project-state="projectStore.current?.state || 'starting'"
-      :console-open="consoleOpen"
       model-label="DeepSeek Flash"
       @back="goHome"
-      @toggle-console="consoleOpen = !consoleOpen"
     />
 
     <p v-if="projectStore.error" class="editor-error">{{ projectStore.error }}</p>
@@ -141,22 +183,32 @@ onBeforeUnmount(() => chat.disconnect())
               <i class="pi pi-code" />
               代码
             </button>
+            <button
+              type="button"
+              :class="{ active: activeTab === 'console' }"
+              @click="activeTab = 'console'"
+            >
+              <i class="pi pi-desktop" />
+              控制台
+            </button>
           </div>
-          <span class="workbench-meta">{{
-            activeTab === 'preview' ? '实时预览' : '只读文件'
-          }}</span>
+          <span class="workbench-meta">{{ tabMeta }}</span>
         </header>
 
         <div class="workbench-body">
           <PreviewPane
             v-if="activeTab === 'preview'"
             :project-id="id"
-            :refresh-token="chat.revision"
+            :refresh-token="previewRevision"
           />
-          <CodePane v-else :project-id="id" />
+          <CodePane v-else-if="activeTab === 'code'" :project-id="id" />
+          <LogConsole
+            v-else
+            class="workbench-log"
+            :open="true"
+            @close="activeTab = 'preview'"
+          />
         </div>
-
-        <LogConsole :open="consoleOpen" @close="consoleOpen = false" />
       </main>
     </div>
   </div>

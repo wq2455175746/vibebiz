@@ -4,3 +4,5 @@ bin/
 .git/
 .gitignore
 coverage.out
+*.test
+tmp/

@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sandbox.fullname" . }}
+  labels:
+    {{- include "sandbox.labels" . | nindent 4 }}
+data:
+  WORKSPACES_DIR: {{ .Values.config.workspacesDir | quote }}
+  SANDBOX_PORT: {{ .Values.config.sandboxPort | quote }}
+  SANDBOX_ADVERTISE_SCHEME: {{ .Values.config.advertiseScheme | quote }}
+  SANDBOX_ADVERTISE_PORT: {{ .Values.config.advertisePort | quote }}
+  SANDBOX_MAX_CONCURRENCY: {{ .Values.config.maxConcurrency | quote }}
+  CP_REGISTRY_URL: {{ .Values.config.cpRegistryUrl | quote }}
+  SANDBOX_HEARTBEAT_INTERVAL: {{ .Values.config.heartbeatInterval | quote }}
+  AGENT_MODE: {{ .Values.config.agentMode | quote }}
+  ANTHROPIC_BASE_URL: {{ .Values.config.anthropicBaseUrl | quote }}
+  AGENT_MODEL: {{ .Values.config.agentModel | quote }}
+  AGENT_SKILLS: {{ .Values.config.agentSkills | quote }}
+  AGENT_PLUGINS: {{ .Values.config.agentPlugins | quote }}
+  AGENT_MAX_TURNS: {{ .Values.config.agentMaxTurns | quote }}
+  LLM_BASE_URL: {{ .Values.config.llmBaseUrl | quote }}
+  LLM_MODEL_NAME: {{ .Values.config.llmModelName | quote }}
+  LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+  OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.config.otelExporterOtlpEndpoint | quote }}
+  OTEL_EXPORTER_OTLP_PROTOCOL: {{ .Values.config.otelExporterOtlpProtocol | quote }}
+  OTEL_RESOURCE_ATTRIBUTES: {{ .Values.config.otelResourceAttributes | quote }}
+  OTEL_TRACES_SAMPLER: {{ .Values.config.otelTracesSampler | quote }}
+  OTEL_TRACES_SAMPLER_ARG: {{ .Values.config.otelTracesSamplerArg | quote }}

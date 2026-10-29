@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.service.name }}
+  labels:
+    {{- include "backend.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    {{- include "backend.selectorLabels" . | nindent 4 }}
+    vibebiz.io/role: {{ include "backend.cpRole" . }}
+  ports:
+    - name: cp
+      port: {{ .Values.service.cpPort }}
+      targetPort: {{ .Values.service.cpTargetPort }}
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.dpService.name }}
+  labels:
+    {{- include "backend.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    {{- include "backend.selectorLabels" . | nindent 4 }}
+    vibebiz.io/role: {{ include "backend.dpRole" . }}
+  ports:
+    - name: dp
+      port: {{ .Values.service.dpPort }}
+      targetPort: {{ .Values.service.dpTargetPort }}
+      protocol: TCP

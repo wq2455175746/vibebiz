@@ -1,0 +1,19 @@
+apiVersion: v2
+name: vibebiz
+description: Vibebiz AI coding platform
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+dependencies:
+  - name: backend
+    version: 0.1.0
+    repository: file://../backend
+  - name: sandbox
+    version: 0.1.0
+    repository: file://../sandbox
+  - name: web
+    version: 0.1.0
+    repository: file://../web
+  - name: ops-web
+    version: 0.1.0
+    repository: file://../ops-web

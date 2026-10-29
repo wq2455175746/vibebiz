@@ -1,6 +1,7 @@
 import asyncio
 import uuid
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -19,11 +20,17 @@ class TurnInProgress(WorkspaceError):
     code = 40901
 
 
+class TurnLocked(WorkspaceError):
+    status = 423
+    code = 42300
+
+
 @dataclass
 class Turn:
     id: str
     project_id: str
     message: str
+    references: list[dict[str, Any]]
     queue: asyncio.Queue[dict[str, Any] | None]
     task: asyncio.Task | None = None
     subscribers: set[asyncio.Queue[dict[str, Any] | None]] = field(default_factory=set)
@@ -138,16 +145,18 @@ class ChatTurnManager:
         message: str,
         workspace: Workspace,
         session_id: str | None = None,
+        references: list[dict[str, Any]] | None = None,
     ) -> Turn:
         async with self._lock:
             if project_id in self._active:
                 raise TurnInProgress("turn in progress")
             turn_id = uuid.uuid4().hex
-            await self.history.append_user(project_id, message, turn_id)
+            await self.history.append_user(project_id, message, turn_id, references)
             turn = Turn(
                 id=turn_id,
                 project_id=project_id,
                 message=message,
+                references=references or [],
                 queue=asyncio.Queue(),
             )
             turn.subscribers.add(turn.queue)
@@ -163,6 +172,18 @@ class ChatTurnManager:
         turn.task.cancel()
         return True
 
+    async def status(self, project_id: str) -> dict[str, Any]:
+        async with self._lock:
+            turn = self._active.get(project_id)
+            return {"active": turn is not None, "turnId": turn.id if turn is not None else None}
+
+    @asynccontextmanager
+    async def write_guard(self, project_id: str) -> AsyncIterator[None]:
+        async with self._lock:
+            if project_id in self._active:
+                raise TurnLocked("agent is running")
+            yield
+
     def unsubscribe(self, turn: Turn, queue: asyncio.Queue[dict[str, Any] | None]) -> None:
         turn.subscribers.discard(queue)
 
@@ -174,7 +195,10 @@ class ChatTurnManager:
         try:
             async with asyncio.timeout(self.timeout_seconds):
                 async for event in self.agent.run(
-                    turn.project_id, turn.message, workspace, session_id
+                    turn.project_id,
+                    build_prompt(turn.message, turn.references),
+                    workspace,
+                    session_id,
                 ):
                     collector.consume(event)
                     self._broadcast(turn, event)
@@ -262,3 +286,26 @@ async def iter_turn_events(
             yield event
     finally:
         manager.unsubscribe(turn, turn.queue)
+
+
+def build_prompt(message: str, references: list[dict[str, Any]]) -> str:
+    if not references:
+        return message
+    lines = ["用户消息：", message, "", "本轮引用文件（位于当前项目工作区）："]
+    for item in references:
+        path = str(item.get("path", ""))
+        if item.get("kind") == "project_file":
+            lines.append(f"- {path}（代码文件：直接读取）")
+            continue
+        name = str(item.get("name", path))
+        content_type = str(item.get("contentType", ""))
+        resource_kind = str(item.get("resourceKind", ""))
+        if resource_kind == "document":
+            action = "文档：使用 document-skills 读取"
+        elif resource_kind == "image":
+            action = "图片：按需 Read，不自动 OCR"
+        else:
+            action = "文本：直接读取"
+        lines.append(f"- {path}（原始名：{name}，{content_type}，{action}）")
+    lines.extend(["", "资源文件只读，不要修改或删除，除非用户明确要求。"])
+    return "\n".join(lines)

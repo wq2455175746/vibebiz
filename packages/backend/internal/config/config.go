@@ -42,6 +42,7 @@ type Config struct {
 	S3Endpoint             string
 	S3AccessKey            string
 	S3SecretKey            string
+	S3RemoteDirPrefix      string
 	S3ForcePathStyle       bool
 	S3PresignExpiryMinutes int
 }
@@ -83,6 +84,7 @@ func Load(plane string) Config {
 		S3Endpoint:             getString("S3_ENDPOINT", ""),
 		S3AccessKey:            getString("S3_ACCESS_KEY", ""),
 		S3SecretKey:            getString("S3_SECRET_KEY", ""),
+		S3RemoteDirPrefix:      getString("S3_REMOTE_DIR_PREFIX", ""),
 		S3ForcePathStyle:       getBool("S3_FORCE_PATH_STYLE", getString("S3_ENDPOINT", "") != ""),
 		S3PresignExpiryMinutes: getInt("S3_PRESIGN_EXPIRY_MINUTES", 15),
 	}

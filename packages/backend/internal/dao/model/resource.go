@@ -1,6 +1,10 @@
 package model
 
-import "time"
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
 
 type ExternalResource struct {
 	Base
@@ -31,3 +35,25 @@ type ProjectExternalResource struct {
 }
 
 func (ProjectExternalResource) TableName() string { return "project_external_resource" }
+
+type ProjectResource struct {
+	ID              int64          `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	ResourceID      string         `gorm:"column:resource_id" json:"resourceId"`
+	ProjectPublicID *string        `gorm:"column:project_public_id" json:"projectPublicId,omitempty"`
+	WorkspaceID     int64          `gorm:"column:workspace_id" json:"workspaceId"`
+	UserID          int64          `gorm:"column:user_id" json:"userId"`
+	OriginalName    string         `gorm:"column:original_name" json:"originalName"`
+	DisplayName     string         `gorm:"column:display_name" json:"displayName"`
+	StorageName     string         `gorm:"column:storage_name" json:"storageName"`
+	ContentType     string         `gorm:"column:content_type" json:"contentType"`
+	SizeBytes       int64          `gorm:"column:size_bytes" json:"sizeBytes"`
+	Kind            string         `gorm:"column:kind" json:"kind"`
+	S3StagingKey    string         `gorm:"column:s3_staging_key" json:"s3StagingKey"`
+	S3Key           string         `gorm:"column:s3_key" json:"s3Key"`
+	Status          string         `gorm:"column:status" json:"status"`
+	CreatedAt       time.Time      `gorm:"column:created_at;autoCreateTime" json:"createdAt"`
+	UpdatedAt       time.Time      `gorm:"column:updated_at;autoUpdateTime" json:"updatedAt"`
+	DeletedAt       gorm.DeletedAt `gorm:"column:deleted_at;index" json:"-"`
+}
+
+func (ProjectResource) TableName() string { return "project_resource" }
