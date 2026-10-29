@@ -1,6 +1,7 @@
 import type { RouteRecordRaw } from 'vue-router'
 
 import AuditView from '@/views/AuditView.vue'
+import NotificationsView from '@/views/NotificationsView.vue'
 import OverviewView from '@/views/OverviewView.vue'
 import ProjectsView from '@/views/ProjectsView.vue'
 import QuotasView from '@/views/QuotasView.vue'
@@ -20,5 +21,11 @@ export const childRoutes: RouteRecordRaw[] = [
   },
   { path: 'quotas', name: 'quotas', component: QuotasView, meta: { title: '配额' } },
   { path: 'audit', name: 'audit', component: AuditView, meta: { title: '审计日志' } },
+  {
+    path: 'notifications',
+    name: 'notifications',
+    component: NotificationsView,
+    meta: { title: '消息通知' },
+  },
   { path: 'settings', name: 'settings', component: SettingsView, meta: { title: '系统设置' } },
 ]

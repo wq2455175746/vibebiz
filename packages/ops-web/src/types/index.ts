@@ -53,6 +53,34 @@ export interface AuditEvent {
   createdAt: string
 }
 
+export type NotificationType = 'version_release' | 'inbox'
+export type NotificationStatus = 'draft' | 'published' | 'unpublished' | 'expired'
+
+export interface OpsNotification {
+  id: number
+  title: string
+  content: string
+  type: NotificationType
+  version: string
+  link: string
+  status: NotificationStatus
+  expireAt: string
+  publishedAt: string | null
+  createdBy: number
+  createdByName: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface NotificationInput {
+  title: string
+  content: string
+  type: NotificationType
+  version: string
+  link: string
+  expireAt: string
+}
+
 export type TableRow = object
 
 export interface TableColumn {
