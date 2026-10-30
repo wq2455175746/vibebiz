@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { cpHttp, request } from './client'
-import { createProject } from './projects'
+import {
+  completeProjectStage,
+  createProject,
+  listProjectStages,
+  startProjectStage,
+} from './projects'
 
 vi.mock('./client', () => ({
   cpHttp: {},
@@ -32,6 +37,26 @@ describe('projects api', () => {
       method: 'post',
       url: '/projects',
       data: { prompt: 'enterprise app', agentRoleIds: [6], mode: 'enterprise' },
+    })
+  })
+
+  it('lists, starts and completes enterprise stages', async () => {
+    await listProjectStages('p1')
+    expect(requestMock).toHaveBeenCalledWith(cpHttp, {
+      method: 'get',
+      url: '/projects/p1/stages',
+    })
+
+    await startProjectStage('p1', 'requirements')
+    expect(requestMock).toHaveBeenCalledWith(cpHttp, {
+      method: 'post',
+      url: '/projects/p1/stages/requirements/start',
+    })
+
+    await completeProjectStage('p1', 'requirements')
+    expect(requestMock).toHaveBeenCalledWith(cpHttp, {
+      method: 'post',
+      url: '/projects/p1/stages/requirements/complete',
     })
   })
 })

@@ -18,6 +18,7 @@ func TestTableNames(t *testing.T) {
 		{&ProjectTopic{}, "project_topic"},
 		{&ProjectTemplate{}, "project_template"},
 		{&Project{}, "project"},
+		{&ProjectStage{}, "project_stage"},
 		{&ProjectStorage{}, "project_storage"},
 		{&ExternalResource{}, "external_resource"},
 		{&ProjectExternalResource{}, "project_external_resource"},

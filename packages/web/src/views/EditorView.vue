@@ -14,6 +14,7 @@ import { useLogStore } from '@/stores/logs'
 import { useProjectStore } from '@/stores/project'
 import type { AgentRole } from '@/types'
 import { shouldSendInitialPrompt, takeInitialAppend } from '@/utils/initialPrompt'
+import { buildPreviewUrl } from '@/utils/preview'
 import '@/styles/editor.css'
 
 const route = useRoute()
@@ -27,6 +28,7 @@ const logs = useLogStore()
 const id = computed(() => String(route.params.id))
 const activeTab = ref<'preview' | 'code' | 'console'>('preview')
 const previewReady = ref(false)
+const shareNotice = ref('')
 const previewRevision = computed(() => chat.revision + files.revision)
 const headerRoles = computed(() =>
   (projectStore.current?.agentRoleIds ?? [])
@@ -41,6 +43,19 @@ const tabMeta = computed(() => {
 })
 let statusTimer: ReturnType<typeof setInterval> | null = null
 let backgroundProjectId: string | null = null
+
+async function shareProject() {
+  const url = new URL(buildPreviewUrl(id.value), window.location.origin).toString()
+  try {
+    await navigator.clipboard.writeText(url)
+    shareNotice.value = `应用链接已复制：${url}`
+  } catch {
+    shareNotice.value = `应用链接：${url}`
+  }
+  window.setTimeout(() => {
+    shareNotice.value = ''
+  }, 5000)
+}
 
 function stopStatusPolling() {
   if (statusTimer !== null) {
@@ -205,8 +220,10 @@ onBeforeUnmount(() => {
       :roles="headerRoles"
       model-label="DeepSeek Flash"
       @back="goHome"
+      @share="shareProject"
     />
 
+    <p v-if="shareNotice" class="editor-share-notice">{{ shareNotice }}</p>
     <p v-if="projectStore.error" class="editor-error">{{ projectStore.error }}</p>
 
     <div class="editor-body">

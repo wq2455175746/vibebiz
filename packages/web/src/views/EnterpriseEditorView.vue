@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { ApiError } from '@/api/client'
 import { readFile } from '@/api/files'
+import { completeProjectStage, listProjectStages, startProjectStage } from '@/api/projects'
 import ChatPanel from '@/components/editor/ChatPanel.vue'
 import CodePane from '@/components/editor/CodePane.vue'
 import EditorHeader from '@/components/editor/EditorHeader.vue'
@@ -18,16 +19,14 @@ import { useChatStore } from '@/stores/chat'
 import { useFileStore } from '@/stores/files'
 import { useLogStore } from '@/stores/logs'
 import { useProjectStore } from '@/stores/project'
-import type { AgentRole, ChatReference, FileContent } from '@/types'
+import type { AgentRole, ChatReference, FileContent, StageMutation } from '@/types'
 import {
   buildStagePrompt,
-  completeStage,
   createInitialStageState,
   currentStageKey,
-  loadEnterpriseStageState,
   markEnterpriseProject,
-  saveEnterpriseStageState,
   stageDefinition,
+  stageStatesFromProject,
   type EnterpriseStageKey,
   type EnterpriseStageStateMap,
 } from '@/utils/enterprise'
@@ -52,9 +51,13 @@ const artifact = ref<FileContent | null>(null)
 const artifactLoading = ref(false)
 const artifactError = ref('')
 const confirming = ref(false)
+const starting = ref(false)
 const confirmError = ref('')
+const stageLoadError = ref('')
 const previewRevision = computed(() => chat.revision + files.revision)
 const activeKey = computed(() => currentStageKey(stageStates.value))
+const activeState = computed(() => (activeKey.value ? stageStates.value[activeKey.value] : null))
+const activeStarted = computed(() => Boolean(activeState.value?.startedAt))
 const displayedKey = computed<EnterpriseStageKey>(
   () => viewingKey.value ?? activeKey.value ?? 'artifacts',
 )
@@ -67,6 +70,7 @@ const canComplete = computed(
   () =>
     Boolean(activeStage.value?.artifactPath) &&
     Boolean(artifact.value?.content.trim()) &&
+    activeStarted.value &&
     !chat.busy &&
     !confirming.value,
 )
@@ -184,6 +188,64 @@ async function loadArtifact() {
   }
 }
 
+async function loadStages(projectId: string) {
+  try {
+    const result = await listProjectStages(projectId)
+    stageStates.value = stageStatesFromProject(result.stages)
+    stageLoadError.value = ''
+  } catch (err) {
+    stageLoadError.value = (err as Error).message || '阶段状态加载失败'
+    stageStates.value = createInitialStageState()
+  }
+}
+
+function applyStageMutation(result: StageMutation) {
+  const next = { ...stageStates.value }
+  for (const stage of [result.stage, result.nextStage]) {
+    if (!stage || !(stage.stageKey in next)) {
+      continue
+    }
+    const key = stage.stageKey as EnterpriseStageKey
+    next[key] = {
+      status: stage.status,
+      startedAt: stage.startedAt ?? null,
+      completedAt: stage.completedAt ?? null,
+    }
+  }
+  stageStates.value = next
+}
+
+async function startStage(
+  key: EnterpriseStageKey,
+  requirement = '',
+  references: ChatReference[] = [],
+): Promise<void> {
+  if (starting.value || chat.busy) {
+    return
+  }
+  starting.value = true
+  confirmError.value = ''
+  try {
+    const result = await startProjectStage(id.value, key)
+    applyStageMutation(result)
+    const definition = stageDefinition(key)
+    const request =
+      requirement || (key === 'requirements' ? (projectStore.current?.prompt ?? '') : '')
+    void chat.send(id.value, buildStagePrompt(definition, request), references)
+  } catch (err) {
+    confirmError.value = (err as Error).message
+  } finally {
+    starting.value = false
+  }
+}
+
+function startCurrentStage() {
+  if (!activeKey.value) {
+    return
+  }
+  void startStage(activeKey.value, projectStore.current?.prompt ?? '')
+}
+
 async function load() {
   const projectId = id.value
   activeTab.value = 'preview'
@@ -193,10 +255,10 @@ async function load() {
   logs.clear()
   chat.reset()
   markEnterpriseProject(projectId)
-  stageStates.value = loadEnterpriseStageState(projectId)
-  saveEnterpriseStageState(projectId, stageStates.value)
+  stageLoadError.value = ''
   void agentRoles.load()
   await projectStore.load(projectId)
+  await loadStages(projectId)
 
   files.entries = []
   files.active = null
@@ -227,16 +289,13 @@ async function load() {
   const append = takeInitialAppend(projectId)
   if (
     activeStage.value?.key === 'requirements' &&
+    !stageStates.value.requirements.startedAt &&
     shouldSendInitialPrompt(prompt, hasHistory, append)
   ) {
     if (chat.busy) {
       logs.append({ level: 'error', source: 'agent', message: '目标项目正在执行，消息未发送' })
     } else {
-      void chat.send(
-        projectId,
-        buildStagePrompt(stageDefinition('requirements'), prompt),
-        references,
-      )
+      await startStage('requirements', prompt, references)
     }
   }
 }
@@ -250,21 +309,12 @@ async function completeCurrentStage() {
   confirming.value = true
   confirmError.value = ''
   try {
-    const file = await readFile(id.value, stage.artifactPath)
-    if (!file.content.trim()) {
-      throw new Error(`请等待 ${stage.roleLabel} 完成 ${stage.artifactPath}`)
-    }
-    const result = completeStage(stageStates.value, key)
-    if (!result) {
-      throw new Error('当前阶段无法推进')
-    }
-    stageStates.value = result.states
-    saveEnterpriseStageState(id.value, stageStates.value)
+    const result = await completeProjectStage(id.value, key)
+    applyStageMutation(result)
     viewingKey.value = null
     activeTab.value = 'preview'
-    if (result.nextKey) {
-      const next = stageDefinition(result.nextKey)
-      void chat.send(id.value, buildStagePrompt(next))
+    if (result.nextStage) {
+      await startStage(result.nextStage.stageKey as EnterpriseStageKey)
     }
     await loadArtifact()
   } catch (err) {
@@ -327,6 +377,7 @@ onBeforeUnmount(() => {
     />
 
     <p v-if="projectStore.error" class="editor-error">{{ projectStore.error }}</p>
+    <p v-if="stageLoadError" class="editor-error">{{ stageLoadError }}</p>
 
     <EnterpriseStageBar
       :states="stageStates"
@@ -344,9 +395,12 @@ onBeforeUnmount(() => {
             :stage="displayedStage"
             :read-only="isHistory"
             :busy="chat.busy"
+            :started="activeStarted"
             :can-complete="canComplete"
             :confirming="confirming"
+            :starting="starting"
             :error="confirmError"
+            @start="startCurrentStage"
             @complete="completeCurrentStage"
             @back="backToCurrent"
           />

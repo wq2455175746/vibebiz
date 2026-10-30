@@ -80,6 +80,33 @@ export interface Project {
   coverUrl?: string | null
 }
 
+export type ProjectStageStatus = 'locked' | 'active' | 'done' | 'placeholder'
+export type ProjectStageWorkspace = 'document' | 'development' | 'placeholder'
+
+export interface ProjectStage {
+  stageKey: string
+  seq: number
+  title: string
+  roleCode: string
+  roleName: string
+  artifactPath: string
+  workspace: ProjectStageWorkspace
+  status: ProjectStageStatus
+  startedAt?: string | null
+  completedAt?: string | null
+}
+
+export interface ProjectStages {
+  mode: 'standard' | 'enterprise'
+  currentStage: string
+  stages: ProjectStage[]
+}
+
+export interface StageMutation {
+  stage: ProjectStage
+  nextStage?: ProjectStage
+}
+
 export interface Template {
   id: number
   templateCode: string

@@ -26,6 +26,7 @@ import (
 	"vibebiz/internal/llmmodel"
 	"vibebiz/internal/notification"
 	"vibebiz/internal/observability"
+	"vibebiz/internal/projectstage"
 	"vibebiz/internal/projecttemplate"
 	"vibebiz/internal/requestcount"
 	"vibebiz/internal/router"
@@ -122,6 +123,7 @@ func main() {
 		obs.Logger.Error("project store init failed", "error", err)
 		os.Exit(1)
 	}
+	stageStore := projectstage.NewMySQLStore(db)
 	requestCounter := requestcount.NewCounter(redisClient, redisPrefix)
 	adminRepo := admin.NewMySQLRepository(db, requestCounter)
 	var modelCipher *secret.Cipher
@@ -195,7 +197,7 @@ func main() {
 	templateHandler := handler.NewTemplateHandler(templateService, projectStore, provisioner, sandboxRouter)
 	templateHandler.Metas = metas
 
-	router.RegisterControl(e, adminRepo, projectStore, provisioner, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler, registryHandler, modelHandler, roleHandler, avatarPresigner, cfg.S3PresignExpiry(), sandboxRouter, templateHandler, harnessImporter)
+	router.RegisterControl(e, adminRepo, projectStore, provisioner, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler, registryHandler, modelHandler, roleHandler, avatarPresigner, cfg.S3PresignExpiry(), sandboxRouter, templateHandler, harnessImporter, stageStore, sandboxRouter)
 	router.RegisterChatHistory(e, handler.NewChatHistoryHandler(sandboxRouter, projectStore), authn)
 
 	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))

@@ -1,5 +1,5 @@
 import { cpHttp, dpHttp, request } from './client'
-import type { Project } from '@/types'
+import type { Project, ProjectStages, StageMutation } from '@/types'
 
 export async function listProjects(): Promise<Project[]> {
   const result = await request<{ projects: Project[] }>(cpHttp, { method: 'get', url: '/projects' })
@@ -53,5 +53,26 @@ export async function deleteProject(id: string): Promise<void> {
   await request<{ id: string }>(cpHttp, {
     method: 'delete',
     url: `/projects/${encodeURIComponent(id)}`,
+  })
+}
+
+export async function listProjectStages(id: string): Promise<ProjectStages> {
+  return request<ProjectStages>(cpHttp, {
+    method: 'get',
+    url: `/projects/${encodeURIComponent(id)}/stages`,
+  })
+}
+
+export async function startProjectStage(id: string, stageKey: string): Promise<StageMutation> {
+  return request<StageMutation>(cpHttp, {
+    method: 'post',
+    url: `/projects/${encodeURIComponent(id)}/stages/${encodeURIComponent(stageKey)}/start`,
+  })
+}
+
+export async function completeProjectStage(id: string, stageKey: string): Promise<StageMutation> {
+  return request<StageMutation>(cpHttp, {
+    method: 'post',
+    url: `/projects/${encodeURIComponent(id)}/stages/${encodeURIComponent(stageKey)}/complete`,
   })
 }

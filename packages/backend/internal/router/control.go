@@ -10,10 +10,11 @@ import (
 	"vibebiz/internal/auth"
 	"vibebiz/internal/handler"
 	"vibebiz/internal/observability"
+	"vibebiz/internal/projectstage"
 	"vibebiz/internal/store"
 )
 
-func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.ProjectStore, provisioner handler.ProjectInitializer, obs *observability.Provider, authn *auth.Authenticator, authHandler *handler.AuthHandler, settingsHandler *handler.SettingsHandler, storageHandler *handler.StorageHandler, metas auth.ProjectMetaStore, notifications *handler.NotificationHandler, registry *handler.SandboxRegistryHandler, models *handler.ModelHandler, roles *handler.RoleHandler, coverSigner handler.CoverURLSigner, coverExpiry time.Duration, adminSandbox handler.AdminSandbox, templates *handler.TemplateHandler, harness handler.HarnessImporter) {
+func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.ProjectStore, provisioner handler.ProjectInitializer, obs *observability.Provider, authn *auth.Authenticator, authHandler *handler.AuthHandler, settingsHandler *handler.SettingsHandler, storageHandler *handler.StorageHandler, metas auth.ProjectMetaStore, notifications *handler.NotificationHandler, registry *handler.SandboxRegistryHandler, models *handler.ModelHandler, roles *handler.RoleHandler, coverSigner handler.CoverURLSigner, coverExpiry time.Duration, adminSandbox handler.AdminSandbox, templates *handler.TemplateHandler, harness handler.HarnessImporter, stageStore projectstage.Store, stageSandbox handler.StageSandbox) {
 	var roleStore handler.AgentRoleStore
 	if roles != nil {
 		roleStore = roles.Service
@@ -22,6 +23,11 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 	projectHandler.Covers = coverSigner
 	projectHandler.CoverExpiry = coverExpiry
 	projectHandler.Harness = harness
+	projectHandler.Stages = stageStore
+	var stageHandler *handler.StageHandler
+	if stageStore != nil {
+		stageHandler = handler.NewStageHandler(projects, stageStore, stageSandbox)
+	}
 	adminHandler := handler.NewAdminHandler(repo, projects)
 	adminHandler.Sandbox = adminSandbox
 	adminHandler.Covers = coverSigner
@@ -75,6 +81,11 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 	projectsAPI.GET("/:id", projectHandler.Get)
 	projectsAPI.DELETE("/:id", projectHandler.Delete)
 	projectsAPI.PUT("/:id/agent-roles", projectHandler.UpdateAgentRoles)
+	if stageHandler != nil {
+		projectsAPI.GET("/:id/stages", stageHandler.List)
+		projectsAPI.POST("/:id/stages/:stageKey/start", stageHandler.Start)
+		projectsAPI.POST("/:id/stages/:stageKey/complete", stageHandler.Complete)
+	}
 
 	adminAPI := api.Group("/admin")
 	adminAPI.POST("/auth/login", authHandler.LoginOps)

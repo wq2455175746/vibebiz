@@ -5,12 +5,15 @@ defineProps<{
   stage: EnterpriseStageDefinition
   readOnly: boolean
   busy: boolean
+  started: boolean
   canComplete: boolean
   confirming: boolean
+  starting: boolean
   error: string
 }>()
 
 const emit = defineEmits<{
+  (event: 'start'): void
   (event: 'complete'): void
   (event: 'back'): void
 }>()
@@ -34,6 +37,16 @@ const emit = defineEmits<{
     <div class="enterprise-stage-actions">
       <button v-if="readOnly" class="enterprise-secondary" type="button" @click="emit('back')">
         返回当前阶段
+      </button>
+      <button
+        v-else-if="!started"
+        class="enterprise-primary"
+        type="button"
+        :disabled="busy || starting"
+        @click="emit('start')"
+      >
+        <i :class="starting ? 'pi pi-spin pi-spinner' : 'pi pi-play'" />
+        {{ starting ? '启动中…' : '开始本阶段' }}
       </button>
       <button
         v-else

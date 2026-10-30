@@ -463,6 +463,33 @@ func TestListProjectsAttachesCoverURL(t *testing.T) {
 	}
 }
 
+type fakeStageInitializer struct {
+	created []string
+	deleted []string
+	err     error
+}
+
+func (f *fakeStageInitializer) CreateInitial(_ context.Context, projectID string) error {
+	f.created = append(f.created, projectID)
+	return f.err
+}
+
+func (f *fakeStageInitializer) DeleteByProject(_ context.Context, projectID string) error {
+	f.deleted = append(f.deleted, projectID)
+	return nil
+}
+
+func enterpriseRolesForTest() []agentrole.Role {
+	return []agentrole.Role{
+		{ID: 6, RoleCode: "team", RoleNameZH: "团队", Status: 1},
+		{ID: 4, RoleCode: "emma", RoleNameZH: "产品经理", Status: 1},
+		{ID: 2, RoleCode: "bob", RoleNameZH: "系统架构师", Status: 1},
+		{ID: 7, RoleCode: "senior", RoleNameZH: "高级工程师", Status: 1},
+		{ID: 8, RoleCode: "qa", RoleNameZH: "测试开发工程师", Status: 1},
+		{ID: 1, RoleCode: "alex", RoleNameZH: "全栈工程师", Status: 1},
+	}
+}
+
 type fakeHarnessImporter struct {
 	id    string
 	err   error
@@ -477,12 +504,12 @@ func (f *fakeHarnessImporter) Import(_ context.Context, projectID string) error 
 
 func TestCreateEnterpriseProjectImportsHarness(t *testing.T) {
 	projectStore := store.NewMemoryProjectStore()
-	roles := &fakeAgentRoles{roles: []agentrole.Role{
-		{ID: 6, RoleCode: "team", RoleNameZH: "团队", Status: 1},
-	}}
+	roles := &fakeAgentRoles{roles: enterpriseRolesForTest()}
 	harness := &fakeHarnessImporter{}
+	stages := &fakeStageInitializer{}
 	h := newProjectHandlerForTest(projectStore, &fakeInitializer{sandboxID: 42}, newFakeMetaStore(), roles)
 	h.Harness = harness
+	h.Stages = stages
 	e := echo.New()
 	routeWithSession(e, http.MethodPost, "/cp/api/v1/projects", h.Create, sessionForTest(3))
 	req := httptest.NewRequest(http.MethodPost, "/cp/api/v1/projects", strings.NewReader(`{"prompt":"enterprise","mode":"enterprise","agentRoleIds":[6]}`))
@@ -500,9 +527,15 @@ func TestCreateEnterpriseProjectImportsHarness(t *testing.T) {
 	if harness.calls != 1 || harness.id != project.ID {
 		t.Fatalf("harness calls=%d id=%q, project=%q", harness.calls, harness.id, project.ID)
 	}
+	if len(stages.created) != 1 || stages.created[0] != project.ID {
+		t.Fatalf("stages created = %v", stages.created)
+	}
 	stored, err := projectStore.Get(context.Background(), project.ID)
 	if err != nil || stored.Mode != model.ProjectModeEnterprise {
 		t.Fatalf("stored = %+v err=%v", stored, err)
+	}
+	if len(stored.AgentRoleIDs) != 6 || stored.AgentRoleIDs[0] != 6 {
+		t.Fatalf("enterprise role ids = %v", stored.AgentRoleIDs)
 	}
 }
 
@@ -515,6 +548,7 @@ func TestCreateEnterpriseProjectRequiresTeamRole(t *testing.T) {
 	init := &fakeInitializer{sandboxID: 42}
 	h := newProjectHandlerForTest(projectStore, init, newFakeMetaStore(), roles)
 	h.Harness = harness
+	h.Stages = &fakeStageInitializer{}
 	e := echo.New()
 	routeWithSession(e, http.MethodPost, "/cp/api/v1/projects", h.Create, sessionForTest(3))
 	req := httptest.NewRequest(http.MethodPost, "/cp/api/v1/projects", strings.NewReader(`{"prompt":"enterprise","mode":"enterprise","agentRoleIds":[2]}`))
@@ -559,12 +593,12 @@ func TestCreateStandardProjectDoesNotImportHarness(t *testing.T) {
 func TestCreateEnterpriseProjectHarnessFailureRollsBack(t *testing.T) {
 	projectStore := store.NewMemoryProjectStore()
 	metas := newFakeMetaStore()
-	roles := &fakeAgentRoles{roles: []agentrole.Role{
-		{ID: 6, RoleCode: "team", RoleNameZH: "团队", Status: 1},
-	}}
+	roles := &fakeAgentRoles{roles: enterpriseRolesForTest()}
 	harness := &fakeHarnessImporter{err: errors.New("s3 down")}
+	stages := &fakeStageInitializer{}
 	h := newProjectHandlerForTest(projectStore, &fakeInitializer{sandboxID: 42}, metas, roles)
 	h.Harness = harness
+	h.Stages = stages
 	e := echo.New()
 	routeWithSession(e, http.MethodPost, "/cp/api/v1/projects", h.Create, sessionForTest(3))
 	req := httptest.NewRequest(http.MethodPost, "/cp/api/v1/projects", strings.NewReader(`{"prompt":"enterprise","mode":"enterprise","agentRoleIds":[6]}`))
@@ -581,13 +615,15 @@ func TestCreateEnterpriseProjectHarnessFailureRollsBack(t *testing.T) {
 	if len(metas.deleted) != 1 {
 		t.Fatalf("meta should be deleted: %v", metas.deleted)
 	}
+	if len(stages.deleted) != 1 {
+		t.Fatalf("stages should be deleted: %v", stages.deleted)
+	}
 }
 
 func TestCreateEnterpriseProjectWithoutHarnessImporterFails(t *testing.T) {
-	roles := &fakeAgentRoles{roles: []agentrole.Role{
-		{ID: 6, RoleCode: "team", RoleNameZH: "团队", Status: 1},
-	}}
+	roles := &fakeAgentRoles{roles: enterpriseRolesForTest()}
 	h := newProjectHandlerForTest(store.NewMemoryProjectStore(), &fakeInitializer{sandboxID: 42}, newFakeMetaStore(), roles)
+	h.Stages = &fakeStageInitializer{}
 	e := echo.New()
 	routeWithSession(e, http.MethodPost, "/cp/api/v1/projects", h.Create, sessionForTest(3))
 	req := httptest.NewRequest(http.MethodPost, "/cp/api/v1/projects", strings.NewReader(`{"prompt":"enterprise","mode":"enterprise","agentRoleIds":[6]}`))

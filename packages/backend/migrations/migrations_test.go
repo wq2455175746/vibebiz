@@ -201,8 +201,8 @@ func TestGooseCanCollectMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("collect migrations: %v", err)
 	}
-	if len(migs) != 16 {
-		t.Fatalf("collected %d migrations, want 16", len(migs))
+	if len(migs) != 18 {
+		t.Fatalf("collected %d migrations, want 18", len(migs))
 	}
 	for i, mig := range migs {
 		want := int64(i + 1)
@@ -301,6 +301,36 @@ func TestProjectModeMigration(t *testing.T) {
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("project mode migration missing %q", want)
+		}
+	}
+}
+
+func TestEnterpriseRoleSeedMigration(t *testing.T) {
+	body, err := fs.ReadFile(FS, "00017_seed_enterprise_roles.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	for _, want := range []string{"'senior'", "'高级工程师'", "'qa'", "'测试开发工程师'", "ON DUPLICATE KEY UPDATE", "-- +goose Up", "-- +goose Down"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("enterprise role seed missing %q", want)
+		}
+	}
+}
+
+func TestProjectStageMigration(t *testing.T) {
+	body, err := fs.ReadFile(FS, "00018_project_stage.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	for _, want := range []string{
+		"CREATE TABLE `project_stage`", "project_id", "stage_key", "artifact_path",
+		"uk_project_stage", "DROP TABLE IF EXISTS `project_stage`",
+		"-- +goose Up", "-- +goose Down",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("project stage migration missing %q", want)
 		}
 	}
 }

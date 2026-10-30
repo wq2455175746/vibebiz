@@ -3,15 +3,13 @@ import { describe, expect, it } from 'vitest'
 import type { Project } from '@/types'
 import {
   buildStagePrompt,
-  completeStage,
   createInitialStageState,
   currentStageKey,
   ENTERPRISE_STAGES,
   isEnterpriseProject,
-  loadEnterpriseStageState,
+  stageStatesFromProject,
   markEnterpriseProject,
   resolveEditorPath,
-  saveEnterpriseStageState,
 } from './enterprise'
 
 function memoryStorage(initial: Record<string, string> = {}) {
@@ -42,33 +40,34 @@ describe('enterprise stages', () => {
     expect(stages.delivery.status).toBe('placeholder')
   })
 
-  it('completes only the active stage and opens the next stage', () => {
-    const next = completeStage(createInitialStageState(), 'requirements', '2026-10-30T10:00:00Z')
-    expect(next).not.toBeNull()
-    expect(next?.states.requirements.status).toBe('done')
-    expect(next?.states.architecture.status).toBe('active')
-    expect(next?.nextKey).toBe('architecture')
-    expect(currentStageKey(next!.states)).toBe('architecture')
-  })
-
-  it('rejects completing a locked or placeholder stage', () => {
-    const initial = createInitialStageState()
-    expect(completeStage(initial, 'architecture')).toBeNull()
-    expect(completeStage(initial, 'artifacts')).toBeNull()
-  })
-
-  it('does not activate placeholder stages after development', () => {
-    let stages = createInitialStageState()
-    for (const key of ['requirements', 'architecture', 'detailed_design', 'test_plan'] as const) {
-      const result = completeStage(stages, key)
-      expect(result).not.toBeNull()
-      stages = result!.states
-    }
-    const result = completeStage(stages, 'development')
-    expect(result?.states.development.status).toBe('done')
-    expect(result?.states.artifacts.status).toBe('placeholder')
-    expect(result?.states.delivery.status).toBe('placeholder')
-    expect(result?.nextKey).toBeNull()
+  it('maps API stage records into local state', () => {
+    const states = stageStatesFromProject([
+      {
+        stageKey: 'requirements',
+        seq: 1,
+        title: '需求梳理',
+        roleCode: 'emma',
+        roleName: 'Emma',
+        artifactPath: 'docs/requirements.md',
+        workspace: 'document',
+        status: 'done',
+        startedAt: '2026-10-30T09:00:00Z',
+        completedAt: '2026-10-30T09:30:00Z',
+      },
+      {
+        stageKey: 'architecture',
+        seq: 2,
+        title: '概要设计',
+        roleCode: 'bob',
+        roleName: 'Bob',
+        artifactPath: 'docs/architecture.md',
+        workspace: 'document',
+        status: 'active',
+      },
+    ])
+    expect(states.requirements.status).toBe('done')
+    expect(states.architecture.status).toBe('active')
+    expect(states.test_plan.status).toBe('locked')
   })
 
   it('builds requirement and later stage prompts with role and artifact', () => {
@@ -101,21 +100,5 @@ describe('enterprise project routing', () => {
     expect(resolveEditorPath({ ...project, mode: 'enterprise' }, storage)).toBe(
       '/enterprise/editor/p1',
     )
-  })
-})
-
-describe('enterprise stage persistence', () => {
-  it('round-trips stage state per project', () => {
-    const storage = memoryStorage()
-    const stages = createInitialStageState()
-    const next = completeStage(stages, 'requirements')!.states
-    saveEnterpriseStageState('p1', next, storage)
-    expect(loadEnterpriseStageState('p1', storage)).toEqual(next)
-    expect(currentStageKey(loadEnterpriseStageState('p1', storage))).toBe('architecture')
-  })
-
-  it('falls back to a fresh state for malformed storage', () => {
-    const storage = memoryStorage({ 'vibebiz:enterprise:stages:p1': '{bad json' })
-    expect(loadEnterpriseStageState('p1', storage)).toEqual(createInitialStageState())
   })
 })

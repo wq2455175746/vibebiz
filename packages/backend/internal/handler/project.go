@@ -31,6 +31,11 @@ type HarnessImporter interface {
 	Import(ctx context.Context, projectID string) error
 }
 
+type ProjectStageInitializer interface {
+	CreateInitial(ctx context.Context, projectID string) error
+	DeleteByProject(ctx context.Context, projectID string) error
+}
+
 const maxProjectAgentRoles = 5
 
 var errInvalidAgentRole = errors.New("invalid agent role")
@@ -52,6 +57,7 @@ type ProjectHandler struct {
 	Covers      CoverURLSigner
 	CoverExpiry time.Duration
 	Harness     HarnessImporter
+	Stages      ProjectStageInitializer
 	Obs         *observability.Provider
 	Now         func() time.Time
 }
@@ -93,6 +99,27 @@ func (h *ProjectHandler) normalizeAgentRoles(ctx context.Context, ids []int64) (
 	return result, false, nil
 }
 
+func (h *ProjectHandler) enterpriseRoleIDs(ctx context.Context) ([]int64, error) {
+	roles, err := h.Roles.ListActive(ctx)
+	if err != nil {
+		return nil, err
+	}
+	wanted := []string{"team", "emma", "bob", "senior", "qa", "alex"}
+	byCode := make(map[string]int64, len(roles))
+	for _, role := range roles {
+		byCode[role.RoleCode] = role.ID
+	}
+	ids := make([]int64, 0, len(wanted))
+	for _, code := range wanted {
+		id, ok := byCode[code]
+		if !ok {
+			return nil, errInvalidAgentRole
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
 func normalizeProjectMode(value string) (string, error) {
 	mode := strings.TrimSpace(value)
 	if mode == "" {
@@ -118,7 +145,7 @@ func (h *ProjectHandler) Create(c echo.Context) error {
 	if err != nil {
 		return response.Fail(c, http.StatusBadRequest, 40009, "invalid project mode")
 	}
-	if mode == model.ProjectModeEnterprise && h.Harness == nil {
+	if mode == model.ProjectModeEnterprise && (h.Harness == nil || h.Stages == nil) {
 		return response.Fail(c, http.StatusServiceUnavailable, 50303, "enterprise harness unavailable")
 	}
 
@@ -128,6 +155,12 @@ func (h *ProjectHandler) Create(c echo.Context) error {
 	}
 	if mode == model.ProjectModeEnterprise && !hasTeam {
 		return response.Fail(c, http.StatusBadRequest, 40008, "enterprise project requires team role")
+	}
+	if mode == model.ProjectModeEnterprise {
+		roleIDs, err = h.enterpriseRoleIDs(c.Request().Context())
+		if err != nil {
+			return response.Fail(c, http.StatusBadRequest, 40010, "enterprise roles unavailable")
+		}
 	}
 	var defaultRoleID *int64
 	if len(roleIDs) > 0 {
@@ -211,7 +244,16 @@ func (h *ProjectHandler) Create(c echo.Context) error {
 	}
 
 	if mode == model.ProjectModeEnterprise {
+		if err := h.Stages.CreateInitial(ctx, id); err != nil {
+			_ = h.Metas.Delete(ctx, id)
+			_ = h.Store.Delete(ctx, id)
+			if h.Obs != nil {
+				h.Obs.Log(ctx, slog.LevelError, "project.create", "project_id", id, "status", "error", "error", err.Error())
+			}
+			return response.Fail(c, http.StatusInternalServerError, 50005, "create project stages failed")
+		}
 		if err := h.Harness.Import(ctx, id); err != nil {
+			_ = h.Stages.DeleteByProject(ctx, id)
 			_ = h.Metas.Delete(ctx, id)
 			_ = h.Store.Delete(ctx, id)
 			if h.Obs != nil {
@@ -252,8 +294,14 @@ func (h *ProjectHandler) UpdateAgentRoles(c echo.Context) error {
 	if err != nil {
 		return response.Fail(c, http.StatusBadRequest, 40007, "invalid agent roles")
 	}
-	if project.Mode == model.ProjectModeEnterprise && !hasTeam {
-		return response.Fail(c, http.StatusBadRequest, 40008, "enterprise project requires team role")
+	if project.Mode == model.ProjectModeEnterprise {
+		if !hasTeam {
+			return response.Fail(c, http.StatusBadRequest, 40008, "enterprise project requires team role")
+		}
+		roleIDs, err = h.enterpriseRoleIDs(c.Request().Context())
+		if err != nil {
+			return response.Fail(c, http.StatusBadRequest, 40010, "enterprise roles unavailable")
+		}
 	}
 	if err := h.Store.SetAgentRoles(c.Request().Context(), project.ID, roleIDs); err != nil {
 		return response.Fail(c, http.StatusInternalServerError, 50011, "update agent roles failed")
