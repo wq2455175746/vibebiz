@@ -11,6 +11,9 @@ services:
   sandbox:
     build:
       context: ../../packages/sandbox
+      args:
+        APT_MIRROR: ${APT_MIRROR:-deb.debian.org}
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
     image: vibebiz/sandbox:local
     env_file:
       - .env
