@@ -9,6 +9,12 @@ export const useProjectStore = defineStore('project', () => {
   const loading = ref(false)
   const error = ref('')
 
+  function setCover(coverUrl: string, coverS3Path: string) {
+    if (current.value) {
+      current.value = { ...current.value, coverUrl, coverS3Path }
+    }
+  }
+
   async function load(id: string) {
     loading.value = true
     error.value = ''
@@ -22,5 +28,5 @@ export const useProjectStore = defineStore('project', () => {
     }
   }
 
-  return { current, loading, error, load }
+  return { current, loading, error, setCover, load }
 })

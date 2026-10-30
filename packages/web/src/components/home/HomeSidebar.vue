@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import Popover from 'primevue/popover'
 
 import { createFolder, listFolders } from '@/api/settings'
@@ -18,6 +18,7 @@ const emit = defineEmits<{
 
 const auth = useAuthStore()
 const notifications = useNotificationsStore()
+const route = useRoute()
 const router = useRouter()
 
 const account = computed(() => {
@@ -165,13 +166,23 @@ async function logout() {
 }
 
 const navigation = [
-  { label: '首页', icon: 'pi pi-home', active: true, visible: true },
-  { label: '资源', icon: 'pi pi-book', active: false, visible: true },
-  { label: '我的项目', icon: 'pi pi-folder', active: false, visible: false },
-  { label: '定时任务', icon: 'pi pi-clock', active: false, visible: true },
+  { label: '首页', icon: 'pi pi-home', route: 'home', visible: true },
+  { label: '资源', icon: 'pi pi-book', route: '', visible: true },
+  { label: '我的项目', icon: 'pi pi-folder', route: 'projects', visible: true },
+  { label: '定时任务', icon: 'pi pi-clock', route: '', visible: true },
 ]
 
 const visibleNavigation = computed(() => navigation.filter((item) => item.visible !== false))
+
+function isNavigationActive(name: string) {
+  return Boolean(name) && route.name === name
+}
+
+function navigate(name: string) {
+  if (name) {
+    void router.push({ name })
+  }
+}
 </script>
 
 <template>
@@ -221,10 +232,11 @@ const visibleNavigation = computed(() => navigation.filter((item) => item.visibl
           v-for="item in visibleNavigation"
           :key="item.label"
           class="sidebar-nav-item"
-          :class="{ active: item.active }"
+          :class="{ active: isNavigationActive(item.route) }"
           type="button"
           :aria-label="item.label"
           :title="collapsed ? item.label : undefined"
+          @click="navigate(item.route)"
         >
           <i :class="item.icon" />
           <span>{{ item.label }}</span>

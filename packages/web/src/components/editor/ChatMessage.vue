@@ -1,9 +1,14 @@
 <script setup lang="ts">
+import { computed, ref } from 'vue'
+
 import ToolCallCard from './ToolCallCard.vue'
 import type { ChatMessage } from '@/types'
 import { formatDateTime } from '@/utils/storage'
+import { summarizeTools } from '@/utils/toolCalls'
 
-defineProps<{ message: ChatMessage }>()
+const props = defineProps<{ message: ChatMessage }>()
+const toolsExpanded = ref(false)
+const toolSummary = computed(() => summarizeTools(props.message.tools))
 </script>
 
 <template>
@@ -27,7 +32,24 @@ defineProps<{ message: ChatMessage }>()
           </span>
         </div>
         <div v-if="message.tools.length > 0" class="tool-list">
-          <ToolCallCard v-for="tool in message.tools" :key="tool.id" :tool="tool" />
+          <button
+            v-if="toolSummary.collapsible"
+            type="button"
+            class="tool-summary"
+            :aria-expanded="toolsExpanded"
+            @click="toolsExpanded = !toolsExpanded"
+          >
+            <i :class="toolSummary.running ? 'pi pi-spin pi-spinner' : 'pi pi-wrench'" />
+            <span class="tool-summary-title">工具调用 {{ toolSummary.total }} 次</span>
+            <span class="tool-summary-detail">{{ toolSummary.detail }}</span>
+            <span class="tool-summary-state">
+              {{ toolSummary.running ? '执行中' : '已完成' }}
+            </span>
+            <i :class="toolsExpanded ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" />
+          </button>
+          <template v-if="!toolSummary.collapsible || toolsExpanded">
+            <ToolCallCard v-for="tool in message.tools" :key="tool.id" :tool="tool" />
+          </template>
         </div>
         <span v-if="message.pending" class="typing-dots" aria-label="正在生成">
           <i />

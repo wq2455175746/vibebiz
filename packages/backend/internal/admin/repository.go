@@ -2,9 +2,12 @@ package admin
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 )
+
+var ErrNotFound = errors.New("admin record not found")
 
 const (
 	DefaultPageSize = 10
@@ -98,11 +101,20 @@ type Sandbox struct {
 }
 
 type Quota struct {
-	UserID         string `json:"userId"`
-	Plan           string `json:"plan"`
-	LLMTokens      int64  `json:"llmTokens"`
-	SandboxMinutes int64  `json:"sandboxMinutes"`
-	StorageMB      int64  `json:"storageMb"`
+	UserID              string `json:"userId"`
+	Plan                string `json:"plan"`
+	LLMTokensQuota      int64  `json:"llmTokensQuota"`
+	LLMTokensUsed       int64  `json:"llmTokensUsed"`
+	SandboxMinutesQuota int64  `json:"sandboxMinutesQuota"`
+	SandboxMinutesUsed  int64  `json:"sandboxMinutesUsed"`
+	StorageQuotaMB      int64  `json:"storageQuotaMb"`
+	StorageUsedMB       int64  `json:"storageUsedMb"`
+}
+
+type QuotaUpdateInput struct {
+	LLMTokensQuota      int64
+	SandboxMinutesQuota int64
+	StorageQuotaMB      int64
 }
 
 type AuditEvent struct {
@@ -141,8 +153,10 @@ type Repository interface {
 	AuditRecorder
 	Overview(ctx context.Context, projectCount int) (Overview, error)
 	Users(ctx context.Context, query ListQuery) (Page[User], error)
+	UpdateUserStatus(ctx context.Context, id int64, status int8) error
 	Sandboxes(ctx context.Context, query ListQuery) (Page[Sandbox], error)
 	Quotas(ctx context.Context) ([]Quota, error)
+	UpdateQuota(ctx context.Context, userID int64, input QuotaUpdateInput) error
 	Audit(ctx context.Context, query ListQuery) (Page[AuditEvent], error)
 	RecordAudit(ctx context.Context, event AuditRecord) error
 }

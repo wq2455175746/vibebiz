@@ -3,29 +3,26 @@ package handler
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/labstack/echo/v4"
 
-	"vibebiz/internal/client"
 	"vibebiz/internal/dao"
 	"vibebiz/internal/model"
+	"vibebiz/internal/storagesync"
 	"vibebiz/internal/store"
 )
 
-type fakeStatsClient struct {
-	stats map[string]client.ProjectStats
-	errs  map[string]error
+type fakeStorageReader struct {
+	records []storagesync.Record
+	err     error
 }
 
-func (f *fakeStatsClient) ProjectStats(_ context.Context, id string) (client.ProjectStats, error) {
-	if err := f.errs[id]; err != nil {
-		return client.ProjectStats{}, err
-	}
-	return f.stats[id], nil
+func (f *fakeStorageReader) ListByWorkspace(context.Context, int64) ([]storagesync.Record, error) {
+	return f.records, f.err
 }
 
 func TestStorageSummaryAggregatesCurrentWorkspace(t *testing.T) {
@@ -33,17 +30,16 @@ func TestStorageSummaryAggregatesCurrentWorkspace(t *testing.T) {
 	repo.quota = &dao.UserQuotaRecord{StorageQuotaBytes: 10 << 30}
 
 	projects := store.NewMemoryProjectStore()
-	projects.Create(context.Background(), &model.Project{ID: "p1", Name: "one", WorkspaceID: 5})
-	projects.Create(context.Background(), &model.Project{ID: "p2", Name: "two", WorkspaceID: 5})
-	projects.Create(context.Background(), &model.Project{ID: "p3", Name: "other", WorkspaceID: 9})
+	projects.Create(context.Background(), &model.Project{InternalID: 1, ID: "p1", Name: "one", WorkspaceID: 5})
+	projects.Create(context.Background(), &model.Project{InternalID: 2, ID: "p2", Name: "two", WorkspaceID: 5})
+	projects.Create(context.Background(), &model.Project{InternalID: 3, ID: "p3", Name: "other", WorkspaceID: 9})
 
-	stats := &fakeStatsClient{
-		stats: map[string]client.ProjectStats{
-			"p1": {FileSizeBytes: 100, FileCount: 4, DirCount: 1, LastModifiedAt: 1793191707598},
-		},
-		errs: map[string]error{"p2": errors.New("scan failed")},
-	}
-	h := &StorageHandler{Projects: projects, Sandbox: stats, Account: service}
+	modified := time.UnixMilli(1793191707598).UTC()
+	reader := &fakeStorageReader{records: []storagesync.Record{{
+		ProjectID: 1, WorkspaceID: 5, UserID: 7,
+		FileSizeBytes: 100, FileCount: 4, DirCount: 1, LastModifiedAt: &modified,
+	}}}
+	h := &StorageHandler{Projects: projects, Storage: reader, Account: service}
 
 	e := echo.New()
 	e.Use(sessionMiddleware(sessionForTest(5)))
@@ -80,14 +76,11 @@ func TestStorageSummaryAggregatesCurrentWorkspace(t *testing.T) {
 	if !available || !unavailable {
 		t.Fatalf("availability = %+v", summary.Projects)
 	}
-	if repo.updatedUsed != 100 {
-		t.Fatalf("storage used synced = %d, want 100", repo.updatedUsed)
-	}
 }
 
 func TestStorageSummaryRequiresSession(t *testing.T) {
-	repo, _, service := settingsFixture(t)
-	h := &StorageHandler{Projects: store.NewMemoryProjectStore(), Sandbox: &fakeStatsClient{}, Account: service}
+	_, _, service := settingsFixture(t)
+	h := &StorageHandler{Projects: store.NewMemoryProjectStore(), Storage: &fakeStorageReader{}, Account: service}
 	e := echo.New()
 	e.Use(sessionMiddleware(nil))
 	e.GET("/storage", h.Summary)
@@ -96,8 +89,5 @@ func TestStorageSummaryRequiresSession(t *testing.T) {
 	e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/storage", nil))
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401", rec.Code)
-	}
-	if repo.updatedUsed != 0 {
-		t.Fatalf("storage synced without session: %d", repo.updatedUsed)
 	}
 }

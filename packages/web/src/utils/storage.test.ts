@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatBytes, formatDateTime, storageRatio } from './storage'
+import { formatBytes, formatDate, formatDateTime, storageRatio } from './storage'
 
 describe('formatBytes', () => {
   it('renders zero and sub-kilobyte sizes', () => {
@@ -28,6 +28,13 @@ describe('formatDateTime', () => {
 
   it('renders a valid timestamp', () => {
     expect(formatDateTime('2026-10-28T12:00:00Z')).toContain('2026')
+  })
+})
+
+describe('formatDate', () => {
+  it('renders a date without the time', () => {
+    expect(formatDate('2026-10-30T12:00:00Z')).toContain('2026')
+    expect(formatDate(null)).toBe('—')
   })
 })
 

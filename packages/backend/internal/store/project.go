@@ -19,6 +19,7 @@ type ProjectStore interface {
 	Update(ctx context.Context, project *model.Project) error
 	Delete(ctx context.Context, id string) error
 	SetAgentRoles(ctx context.Context, id string, roleIDs []int64) error
+	SetCover(ctx context.Context, id, key string) error
 }
 
 type MemoryProjectStore struct {
@@ -121,6 +122,18 @@ func (s *MemoryProjectStore) SetAgentRoles(_ context.Context, id string, roleIDs
 		first := roleIDs[0]
 		project.DefaultAgentRoleID = &first
 	}
+	return nil
+}
+
+func (s *MemoryProjectStore) SetCover(_ context.Context, id, key string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	project, ok := s.items[id]
+	if !ok {
+		return ErrNotFound
+	}
+	project.CoverS3Path = key
+	project.CoverURL = ""
 	return nil
 }
 

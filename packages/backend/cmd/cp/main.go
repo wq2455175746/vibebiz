@@ -31,6 +31,7 @@ import (
 	"vibebiz/internal/sandboxregistry"
 	"vibebiz/internal/secret"
 	"vibebiz/internal/server"
+	"vibebiz/internal/storagesync"
 	"vibebiz/internal/store"
 )
 
@@ -137,7 +138,7 @@ func main() {
 	provisioner := sandboxregistry.NewProvisioner(selector, sandboxregistry.NewHTTPInitializer(obs), 3)
 	sandboxRouter := client.NewRouter(resolver, obs)
 	registryHandler := handler.NewSandboxRegistryHandler(registryRepo, cfg.SandboxRegistryToken, obs)
-	storageHandler := &handler.StorageHandler{Projects: projectStore, Sandbox: sandboxRouter, Account: accountService}
+	storageHandler := &handler.StorageHandler{Projects: projectStore, Storage: storagesync.NewMySQLRepository(db), Account: accountService}
 
 	notificationRepo := dao.NewNotificationRepository(db)
 	notificationCache := notification.NewCache(redisClient, redisPrefix)
@@ -181,7 +182,7 @@ func main() {
 
 	e := server.New(cfg, obs)
 	e.Use(requestCounter.Middleware())
-	router.RegisterControl(e, adminRepo, projectStore, provisioner, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler, registryHandler, modelHandler, roleHandler)
+	router.RegisterControl(e, adminRepo, projectStore, provisioner, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler, registryHandler, modelHandler, roleHandler, avatarPresigner, cfg.S3PresignExpiry())
 	router.RegisterChatHistory(e, handler.NewChatHistoryHandler(sandboxRouter, projectStore), authn)
 
 	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))

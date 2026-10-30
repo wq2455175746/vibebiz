@@ -79,7 +79,7 @@ watch(
         <button
           class="log-action log-close"
           type="button"
-          aria-label="关闭控制台"
+          aria-label="关闭终端"
           @click="emit('close')"
         >
           <i class="pi pi-times" />

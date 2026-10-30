@@ -36,7 +36,7 @@ const tabMeta = computed(() => {
   if (activeTab.value === 'preview') {
     return '实时预览'
   }
-  return activeTab.value === 'code' ? '只读文件' : '执行日志'
+  return activeTab.value === 'code' ? '只读文件' : '终端输出'
 })
 let statusTimer: ReturnType<typeof setInterval> | null = null
 let backgroundProjectId: string | null = null
@@ -233,8 +233,8 @@ onBeforeUnmount(() => {
               :class="{ active: activeTab === 'console' }"
               @click="activeTab = 'console'"
             >
-              <i class="pi pi-desktop" />
-              控制台
+              <i class="pi pi-server" />
+              终端
             </button>
           </div>
           <span class="workbench-meta">{{ tabMeta }}</span>
@@ -242,13 +242,14 @@ onBeforeUnmount(() => {
 
         <div class="workbench-body">
           <PreviewPane
-            v-if="activeTab === 'preview'"
+            v-show="activeTab === 'preview'"
             :project-id="id"
             :refresh-token="previewRevision"
+            :active="activeTab === 'preview'"
           />
-          <CodePane v-else-if="activeTab === 'code'" :project-id="id" />
+          <CodePane v-if="activeTab === 'code'" :project-id="id" />
           <LogConsole
-            v-else
+            v-else-if="activeTab === 'console'"
             class="workbench-log"
             :open="true"
             @close="activeTab = 'preview'"

@@ -201,8 +201,8 @@ func TestGooseCanCollectMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("collect migrations: %v", err)
 	}
-	if len(migs) != 13 {
-		t.Fatalf("collected %d migrations, want 13", len(migs))
+	if len(migs) != 14 {
+		t.Fatalf("collected %d migrations, want 14", len(migs))
 	}
 	for i, mig := range migs {
 		want := int64(i + 1)
@@ -263,6 +263,25 @@ func TestProjectResourceMigration(t *testing.T) {
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("project resource migration missing %q", want)
+		}
+	}
+}
+
+func TestProjectCoverMigration(t *testing.T) {
+	body, err := fs.ReadFile(FS, "00014_project_cover.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	for _, want := range []string{
+		"ALTER TABLE `project`",
+		"ADD COLUMN `cover_s3_path`",
+		"DROP COLUMN `cover_s3_path`",
+		"-- +goose Up",
+		"-- +goose Down",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("project cover migration missing %q", want)
 		}
 	}
 }

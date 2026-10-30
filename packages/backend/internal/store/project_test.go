@@ -131,6 +131,23 @@ func TestMemoryProjectStoreClearAgentRoles(t *testing.T) {
 	}
 }
 
+func TestMemoryProjectStoreSetCover(t *testing.T) {
+	s := NewMemoryProjectStore()
+	if err := s.Create(context.Background(), &model.Project{ID: "p1", WorkspaceID: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetCover(context.Background(), "p1", "projects/p1/cover.png"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Get(context.Background(), "p1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.CoverS3Path != "projects/p1/cover.png" {
+		t.Fatalf("cover = %q", got.CoverS3Path)
+	}
+}
+
 func TestMemoryProjectStoreDelete(t *testing.T) {
 	s := NewMemoryProjectStore()
 	s.Create(context.Background(), &model.Project{ID: "p1", WorkspaceID: 1})

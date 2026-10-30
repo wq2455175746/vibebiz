@@ -342,3 +342,19 @@ def test_chat_passes_agent_roles_and_team_mode_through_turn_to_agent(tmp_path):
     assert len(recorder.calls) == 1
     assert recorder.calls[0]["agent_roles"] == agent_roles
     assert recorder.calls[0]["team_mode"] is True
+
+
+def test_preview_injects_console_bridge_only_into_html(tmp_path):
+    client = make_client(tmp_path)
+    init_project(client)
+
+    page = client.get("/internal/projects/p1/preview/")
+
+    assert page.status_code == 200
+    assert "vibebiz-preview-log" in page.text
+    assert "preserveDrawingBuffer" in page.text
+    assert page.text.index("preserveDrawingBuffer") < page.text.index("<body")
+
+    css = client.get("/internal/projects/p1/preview/styles.css")
+    assert css.status_code == 200
+    assert "vibebiz-preview-log" not in css.text

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -50,6 +51,25 @@ func (h *AdminHandler) Users(c echo.Context) error {
 	})
 }
 
+type userStatusRequest struct {
+	Status *int8 `json:"status"`
+}
+
+func (h *AdminHandler) UpdateUserStatus(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		return response.Fail(c, http.StatusBadRequest, 40001, "invalid user id")
+	}
+	var req userStatusRequest
+	if err := c.Bind(&req); err != nil || req.Status == nil || (*req.Status != 0 && *req.Status != 1) {
+		return response.Fail(c, http.StatusBadRequest, 40001, "invalid status")
+	}
+	if err := h.Repo.UpdateUserStatus(c.Request().Context(), id, *req.Status); err != nil {
+		return adminRepoError(c, err)
+	}
+	return response.OK(c, map[string]any{"id": strconv.FormatInt(id, 10), "status": *req.Status})
+}
+
 func (h *AdminHandler) Sandboxes(c echo.Context) error {
 	page, err := h.Repo.Sandboxes(c.Request().Context(), adminListQuery(c))
 	if err != nil {
@@ -66,6 +86,34 @@ func (h *AdminHandler) Quotas(c echo.Context) error {
 		return adminRepoError(c, err)
 	}
 	return response.OK(c, quotas)
+}
+
+type quotaUpdateRequest struct {
+	LLMTokensQuota      *int64 `json:"llmTokensQuota"`
+	SandboxMinutesQuota *int64 `json:"sandboxMinutesQuota"`
+	StorageQuotaMB      *int64 `json:"storageQuotaMb"`
+}
+
+func (h *AdminHandler) UpdateQuota(c echo.Context) error {
+	userID, err := strconv.ParseInt(c.Param("userId"), 10, 64)
+	if err != nil || userID <= 0 {
+		return response.Fail(c, http.StatusBadRequest, 40001, "invalid user id")
+	}
+	var req quotaUpdateRequest
+	if err := c.Bind(&req); err != nil || req.LLMTokensQuota == nil || req.SandboxMinutesQuota == nil || req.StorageQuotaMB == nil {
+		return response.Fail(c, http.StatusBadRequest, 40001, "invalid quota")
+	}
+	if *req.LLMTokensQuota < 0 || *req.SandboxMinutesQuota < 0 || *req.StorageQuotaMB < 0 {
+		return response.Fail(c, http.StatusBadRequest, 40001, "invalid quota")
+	}
+	if err := h.Repo.UpdateQuota(c.Request().Context(), userID, admin.QuotaUpdateInput{
+		LLMTokensQuota:      *req.LLMTokensQuota,
+		SandboxMinutesQuota: *req.SandboxMinutesQuota,
+		StorageQuotaMB:      *req.StorageQuotaMB,
+	}); err != nil {
+		return adminRepoError(c, err)
+	}
+	return response.OK(c, map[string]any{"userId": strconv.FormatInt(userID, 10)})
 }
 
 func (h *AdminHandler) Audit(c echo.Context) error {
@@ -109,6 +157,9 @@ func adminListQuery(c echo.Context) admin.ListQuery {
 	return admin.ListQuery{Keyword: c.QueryParam("keyword"), Page: page, PageSize: pageSize}
 }
 
-func adminRepoError(c echo.Context, _ error) error {
+func adminRepoError(c echo.Context, err error) error {
+	if errors.Is(err, admin.ErrNotFound) {
+		return response.Fail(c, http.StatusNotFound, 40401, "admin record not found")
+	}
 	return response.Fail(c, http.StatusInternalServerError, 50001, "admin data unavailable")
 }

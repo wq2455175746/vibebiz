@@ -46,9 +46,18 @@ export interface AdminSandbox {
 export interface AdminQuota {
   userId: string
   plan: string
-  llmTokens: number
-  sandboxMinutes: number
-  storageMb: number
+  llmTokensQuota: number
+  llmTokensUsed: number
+  sandboxMinutesQuota: number
+  sandboxMinutesUsed: number
+  storageQuotaMb: number
+  storageUsedMb: number
+}
+
+export interface QuotaUpdateInput {
+  llmTokensQuota: number
+  sandboxMinutesQuota: number
+  storageQuotaMb: number
 }
 
 export interface AuditEvent {

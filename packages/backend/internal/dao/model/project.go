@@ -53,6 +53,7 @@ type Project struct {
 	TopicID            int64      `gorm:"column:topic_id" json:"topicId"`
 	TemplateID         *int64     `gorm:"column:template_id" json:"templateId,omitempty"`
 	S3Path             string     `gorm:"column:s3_path" json:"s3Path"`
+	CoverS3Path        string     `gorm:"column:cover_s3_path" json:"coverS3Path"`
 	LocalPath          string     `gorm:"column:local_path" json:"localPath"`
 	SandboxID          *int64     `gorm:"column:sandbox_id" json:"sandboxId,omitempty"`
 	ProjectStructure   JSON       `gorm:"column:project_structure;type:json" json:"projectStructure,omitempty"`

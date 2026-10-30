@@ -426,3 +426,39 @@ func TestUpdateProjectAgentRolesNormalizesTeam(t *testing.T) {
 		t.Fatalf("team not normalized: %+v", got.AgentRoleIDs)
 	}
 }
+
+type fakeCoverURLSigner struct{}
+
+func (fakeCoverURLSigner) PresignGet(_ context.Context, key string, _ time.Duration) (string, error) {
+	return "https://s3.example/" + key, nil
+}
+
+func TestListProjectsAttachesCoverURL(t *testing.T) {
+	projectStore := store.NewMemoryProjectStore()
+	_ = projectStore.Create(context.Background(), &model.Project{
+		ID: "p1", WorkspaceID: 3, CreatedAt: time.Now(),
+		CoverS3Path: "projects/p1/cover.png",
+	})
+	h := newProjectHandlerForTest(projectStore, &fakeInitializer{}, newFakeMetaStore(), &fakeAgentRoles{})
+	h.Covers = fakeCoverURLSigner{}
+	e := echo.New()
+	routeWithSession(e, http.MethodGet, "/cp/api/v1/projects", h.List, sessionForTest(3))
+
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/cp/api/v1/projects", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	var env struct {
+		Result struct {
+			Projects []model.Project `json:"projects"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatal(err)
+	}
+	if len(env.Result.Projects) != 1 || env.Result.Projects[0].CoverURL != "https://s3.example/projects/p1/cover.png" {
+		t.Fatalf("projects = %+v", env.Result.Projects)
+	}
+}

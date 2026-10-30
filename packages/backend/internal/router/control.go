@@ -2,6 +2,7 @@ package router
 
 import (
 	"log/slog"
+	"time"
 
 	"github.com/labstack/echo/v4"
 
@@ -12,12 +13,14 @@ import (
 	"vibebiz/internal/store"
 )
 
-func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.ProjectStore, provisioner handler.ProjectInitializer, obs *observability.Provider, authn *auth.Authenticator, authHandler *handler.AuthHandler, settingsHandler *handler.SettingsHandler, storageHandler *handler.StorageHandler, metas auth.ProjectMetaStore, notifications *handler.NotificationHandler, registry *handler.SandboxRegistryHandler, models *handler.ModelHandler, roles *handler.RoleHandler) {
+func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.ProjectStore, provisioner handler.ProjectInitializer, obs *observability.Provider, authn *auth.Authenticator, authHandler *handler.AuthHandler, settingsHandler *handler.SettingsHandler, storageHandler *handler.StorageHandler, metas auth.ProjectMetaStore, notifications *handler.NotificationHandler, registry *handler.SandboxRegistryHandler, models *handler.ModelHandler, roles *handler.RoleHandler, coverSigner handler.CoverURLSigner, coverExpiry time.Duration) {
 	var roleStore handler.AgentRoleStore
 	if roles != nil {
 		roleStore = roles.Service
 	}
 	projectHandler := handler.NewProjectHandler(projects, provisioner, obs, metas, roleStore)
+	projectHandler.Covers = coverSigner
+	projectHandler.CoverExpiry = coverExpiry
 	adminHandler := handler.NewAdminHandler(repo, projects)
 
 	api := e.Group("/cp/api/v1")
@@ -73,9 +76,11 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 	adminProtected.Use(admin.AuditMiddleware(repo, auditLogger))
 	adminProtected.GET("/overview", adminHandler.Overview)
 	adminProtected.GET("/users", adminHandler.Users)
+	adminProtected.PUT("/users/:id/status", adminHandler.UpdateUserStatus)
 	adminProtected.GET("/projects", adminHandler.Projects)
 	adminProtected.GET("/sandboxes", adminHandler.Sandboxes)
 	adminProtected.GET("/quotas", adminHandler.Quotas)
+	adminProtected.PUT("/quotas/:userId", adminHandler.UpdateQuota)
 	adminProtected.GET("/audit", adminHandler.Audit)
 	if models != nil {
 		adminProtected.GET("/models", models.List)

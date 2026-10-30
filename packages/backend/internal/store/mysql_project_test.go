@@ -223,6 +223,23 @@ func TestMySQLProjectStoreUpdateSandboxID(t *testing.T) {
 	}
 }
 
+func TestMySQLProjectStoreSetCover(t *testing.T) {
+	db, mock := newMockProjectDB(t)
+	s := newMySQLProjectStore(t, db, mock)
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE `project` SET .*cover_s3_path.*").
+		WithArgs("projects/p1/cover.png", sqlmock.AnyArg(), "p1").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	if err := s.SetCover(context.Background(), "p1", "projects/p1/cover.png"); err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestMySQLProjectStoreUpdateNotFound(t *testing.T) {
 	db, mock := newMockProjectDB(t)
 	s := newMySQLProjectStore(t, db, mock)

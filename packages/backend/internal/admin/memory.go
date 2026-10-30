@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"strconv"
 	"time"
 )
 
@@ -24,8 +25,8 @@ func NewMemoryRepository() Repository {
 			{ID: "sb-2", Name: "sandbox-b", Host: "127.0.0.1", Port: 8001, Status: "offline", HealthStatus: "unhealthy", ActiveRequests: 0, MaxConcurrency: 8, LastHeartbeatAt: &created, LastHealthAt: &created, HealthError: "timeout"},
 		},
 		quotas: []Quota{
-			{UserID: "1", Plan: "free", LLMTokens: 12000, SandboxMinutes: 45, StorageMB: 12},
-			{UserID: "2", Plan: "free", LLMTokens: 12000, SandboxMinutes: 45, StorageMB: 12},
+			{UserID: "1", Plan: "free", LLMTokensQuota: 500000, LLMTokensUsed: 12000, SandboxMinutesQuota: 600, SandboxMinutesUsed: 45, StorageQuotaMB: 1024, StorageUsedMB: 12},
+			{UserID: "2", Plan: "free", LLMTokensQuota: 500000, LLMTokensUsed: 12000, SandboxMinutesQuota: 600, SandboxMinutesUsed: 45, StorageQuotaMB: 1024, StorageUsedMB: 12},
 		},
 		audit: []AuditEvent{
 			{ID: "evt_01", Actor: "wanghg11", Action: "project.create", Target: "p_01", CreatedAt: created},
@@ -54,6 +55,22 @@ func (r *MemoryRepository) Users(_ context.Context, query ListQuery) (Page[User]
 	return Paginate(filtered, query), nil
 }
 
+func (r *MemoryRepository) UpdateUserStatus(_ context.Context, id int64, status int8) error {
+	target := strconv.FormatInt(id, 10)
+	for index := range r.users {
+		if r.users[index].ID != target {
+			continue
+		}
+		if status == 1 {
+			r.users[index].Status = "active"
+		} else {
+			r.users[index].Status = "disabled"
+		}
+		return nil
+	}
+	return ErrNotFound
+}
+
 func (r *MemoryRepository) Sandboxes(_ context.Context, query ListQuery) (Page[Sandbox], error) {
 	filtered := make([]Sandbox, 0, len(r.sandboxes))
 	for _, item := range r.sandboxes {
@@ -66,6 +83,20 @@ func (r *MemoryRepository) Sandboxes(_ context.Context, query ListQuery) (Page[S
 
 func (r *MemoryRepository) Quotas(_ context.Context) ([]Quota, error) {
 	return clone(r.quotas), nil
+}
+
+func (r *MemoryRepository) UpdateQuota(_ context.Context, userID int64, input QuotaUpdateInput) error {
+	target := strconv.FormatInt(userID, 10)
+	for index := range r.quotas {
+		if r.quotas[index].UserID != target {
+			continue
+		}
+		r.quotas[index].LLMTokensQuota = input.LLMTokensQuota
+		r.quotas[index].SandboxMinutesQuota = input.SandboxMinutesQuota
+		r.quotas[index].StorageQuotaMB = input.StorageQuotaMB
+		return nil
+	}
+	return ErrNotFound
 }
 
 func (r *MemoryRepository) Audit(_ context.Context, query ListQuery) (Page[AuditEvent], error) {

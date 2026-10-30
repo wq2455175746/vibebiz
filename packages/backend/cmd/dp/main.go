@@ -25,6 +25,7 @@ import (
 	storages3 "vibebiz/internal/s3"
 	"vibebiz/internal/sandboxregistry"
 	"vibebiz/internal/server"
+	"vibebiz/internal/storagesync"
 	"vibebiz/internal/store"
 )
 
@@ -88,6 +89,7 @@ func main() {
 	sandbox := client.NewRouter(resolver, obs)
 
 	var resourceS3 resource.S3
+	var coverS3 handler.CoverS3
 	if cfg.S3Bucket != "" {
 		presigner, err := storages3.NewPresigner(ctx, storages3.Config{
 			Bucket:          cfg.S3Bucket,
@@ -102,6 +104,7 @@ func main() {
 			obs.Logger.Error("s3 presigner init failed", "error", err)
 		} else {
 			resourceS3 = presigner
+			coverS3 = presigner
 		}
 	}
 	resourceService := resource.NewService(dao.NewProjectResourceRepository(db), resourceS3, sandbox)
@@ -115,9 +118,17 @@ func main() {
 	}
 	roleService := agentrole.NewService(agentrole.NewMySQLRepository(db), nil, 0)
 	roleResolver := role.NewResolver(projectStore, roleService)
+	storageSyncer := &storagesync.Syncer{
+		Projects: projectStore,
+		Sandbox:  sandbox,
+		Repo:     storagesync.NewMySQLRepository(db),
+		Logger:   obs.Logger,
+	}
+
+	coverHandler := handler.NewCoverHandler(projectStore, coverS3, cfg.S3PresignExpiry())
 
 	e := server.New(cfg, obs)
-	router.RegisterData(e, sandbox, obs, authn, metas, resourceHandler, roleResolver)
+	router.RegisterData(e, sandbox, obs, authn, metas, resourceHandler, roleResolver, coverHandler, storageSyncer)
 
 	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
 	go func() {

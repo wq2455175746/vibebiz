@@ -75,6 +75,8 @@ export interface Project {
   updatedAt: string
   defaultAgentRoleId?: number | null
   agentRoleIds?: number[] | null
+  coverS3Path?: string | null
+  coverUrl?: string | null
 }
 
 export interface AgentRole {

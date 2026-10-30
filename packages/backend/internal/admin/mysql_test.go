@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -59,15 +60,15 @@ func TestMySQLRepositoryUsers(t *testing.T) {
 func TestMySQLRepositoryQuotas(t *testing.T) {
 	db, mock := newAdminMockDB(t)
 	repo := NewMySQLRepository(db, fixedCounter(0))
-	mock.ExpectQuery("SELECT user_id, plan_code, llm_tokens_used_month, sandbox_minutes_used_month, storage_used_bytes FROM `user_quota`").
-		WillReturnRows(sqlmock.NewRows([]string{"user_id", "plan_code", "llm_tokens_used_month", "sandbox_minutes_used_month", "storage_used_bytes"}).
-			AddRow(1, "free", 12000, 45, 12*1024*1024))
+	mock.ExpectQuery("SELECT user_id, plan_code, llm_token_quota_month").
+		WillReturnRows(sqlmock.NewRows([]string{"user_id", "plan_code", "llm_token_quota_month", "llm_tokens_used_month", "sandbox_minutes_quota_month", "sandbox_minutes_used_month", "storage_quota_bytes", "storage_used_bytes"}).
+			AddRow(1, "free", 500000, 12000, 600, 45, 1024*1024*1024, 12*1024*1024))
 
 	quotas, err := repo.Quotas(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(quotas) != 1 || quotas[0].UserID != "1" || quotas[0].LLMTokens != 12000 || quotas[0].StorageMB != 12 {
+	if len(quotas) != 1 || quotas[0].UserID != "1" || quotas[0].LLMTokensQuota != 500000 || quotas[0].LLMTokensUsed != 12000 || quotas[0].StorageQuotaMB != 1024 || quotas[0].StorageUsedMB != 12 {
 		t.Fatalf("quotas = %+v", quotas)
 	}
 }
@@ -103,6 +104,80 @@ func TestMySQLRepositoryAuditAndRecord(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMySQLRepositoryUpdateUserStatus(t *testing.T) {
+	db, mock := newAdminMockDB(t)
+	repo := NewMySQLRepository(db, fixedCounter(0))
+
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE `user` SET `status`=\\?,`updated_at`=\\? WHERE id = \\? AND `user`.`deleted_at` IS NULL").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	if err := repo.UpdateUserStatus(context.Background(), 1, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMySQLRepositoryUpdateUserStatusNotFound(t *testing.T) {
+	db, mock := newAdminMockDB(t)
+	repo := NewMySQLRepository(db, fixedCounter(0))
+
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE `user` SET `status`=\\?,`updated_at`=\\? WHERE id = \\? AND `user`.`deleted_at` IS NULL").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectCommit()
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `user`").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+
+	if err := repo.UpdateUserStatus(context.Background(), 99, 1); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("err = %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMySQLRepositoryUpdateQuota(t *testing.T) {
+	db, mock := newAdminMockDB(t)
+	repo := NewMySQLRepository(db, fixedCounter(0))
+
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE `user_quota` SET .*WHERE user_id = \\? AND `user_quota`.`deleted_at` IS NULL").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	if err := repo.UpdateQuota(context.Background(), 1, QuotaUpdateInput{
+		LLMTokensQuota: 500000, SandboxMinutesQuota: 600, StorageQuotaMB: 1024,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMySQLRepositoryUpdateQuotaNotFound(t *testing.T) {
+	db, mock := newAdminMockDB(t)
+	repo := NewMySQLRepository(db, fixedCounter(0))
+
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE `user_quota` SET .*WHERE user_id = \\? AND `user_quota`.`deleted_at` IS NULL").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectCommit()
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `user_quota`").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+
+	if err := repo.UpdateQuota(context.Background(), 99, QuotaUpdateInput{}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("err = %v", err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)

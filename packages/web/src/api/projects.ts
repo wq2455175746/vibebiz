@@ -1,4 +1,4 @@
-import { cpHttp, request } from './client'
+import { cpHttp, dpHttp, request } from './client'
 import type { Project } from '@/types'
 
 export async function listProjects(): Promise<Project[]> {
@@ -28,4 +28,26 @@ export async function updateProjectAgentRoles(
     data: { agentRoleIds },
   })
   return result.agentRoleIds ?? []
+}
+
+export interface ProjectCover {
+  coverS3Path: string
+  coverUrl: string
+}
+
+export async function uploadProjectCover(projectId: string, image: Blob): Promise<ProjectCover> {
+  return request<ProjectCover>(dpHttp, {
+    method: 'post',
+    url: `/projects/${encodeURIComponent(projectId)}/cover`,
+    data: image,
+    headers: { 'Content-Type': 'image/png' },
+    timeout: 30_000,
+  })
+}
+
+export async function deleteProject(id: string): Promise<void> {
+  await request<{ id: string }>(cpHttp, {
+    method: 'delete',
+    url: `/projects/${encodeURIComponent(id)}`,
+  })
 }

@@ -12,6 +12,7 @@ import type {
   Overview,
   PageQuery,
   PageResult,
+  QuotaUpdateInput,
   RoleAvatarPresign,
   RoleInput,
   RoleUpdateInput,
@@ -38,6 +39,14 @@ export async function getUsers(query: PageQuery = {}): Promise<PageResult<AdminU
   return toPage(result, 'users')
 }
 
+export async function updateUserStatus(id: string, status: number): Promise<void> {
+  await request<{ id: string; status: number }>({
+    method: 'put',
+    url: `/users/${id}/status`,
+    data: { status },
+  })
+}
+
 export async function getProjects(query: PageQuery = {}): Promise<PageResult<AdminProject>> {
   const result = await request<AdminProject[] | Record<string, unknown>>({
     method: 'get',
@@ -62,6 +71,14 @@ export async function getQuotas(): Promise<AdminQuota[]> {
     url: '/quotas',
   })
   return toList(result, 'quotas')
+}
+
+export async function updateQuota(userId: string, input: QuotaUpdateInput): Promise<void> {
+  await request<{ userId: string }>({
+    method: 'put',
+    url: `/quotas/${userId}`,
+    data: input,
+  })
 }
 
 export async function getAudit(query: PageQuery = {}): Promise<PageResult<AuditEvent>> {

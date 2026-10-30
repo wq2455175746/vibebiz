@@ -36,13 +36,19 @@ type AgentRoleStore interface {
 	GetActive(ctx context.Context, id int64) (agentrole.Role, error)
 }
 
+type CoverURLSigner interface {
+	PresignGet(ctx context.Context, key string, expiry time.Duration) (string, error)
+}
+
 type ProjectHandler struct {
-	Store   store.ProjectStore
-	Sandbox ProjectInitializer
-	Metas   auth.ProjectMetaStore
-	Roles   AgentRoleStore
-	Obs     *observability.Provider
-	Now     func() time.Time
+	Store       store.ProjectStore
+	Sandbox     ProjectInitializer
+	Metas       auth.ProjectMetaStore
+	Roles       AgentRoleStore
+	Covers      CoverURLSigner
+	CoverExpiry time.Duration
+	Obs         *observability.Provider
+	Now         func() time.Time
 }
 
 func NewProjectHandler(projectStore store.ProjectStore, sandbox ProjectInitializer, obs *observability.Provider, metas auth.ProjectMetaStore, roles AgentRoleStore) *ProjectHandler {
@@ -221,7 +227,11 @@ func (h *ProjectHandler) List(c echo.Context) error {
 	if session.CurrentWorkspaceID == 0 {
 		return response.OK(c, map[string]any{"projects": []*model.Project{}})
 	}
-	return response.OK(c, map[string]any{"projects": h.Store.ListByWorkspaces(c.Request().Context(), []int64{session.CurrentWorkspaceID})})
+	projects := h.Store.ListByWorkspaces(c.Request().Context(), []int64{session.CurrentWorkspaceID})
+	for _, project := range projects {
+		h.attachCoverURL(c.Request().Context(), project)
+	}
+	return response.OK(c, map[string]any{"projects": projects})
 }
 
 func (h *ProjectHandler) Get(c echo.Context) error {
@@ -239,7 +249,26 @@ func (h *ProjectHandler) Get(c echo.Context) error {
 	if !containsInt64(session.WorkspaceIDs, project.WorkspaceID) {
 		return response.Fail(c, http.StatusNotFound, 40401, "project not found")
 	}
+	h.attachCoverURL(c.Request().Context(), project)
 	return response.OK(c, project)
+}
+
+func (h *ProjectHandler) attachCoverURL(ctx context.Context, project *model.Project) {
+	if project == nil || project.CoverS3Path == "" || h.Covers == nil {
+		return
+	}
+	expiry := h.CoverExpiry
+	if expiry <= 0 {
+		expiry = 15 * time.Minute
+	}
+	coverURL, err := h.Covers.PresignGet(ctx, project.CoverS3Path, expiry)
+	if err != nil {
+		if h.Obs != nil {
+			h.Obs.Log(ctx, slog.LevelWarn, "project.cover", "project_id", project.ID, "status", "presign_error", "error", err.Error())
+		}
+		return
+	}
+	project.CoverURL = coverURL
 }
 
 func (h *ProjectHandler) Delete(c echo.Context) error {

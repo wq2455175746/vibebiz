@@ -88,6 +88,61 @@ func TestAdminUsersSearchAndPagination(t *testing.T) {
 	}
 }
 
+func TestAdminUpdatesUserStatus(t *testing.T) {
+	e, _, authState := newCP(t, store.NewMemoryProjectStore())
+
+	rec := serveWithAuthBody(e, http.MethodPut, "/cp/api/v1/admin/users/1/status", authState.opsCookie, `{"status":0}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	rec = serveWithAuthBody(e, http.MethodPut, "/cp/api/v1/admin/users/1/status", authState.userCookie, `{"status":1}`)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("user status = %d, want 401", rec.Code)
+	}
+	rec = serveWithAuthBody(e, http.MethodPut, "/cp/api/v1/admin/users/99/status", authState.opsCookie, `{"status":1}`)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("missing status = %d, want 404", rec.Code)
+	}
+
+	rec = serveWithAuth(e, http.MethodGet, "/cp/api/v1/admin/users?keyword=wanghg11", authState.opsCookie)
+	var payload struct {
+		Users []admin.User `json:"users"`
+	}
+	if err := json.Unmarshal(decodeEnvelope(t, rec.Body.Bytes()).Result, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if len(payload.Users) != 1 || payload.Users[0].Status != "disabled" {
+		t.Fatalf("users = %+v", payload.Users)
+	}
+}
+
+func TestAdminUpdatesQuota(t *testing.T) {
+	e, _, authState := newCP(t, store.NewMemoryProjectStore())
+
+	body := `{"llmTokensQuota":800000,"sandboxMinutesQuota":900,"storageQuotaMb":2048}`
+	rec := serveWithAuthBody(e, http.MethodPut, "/cp/api/v1/admin/quotas/1", authState.opsCookie, body)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	rec = serveWithAuthBody(e, http.MethodPut, "/cp/api/v1/admin/quotas/1", authState.userCookie, body)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("user status = %d, want 401", rec.Code)
+	}
+	rec = serveWithAuthBody(e, http.MethodPut, "/cp/api/v1/admin/quotas/99", authState.opsCookie, body)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("missing status = %d, want 404", rec.Code)
+	}
+
+	rec = serveWithAuth(e, http.MethodGet, "/cp/api/v1/admin/quotas", authState.opsCookie)
+	var quotas []admin.Quota
+	if err := json.Unmarshal(decodeEnvelope(t, rec.Body.Bytes()).Result, &quotas); err != nil {
+		t.Fatal(err)
+	}
+	if len(quotas) != 2 || quotas[0].LLMTokensQuota != 800000 || quotas[0].SandboxMinutesQuota != 900 || quotas[0].StorageQuotaMB != 2048 {
+		t.Fatalf("quotas = %+v", quotas)
+	}
+}
+
 func TestAdminProjects(t *testing.T) {
 	projects := store.NewMemoryProjectStore()
 	now := time.Now()

@@ -9,19 +9,18 @@ import (
 
 	"vibebiz/internal/account"
 	"vibebiz/internal/auth"
-	"vibebiz/internal/client"
-	"vibebiz/internal/model"
 	"vibebiz/internal/response"
+	"vibebiz/internal/storagesync"
 	"vibebiz/internal/store"
 )
 
-type ProjectStatsClient interface {
-	ProjectStats(ctx context.Context, id string) (client.ProjectStats, error)
+type StorageReader interface {
+	ListByWorkspace(ctx context.Context, workspaceID int64) ([]storagesync.Record, error)
 }
 
 type StorageHandler struct {
 	Projects store.ProjectStore
-	Sandbox  ProjectStatsClient
+	Storage  StorageReader
 	Account  *account.Service
 }
 
@@ -58,37 +57,35 @@ func (h *StorageHandler) Summary(c echo.Context) error {
 		return settingsError(c, err)
 	}
 	projects := h.Projects.ListByWorkspaces(ctx, []int64{workspace.ID})
+	records, err := h.Storage.ListByWorkspace(ctx, workspace.ID)
+	if err != nil {
+		return settingsError(c, err)
+	}
+	byProject := make(map[int64]storagesync.Record, len(records))
+	for _, record := range records {
+		byProject[record.ProjectID] = record
+	}
 	summary := StorageSummary{
 		QuotaBytes:   quota.StorageQuotaBytes,
 		ProjectCount: len(projects),
 		Projects:     make([]StorageProject, 0, len(projects)),
 	}
 	for _, project := range projects {
-		summary.Projects = append(summary.Projects, h.projectStorage(ctx, project, quota.StorageQuotaBytes))
-		summary.UsedBytes += summary.Projects[len(summary.Projects)-1].SizeBytes
-	}
-	if err := h.Account.SyncStorageUsed(ctx, session.UserID, summary.UsedBytes); err != nil {
-		return settingsError(c, err)
+		item := StorageProject{ID: project.ID, Name: project.Name}
+		if record, ok := byProject[project.InternalID]; ok {
+			item.Available = true
+			item.SizeBytes = record.FileSizeBytes
+			item.FileCount = record.FileCount
+			item.DirCount = record.DirCount
+			if record.LastModifiedAt != nil {
+				item.LastModifiedAt = *record.LastModifiedAt
+			}
+			if quota.StorageQuotaBytes > 0 {
+				item.Ratio = float64(record.FileSizeBytes) / float64(quota.StorageQuotaBytes)
+			}
+		}
+		summary.Projects = append(summary.Projects, item)
+		summary.UsedBytes += item.SizeBytes
 	}
 	return response.OK(c, summary)
-}
-
-func (h *StorageHandler) projectStorage(ctx context.Context, project *model.Project, quotaBytes int64) StorageProject {
-	item := StorageProject{ID: project.ID, Name: project.Name}
-	stats, err := h.Sandbox.ProjectStats(ctx, project.ID)
-	if err != nil {
-		return item
-	}
-	item.Available = true
-	item.SizeBytes = stats.FileSizeBytes
-	item.FileCount = stats.FileCount
-	item.DirCount = stats.DirCount
-	item.LastModifiedAt = time.UnixMilli(stats.LastModifiedAt).UTC()
-	if stats.LastModifiedAt <= 0 {
-		item.LastModifiedAt = time.Time{}
-	}
-	if quotaBytes > 0 {
-		item.Ratio = float64(stats.FileSizeBytes) / float64(quotaBytes)
-	}
-	return item
 }

@@ -43,6 +43,7 @@ func (s *MySQLProjectStore) Create(ctx context.Context, project *model.Project) 
 			Name:               project.Name,
 			Prompt:             project.Prompt,
 			SandboxID:          project.SandboxID,
+			CoverS3Path:        project.CoverS3Path,
 			TopicID:            s.commonTopicID,
 			Status:             status,
 			DefaultAgentRoleID: project.DefaultAgentRoleID,
@@ -74,6 +75,20 @@ func (s *MySQLProjectStore) Get(ctx context.Context, id string) (*model.Project,
 	}
 	project.AgentRoleIDs = roleIDs
 	return project, nil
+}
+
+func (s *MySQLProjectStore) SetCover(ctx context.Context, id, key string) error {
+	result := s.db.WithContext(ctx).
+		Model(&daomodel.Project{}).
+		Where("public_id = ?", id).
+		Update("cover_s3_path", key)
+	if result.Error != nil {
+		return fmt.Errorf("update project cover: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (s *MySQLProjectStore) SetAgentRoles(ctx context.Context, id string, roleIDs []int64) error {
@@ -199,6 +214,7 @@ func (s *MySQLProjectStore) Delete(ctx context.Context, id string) error {
 
 func toProject(row *daomodel.Project) *model.Project {
 	return &model.Project{
+		InternalID:         row.ID,
 		ID:                 row.PublicID,
 		Name:               row.Name,
 		Prompt:             row.Prompt,
@@ -207,6 +223,7 @@ func toProject(row *daomodel.Project) *model.Project {
 		OwnerUserID:        row.UserID,
 		SandboxID:          row.SandboxID,
 		DefaultAgentRoleID: row.DefaultAgentRoleID,
+		CoverS3Path:        row.CoverS3Path,
 		CreatedAt:          row.CreatedAt,
 		UpdatedAt:          row.UpdatedAt,
 	}

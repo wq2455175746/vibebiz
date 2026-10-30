@@ -1,25 +1,28 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, ref } from 'vue'
 
+import ProjectCard from './ProjectCard.vue'
 import type { Project } from '@/types'
-import { formatDateTime } from '@/utils/storage'
 
-defineProps<{ projects: Project[] }>()
+const props = defineProps<{ projects: Project[]; limit?: number }>()
+
+const emit = defineEmits<{
+  (event: 'open-project', id: string): void
+  (event: 'delete-project', project: Project): void
+  (event: 'view-all'): void
+}>()
 
 type DiscoveryTab = 'projects' | 'templates'
 
-const router = useRouter()
 const activeTab = ref<DiscoveryTab>('projects')
+const visibleProjects = computed(() =>
+  props.limit ? props.projects.slice(0, props.limit) : props.projects,
+)
 
 const tabs: { key: DiscoveryTab; label: string }[] = [
   { key: 'projects', label: '我的项目' },
   { key: 'templates', label: '模板' },
 ]
-
-function openProject(id: string) {
-  void router.push({ name: 'editor', params: { id } })
-}
 </script>
 
 <template>
@@ -37,25 +40,27 @@ function openProject(id: string) {
           {{ tab.label }}
         </button>
       </div>
+      <button
+        v-if="activeTab === 'projects' && limit && projects.length > limit"
+        class="discovery-more"
+        type="button"
+        @click="emit('view-all')"
+      >
+        查看全部
+        <i class="pi pi-arrow-right" />
+      </button>
     </div>
 
     <template v-if="activeTab === 'projects'">
-      <p v-if="projects.length === 0" class="discovery-empty">暂无项目</p>
+      <p v-if="visibleProjects.length === 0" class="discovery-empty">暂无项目</p>
       <div v-else class="project-grid">
-        <button
-          v-for="project in projects"
+        <ProjectCard
+          v-for="project in visibleProjects"
           :key="project.id"
-          class="project-card"
-          type="button"
-          @click="openProject(project.id)"
-        >
-          <span class="project-icon"><i class="pi pi-folder" /></span>
-          <span class="project-body">
-            <strong>{{ project.name }}</strong>
-            <span>{{ formatDateTime(project.createdAt) }}</span>
-          </span>
-          <i class="pi pi-angle-right project-arrow" />
-        </button>
+          :project="project"
+          @open="emit('open-project', $event)"
+          @delete="emit('delete-project', $event)"
+        />
       </div>
     </template>
 

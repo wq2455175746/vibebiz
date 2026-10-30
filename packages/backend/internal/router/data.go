@@ -18,10 +18,11 @@ type DataSandbox interface {
 	handler.PreviewClient
 }
 
-func RegisterData(e *echo.Echo, sandbox DataSandbox, obs *observability.Provider, authn *auth.Authenticator, metas auth.ProjectMetaStore, resources *handler.ResourceHandler, roles handler.ProjectRoleResolver) {
+func RegisterData(e *echo.Echo, sandbox DataSandbox, obs *observability.Provider, authn *auth.Authenticator, metas auth.ProjectMetaStore, resources *handler.ResourceHandler, roles handler.ProjectRoleResolver, covers *handler.CoverHandler, storageSyncer handler.StorageSyncer) {
 	files := handler.NewFileHandler(sandbox, obs)
 	chat := handler.NewChatHandler(sandbox, obs)
 	chat.Roles = roles
+	chat.Storage = storageSyncer
 	stopChat := handler.NewChatStopHandler(sandbox, obs)
 	chatStatus := handler.NewChatStatusHandler(sandbox, obs)
 	chatLogs := handler.NewChatLogsHandler(sandbox, obs)
@@ -47,6 +48,9 @@ func RegisterData(e *echo.Echo, sandbox DataSandbox, obs *observability.Provider
 	projects.GET("/logs", chatLogs.Get)
 	projects.GET("/skills", skills.List)
 	projects.GET("/preview/*", preview.Serve)
+	if covers != nil {
+		projects.POST("/cover", covers.Upload)
+	}
 
 	registerErrorHandler(e)
 }

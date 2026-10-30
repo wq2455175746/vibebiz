@@ -27,7 +27,7 @@ func TestDPRoutesProjectsToBoundSandbox(t *testing.T) {
 	authState.metas.items["p1"] = auth.ProjectMeta{WorkspaceID: 1, OwnerUserID: 7}
 	authState.metas.items["p2"] = auth.ProjectMeta{WorkspaceID: 1, OwnerUserID: 7}
 	e := server.New(config.Config{Plane: "dp", ServiceName: "vibebiz-dp"}, obs)
-	RegisterData(e, client.NewRouter(mapResolver{"p1": serverA.URL, "p2": serverB.URL}, obs), obs, authState.authn, authState.metas, nil, nil)
+	RegisterData(e, client.NewRouter(mapResolver{"p1": serverA.URL, "p2": serverB.URL}, obs), obs, authState.authn, authState.metas, nil, nil, nil, nil)
 
 	rec := serveWithAuth(e, http.MethodGet, "/dp/api/v1/projects/p1/files", authState.userCookie)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "a.txt") {

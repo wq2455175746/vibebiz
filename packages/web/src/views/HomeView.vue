@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 import { deleteStaging } from '@/api/resources'
-import { createProject, listProjects } from '@/api/projects'
+import { createProject, deleteProject, listProjects } from '@/api/projects'
 import { fetchChatStatus } from '@/api/chat'
 import HomeDiscovery from '@/components/home/HomeDiscovery.vue'
 import HomeHero from '@/components/home/HomeHero.vue'
 import HomeSidebar from '@/components/home/HomeSidebar.vue'
+import ProjectCard from '@/components/home/ProjectCard.vue'
 import ProjectPickerDialog from '@/components/home/ProjectPickerDialog.vue'
 import { useNotificationSocket } from '@/composables/useNotificationSocket'
 import { useAuthStore } from '@/stores/auth'
@@ -18,6 +19,7 @@ import '@/styles/home.css'
 import type { Project } from '@/types'
 
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
 const notifications = useNotificationsStore()
 const resources = useResourceStore()
@@ -28,6 +30,7 @@ const projects = ref<Project[]>([])
 const targetProject = ref<Project | null>(null)
 const pickerOpen = ref(false)
 const sidebarCollapsed = ref(localStorage.getItem('vibebiz:sidebar-collapsed') === '1')
+const isProjectsPage = computed(() => route.name === 'projects')
 
 const { connect, disconnect } = useNotificationSocket(() => {
   void notifications.load(true)
@@ -146,6 +149,22 @@ async function loadProjects() {
   }
 }
 
+function openProject(id: string) {
+  void router.push({ name: 'editor', params: { id } })
+}
+
+async function removeProject(project: Project) {
+  if (!window.confirm(`确定删除项目「${project.name}」吗？`)) {
+    return
+  }
+  try {
+    await deleteProject(project.id)
+    projects.value = projects.value.filter((item) => item.id !== project.id)
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : '删除项目失败'
+  }
+}
+
 onMounted(async () => {
   resources.reset()
   await auth.ensure()
@@ -166,7 +185,25 @@ onMounted(async () => {
     />
 
     <main class="home-main">
-      <div class="home-main-inner">
+      <div v-if="isProjectsPage" class="projects-page">
+        <header class="projects-head">
+          <h1>我的项目</h1>
+          <span>{{ projects.length }} 个项目</span>
+        </header>
+        <p v-if="error" class="error-text">{{ error }}</p>
+        <p v-if="projects.length === 0" class="discovery-empty">暂无项目</p>
+        <div v-else class="project-grid">
+          <ProjectCard
+            v-for="project in projects"
+            :key="project.id"
+            :project="project"
+            @open="openProject"
+            @delete="removeProject"
+          />
+        </div>
+      </div>
+
+      <div v-else class="home-main-inner">
         <HomeHero
           v-model="prompt"
           :creating="creating"
@@ -176,7 +213,13 @@ onMounted(async () => {
           @select-project="openProjectPicker"
           @clear-target="targetProject = null"
         />
-        <HomeDiscovery :projects="projects" />
+        <HomeDiscovery
+          :projects="projects"
+          :limit="4"
+          @open-project="openProject"
+          @delete-project="removeProject"
+          @view-all="router.push({ name: 'projects' })"
+        />
       </div>
     </main>
 

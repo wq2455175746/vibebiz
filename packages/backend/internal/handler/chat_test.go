@@ -109,6 +109,40 @@ func (f fakeRoleResolver) Resolve(context.Context, string) (*role.Context, error
 	return f.context, f.err
 }
 
+type fakeStorageSyncer struct {
+	ids []string
+}
+
+func (f *fakeStorageSyncer) Enqueue(projectID string) {
+	f.ids = append(f.ids, projectID)
+}
+
+func TestChatEnqueuesStorageSyncOnSuccess(t *testing.T) {
+	syncer := &fakeStorageSyncer{}
+	h := NewChatHandler(&fakeChat{body: "data: [DONE]\n\n"}, nil)
+	h.Storage = syncer
+	e := echo.New()
+	e.POST("/dp/api/v1/projects/:id/chat", h.Chat)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/dp/api/v1/projects/p1/chat", strings.NewReader(`{"message":"hi"}`)))
+	if len(syncer.ids) != 1 || syncer.ids[0] != "p1" {
+		t.Fatalf("enqueued = %+v", syncer.ids)
+	}
+}
+
+func TestChatEnqueuesStorageSyncOnReadError(t *testing.T) {
+	syncer := &fakeStorageSyncer{}
+	h := NewChatHandler(&errorChat{body: "data: {\"type\":\"agent\"}\n\n"}, nil)
+	h.Storage = syncer
+	e := echo.New()
+	e.POST("/dp/api/v1/projects/:id/chat", h.Chat)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/dp/api/v1/projects/p1/chat", strings.NewReader(`{"message":"hi"}`)))
+	if len(syncer.ids) != 1 || syncer.ids[0] != "p1" {
+		t.Fatalf("enqueued = %+v", syncer.ids)
+	}
+}
+
 type captureChat struct{ payload []byte }
 
 func (c *captureChat) Chat(_ context.Context, _ string, payload []byte) (io.ReadCloser, error) {

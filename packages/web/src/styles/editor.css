@@ -249,6 +249,52 @@
 .tool-card.done {
   color: var(--muted);
 }
+.tool-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 9px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tool-summary:hover {
+  border-color: var(--line-strong);
+}
+
+.tool-summary > i {
+  flex: none;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.tool-summary-title {
+  flex: none;
+  font-weight: 600;
+}
+
+.tool-summary-detail {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-summary-state {
+  flex: none;
+  color: var(--muted);
+  font-size: 10px;
+}
 
 .tool-icon {
   display: grid;
@@ -439,7 +485,13 @@
 .workbench-body {
   min-height: 0;
   flex: 1;
-  padding: 14px;
+  padding: 0;
+}
+
+@media (min-width: 961px) {
+  .workbench-body {
+    padding-bottom: 12px;
+  }
 }
 
 .preview-panel {
@@ -448,8 +500,6 @@
   flex-direction: column;
   overflow: hidden;
   background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 12px;
 }
 
 .preview-toolbar {
@@ -518,8 +568,6 @@
   height: 100%;
   overflow: hidden;
   background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 12px;
 }
 
 .file-tree {
@@ -714,8 +762,18 @@ button.file-row {
 .workbench-body > .workbench-log {
   height: 100%;
   overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+}
+
+.workbench-log .log-console {
+  border-top: 0;
+}
+
+.preview-console {
+  height: 180px;
+  flex: none;
+  border: 0;
+  border-top: 1px solid #1f2937;
+  border-radius: 0;
 }
 
 .log-console {
@@ -896,7 +954,7 @@ button.file-row {
   }
 
   .workbench-body {
-    padding: 8px;
+    padding: 0;
   }
 
   .file-tree {

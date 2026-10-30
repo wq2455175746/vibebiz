@@ -12,6 +12,7 @@ const router = createRouter({
   routes: [
     { path: '/login', name: 'login', component: LoginView, meta: { public: true } },
     { path: '/', name: 'home', component: HomeView },
+    { path: '/projects', name: 'projects', component: HomeView },
     settingsRoute,
     { path: '/editor/:id', name: 'editor', component: EditorView },
   ],

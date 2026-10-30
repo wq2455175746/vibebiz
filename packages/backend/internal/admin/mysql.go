@@ -146,15 +146,18 @@ func (r *MySQLRepository) Sandboxes(ctx context.Context, query ListQuery) (Page[
 
 func (r *MySQLRepository) Quotas(ctx context.Context) ([]Quota, error) {
 	var rows []struct {
-		UserID             int64
-		PlanCode           string
-		LLMTokensUsedMonth int64
-		SandboxMinutesUsed int64
-		StorageUsedBytes   int64
+		UserID              int64
+		PlanCode            string
+		LLMTokenQuotaMonth  int64
+		LLMTokensUsedMonth  int64
+		SandboxMinutesQuota int64
+		SandboxMinutesUsed  int64
+		StorageQuotaBytes   int64
+		StorageUsedBytes    int64
 	}
 	err := r.db.WithContext(ctx).
 		Table("user_quota").
-		Select("user_id, plan_code, llm_tokens_used_month, sandbox_minutes_used_month, storage_used_bytes").
+		Select("user_id, plan_code, llm_token_quota_month, llm_tokens_used_month, sandbox_minutes_quota_month, sandbox_minutes_used_month, storage_quota_bytes, storage_used_bytes").
 		Where("deleted_at IS NULL").
 		Order("user_id ASC").
 		Scan(&rows).Error
@@ -164,14 +167,69 @@ func (r *MySQLRepository) Quotas(ctx context.Context) ([]Quota, error) {
 	out := make([]Quota, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, Quota{
-			UserID:         strconv.FormatInt(row.UserID, 10),
-			Plan:           row.PlanCode,
-			LLMTokens:      row.LLMTokensUsedMonth,
-			SandboxMinutes: row.SandboxMinutesUsed,
-			StorageMB:      row.StorageUsedBytes / (1024 * 1024),
+			UserID:              strconv.FormatInt(row.UserID, 10),
+			Plan:                row.PlanCode,
+			LLMTokensQuota:      row.LLMTokenQuotaMonth,
+			LLMTokensUsed:       row.LLMTokensUsedMonth,
+			SandboxMinutesQuota: row.SandboxMinutesQuota,
+			SandboxMinutesUsed:  row.SandboxMinutesUsed,
+			StorageQuotaMB:      row.StorageQuotaBytes / (1024 * 1024),
+			StorageUsedMB:       row.StorageUsedBytes / (1024 * 1024),
 		})
 	}
 	return out, nil
+}
+
+func (r *MySQLRepository) UpdateUserStatus(ctx context.Context, id int64, status int8) error {
+	result := r.db.WithContext(ctx).Model(&model.User{}).
+		Where("id = ?", id).
+		Update("status", status)
+	if result.Error != nil {
+		return fmt.Errorf("update user status: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return r.ensureUserExists(ctx, id)
+	}
+	return nil
+}
+
+func (r *MySQLRepository) ensureUserExists(ctx context.Context, id int64) error {
+	var count int64
+	if err := r.db.WithContext(ctx).Model(&model.User{}).Where("id = ?", id).Count(&count).Error; err != nil {
+		return fmt.Errorf("check user: %w", err)
+	}
+	if count == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *MySQLRepository) UpdateQuota(ctx context.Context, userID int64, input QuotaUpdateInput) error {
+	result := r.db.WithContext(ctx).Model(&model.UserQuota{}).
+		Where("user_id = ?", userID).
+		Updates(map[string]any{
+			"llm_token_quota_month":       input.LLMTokensQuota,
+			"sandbox_minutes_quota_month": input.SandboxMinutesQuota,
+			"storage_quota_bytes":         input.StorageQuotaMB * 1024 * 1024,
+		})
+	if result.Error != nil {
+		return fmt.Errorf("update user quota: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return r.ensureQuotaExists(ctx, userID)
+	}
+	return nil
+}
+
+func (r *MySQLRepository) ensureQuotaExists(ctx context.Context, userID int64) error {
+	var count int64
+	if err := r.db.WithContext(ctx).Model(&model.UserQuota{}).Where("user_id = ?", userID).Count(&count).Error; err != nil {
+		return fmt.Errorf("check user quota: %w", err)
+	}
+	if count == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (r *MySQLRepository) Audit(ctx context.Context, query ListQuery) (Page[AuditEvent], error) {

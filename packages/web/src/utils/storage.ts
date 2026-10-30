@@ -38,3 +38,18 @@ export function formatDateTime(value: string | null | undefined): string {
     hour12: false,
   }).format(date)
 }
+
+export function formatDate(value: string | null | undefined): string {
+  if (!value) {
+    return '—'
+  }
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime()) || date.getFullYear() <= 1) {
+    return '—'
+  }
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date)
+}

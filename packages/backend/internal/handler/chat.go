@@ -29,10 +29,15 @@ type ProjectRoleResolver interface {
 	Resolve(ctx context.Context, projectID string) (*role.Context, error)
 }
 
+type StorageSyncer interface {
+	Enqueue(projectID string)
+}
+
 type ChatHandler struct {
 	Sandbox ChatClient
 	Roles   ProjectRoleResolver
 	Obs     *observability.Provider
+	Storage StorageSyncer
 }
 
 func NewChatHandler(sandbox ChatClient, obs *observability.Provider) *ChatHandler {
@@ -69,6 +74,9 @@ func (h *ChatHandler) Chat(c echo.Context) error {
 		return failFromSandbox(c, err, "chat failed")
 	}
 	defer stream.Close()
+	if h.Storage != nil {
+		defer h.Storage.Enqueue(projectID)
+	}
 
 	res := c.Response()
 	res.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
