@@ -185,6 +185,32 @@ export interface ChatMessage {
   pending: boolean
 }
 
+export type NotificationChannelType = 'webhook' | 'feishu' | 'wecom' | 'dingtalk' | 'email'
+
+export interface NotificationChannelConfig {
+  url?: string
+  secret?: string
+  to?: string
+}
+
+export interface NotificationChannel {
+  id: number
+  name: string
+  type: NotificationChannelType
+  config: NotificationChannelConfig
+  enabled: boolean
+  lastTestAt?: string | null
+  lastTestStatus: '' | 'success' | 'failed'
+  lastTestError: string
+}
+
+export interface NotificationChannelInput {
+  name: string
+  type: NotificationChannelType
+  config: NotificationChannelConfig
+  enabled: boolean
+}
+
 export interface ProjectResource {
   id: string
   name: string

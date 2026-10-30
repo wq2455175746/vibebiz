@@ -18,6 +18,9 @@ services:
     image: vibebiz/sandbox:local
     env_file:
       - .env
+    environment:
+      HOME: /home/appuser
+      CLAUDE_CONFIG_DIR: /data/workspaces/.claude
     volumes:
       - ./workspaces:/data/workspaces
       - ./logs/sandbox:/app/logs

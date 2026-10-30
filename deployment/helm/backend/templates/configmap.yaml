@@ -30,6 +30,10 @@ data:
   S3_ENDPOINT: {{ .Values.config.s3Endpoint | quote }}
   S3_FORCE_PATH_STYLE: {{ .Values.config.s3ForcePathStyle | quote }}
   S3_PRESIGN_EXPIRY_MINUTES: {{ .Values.config.s3PresignExpiryMinutes | quote }}
+  SMTP_HOST: {{ .Values.config.smtpHost | quote }}
+  SMTP_PORT: {{ .Values.config.smtpPort | quote }}
+  SMTP_FROM: {{ .Values.config.smtpFrom | quote }}
+  SMTP_SECURITY: {{ .Values.config.smtpSecurity | quote }}
   OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.config.otelExporterOtlpEndpoint | quote }}
   OTEL_EXPORTER_OTLP_PROTOCOL: {{ .Values.config.otelExporterOtlpProtocol | quote }}
   OTEL_RESOURCE_ATTRIBUTES: {{ .Values.config.otelResourceAttributes | quote }}

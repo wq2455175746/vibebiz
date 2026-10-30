@@ -82,6 +82,10 @@ def build_options(
     )
 
 
+def _missing_session(exc: Exception) -> bool:
+    return "no conversation found" in str(exc).lower()
+
+
 class ClaudeAgent:
     mode = "claude"
 
@@ -155,6 +159,33 @@ class ClaudeAgent:
     ) -> AsyncIterator[dict]:
         project_dir = workspace.project_dir(project_id)
         session = session_id or self._sessions.get(project_id)
+        produced = False
+        try:
+            async for event in self._stream(
+                project_id, message, project_dir, session, agent_roles, team_mode
+            ):
+                if event["payload"]["type"] != "system":
+                    produced = True
+                yield event
+        except Exception as exc:
+            if session and not produced and _missing_session(exc):
+                self._sessions.pop(project_id, None)
+                async for event in self._stream(
+                    project_id, message, project_dir, None, agent_roles, team_mode
+                ):
+                    yield event
+                return
+            raise
+
+    async def _stream(
+        self,
+        project_id: str,
+        message: str,
+        project_dir: Path,
+        session: str | None,
+        agent_roles: list[dict[str, Any]] | None,
+        team_mode: bool,
+    ) -> AsyncIterator[dict]:
         options = build_options(self.settings, project_dir, session, agent_roles, team_mode)
         async for sdk_message in query(prompt=message, options=options):
             if isinstance(sdk_message, ResultMessage) and sdk_message.session_id:

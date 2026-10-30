@@ -25,6 +25,7 @@ import (
 	harnesssvc "vibebiz/internal/harness"
 	"vibebiz/internal/llmmodel"
 	"vibebiz/internal/notification"
+	"vibebiz/internal/notificationchannel"
 	"vibebiz/internal/observability"
 	"vibebiz/internal/projectstage"
 	"vibebiz/internal/projecttemplate"
@@ -168,6 +169,26 @@ func main() {
 	notificationService := notification.NewService(notificationRepo, notificationCache, notificationBus)
 	notificationHandler := handler.NewNotificationHandler(notificationService, notificationHub, cfg.CorsOrigins)
 
+	var channelCipher *secret.Cipher
+	if cfg.NotificationSecretKey != "" {
+		channelCipher, err = secret.NewCipher(cfg.NotificationSecretKey)
+		if err != nil {
+			obs.Logger.Error("notification secret key invalid", "error", err)
+			os.Exit(1)
+		}
+	} else {
+		obs.Logger.Warn("notification secret key is empty; notification channels are disabled")
+	}
+	channelService := &notificationchannel.Service{
+		Repo:   notificationchannel.NewMySQLRepository(db),
+		Cipher: channelCipher,
+		Sender: &notificationchannel.TestSender{Mailer: notificationchannel.NewSMTPMailer(notificationchannel.SMTPConfig{
+			Host: cfg.SMTPHost, Port: cfg.SMTPPort, Username: cfg.SMTPUsername,
+			Password: cfg.SMTPPassword, From: cfg.SMTPFrom, Security: cfg.SMTPSecurity,
+		})},
+	}
+	notificationChannelHandler := handler.NewNotificationChannelHandler(channelService)
+
 	healthChecker := sandboxregistry.NewHealthChecker(registryRepo, cfg.SandboxHeartbeatTTL, cfg.SandboxHealthTimeout, obs)
 	asynqLogger := sandboxregistry.NewAsyncLogger(obs.Logger)
 	asynqRedis := asynq.RedisClientOpt{Addr: cfg.RedisHost, Password: cfg.RedisPassword, DB: cfg.AsynqRedisDB}
@@ -197,7 +218,7 @@ func main() {
 	templateHandler := handler.NewTemplateHandler(templateService, projectStore, provisioner, sandboxRouter)
 	templateHandler.Metas = metas
 
-	router.RegisterControl(e, adminRepo, projectStore, provisioner, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler, registryHandler, modelHandler, roleHandler, avatarPresigner, cfg.S3PresignExpiry(), sandboxRouter, templateHandler, harnessImporter, stageStore, sandboxRouter)
+	router.RegisterControl(e, adminRepo, projectStore, provisioner, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler, registryHandler, modelHandler, roleHandler, avatarPresigner, cfg.S3PresignExpiry(), sandboxRouter, templateHandler, harnessImporter, stageStore, sandboxRouter, notificationChannelHandler)
 	router.RegisterChatHistory(e, handler.NewChatHistoryHandler(sandboxRouter, projectStore), authn)
 
 	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))

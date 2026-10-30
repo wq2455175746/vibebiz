@@ -55,6 +55,10 @@ config:
   s3Endpoint: ""
   s3ForcePathStyle: "true"
   s3PresignExpiryMinutes: "15"
+  smtpHost: ""
+  smtpPort: "587"
+  smtpFrom: ""
+  smtpSecurity: starttls
   otelExporterOtlpEndpoint: ""
   otelExporterOtlpProtocol: http/protobuf
   otelResourceAttributes: "deployment.environment=k8s,service.namespace=vibebiz"

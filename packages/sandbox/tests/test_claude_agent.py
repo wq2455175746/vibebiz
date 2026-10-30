@@ -225,3 +225,48 @@ def test_build_options_registers_team_subagents(tmp_path):
     assert set(options.agents) == {"alex", "emma"}
     assert "Agent" in options.allowed_tools
     assert "团队协调者" in options.system_prompt["append"]
+
+
+def test_claude_agent_retries_without_resume_when_session_missing(tmp_path, monkeypatch):
+    import asyncio
+
+    from claude_agent_sdk import ResultMessage
+
+    from app.services import claude_agent as module
+    from app.services.workspace import Workspace
+
+    seen: list[str | None] = []
+
+    async def fake_query(prompt: str, options):
+        seen.append(options.resume)
+        if options.resume == "stale":
+            raise RuntimeError(
+                "Claude Code returned an error result: No conversation found with session ID: stale"
+            )
+        yield ResultMessage(
+            subtype="success",
+            duration_ms=1,
+            duration_api_ms=1,
+            is_error=False,
+            num_turns=1,
+            session_id="fresh",
+            result="done",
+        )
+
+    monkeypatch.setattr(module, "query", fake_query)
+    agent = build_agent(settings(tmp_path))
+    agent._sessions["p1"] = "stale"
+    workspace = Workspace(tmp_path / "workspaces")
+    workspace.init_project("p1")
+
+    events: list[dict] = []
+
+    async def run_turn() -> None:
+        async for event in agent.run("p1", "继续", workspace):
+            events.append(event)
+
+    asyncio.run(run_turn())
+
+    assert seen == ["stale", None]
+    assert agent._sessions["p1"] == "fresh"
+    assert any(event["payload"]["type"] == "result" for event in events)

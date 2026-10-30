@@ -34,8 +34,9 @@ COPY . .
 
 RUN groupadd -r -g 10001 appuser \
     && useradd -r -u 10001 -g appuser -m appuser \
-    && mkdir -p /data/workspaces \
-    && chown -R appuser:appuser /app /data/workspaces
+    && mkdir -p /home/appuser /data/workspaces \
+    && chown -R appuser:appuser /home/appuser /app /data/workspaces \
+    && chmod 0700 /home/appuser
 
 USER appuser
 EXPOSE 8000

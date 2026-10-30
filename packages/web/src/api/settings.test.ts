@@ -15,6 +15,11 @@ import {
   updateProfile,
   uploadAvatar,
   uploadWorkspaceAvatar,
+  listNotificationChannels,
+  createNotificationChannel,
+  updateNotificationChannel,
+  deleteNotificationChannel,
+  testNotificationChannel,
 } from './settings'
 
 vi.mock('./client', () => ({
@@ -134,6 +139,49 @@ describe('settings api', () => {
       method: 'post',
       url: '/workspaces/current/members',
       data: { email: 'a@example.com' },
+    })
+  })
+})
+
+describe('notification channel api', () => {
+  it('uses the personal channel endpoints', async () => {
+    requestMock.mockResolvedValueOnce({ channels: [] })
+    await listNotificationChannels()
+    expect(requestMock).toHaveBeenCalledWith(cpHttp, {
+      method: 'get',
+      url: '/me/notification-channels',
+    })
+
+    const input = {
+      name: '研发群',
+      type: 'webhook' as const,
+      enabled: true,
+      config: { url: 'https://example.com/hook' },
+    }
+    await createNotificationChannel(input)
+    expect(requestMock).toHaveBeenCalledWith(cpHttp, {
+      method: 'post',
+      url: '/me/notification-channels',
+      data: input,
+    })
+
+    await updateNotificationChannel(3, input)
+    expect(requestMock).toHaveBeenCalledWith(cpHttp, {
+      method: 'put',
+      url: '/me/notification-channels/3',
+      data: input,
+    })
+
+    await deleteNotificationChannel(3)
+    expect(requestMock).toHaveBeenCalledWith(cpHttp, {
+      method: 'delete',
+      url: '/me/notification-channels/3',
+    })
+
+    await testNotificationChannel(3)
+    expect(requestMock).toHaveBeenCalledWith(cpHttp, {
+      method: 'post',
+      url: '/me/notification-channels/3/test',
     })
   })
 })

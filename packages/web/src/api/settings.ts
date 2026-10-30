@@ -1,4 +1,12 @@
-import type { AuthUser, Member, Presign, Workspace, WorkspaceFolder } from '@/types'
+import type {
+  AuthUser,
+  Member,
+  NotificationChannel,
+  NotificationChannelInput,
+  Presign,
+  Workspace,
+  WorkspaceFolder,
+} from '@/types'
 
 import { cpHttp, request } from './client'
 
@@ -115,5 +123,48 @@ export function createFolder(name: string, parentId = 0): Promise<WorkspaceFolde
     method: 'post',
     url: '/workspaces/current/folders',
     data: { name, parentId },
+  })
+}
+
+export async function listNotificationChannels(): Promise<NotificationChannel[]> {
+  const result = await request<{ channels: NotificationChannel[] }>(cpHttp, {
+    method: 'get',
+    url: '/me/notification-channels',
+  })
+  return result.channels
+}
+
+export function createNotificationChannel(
+  input: NotificationChannelInput,
+): Promise<NotificationChannel> {
+  return request<NotificationChannel>(cpHttp, {
+    method: 'post',
+    url: '/me/notification-channels',
+    data: input,
+  })
+}
+
+export function updateNotificationChannel(
+  id: number,
+  input: NotificationChannelInput,
+): Promise<NotificationChannel> {
+  return request<NotificationChannel>(cpHttp, {
+    method: 'put',
+    url: `/me/notification-channels/${id}`,
+    data: input,
+  })
+}
+
+export async function deleteNotificationChannel(id: number): Promise<void> {
+  await request<{ deleted: boolean }>(cpHttp, {
+    method: 'delete',
+    url: `/me/notification-channels/${id}`,
+  })
+}
+
+export function testNotificationChannel(id: number): Promise<{ sent: boolean }> {
+  return request<{ sent: boolean }>(cpHttp, {
+    method: 'post',
+    url: `/me/notification-channels/${id}/test`,
   })
 }

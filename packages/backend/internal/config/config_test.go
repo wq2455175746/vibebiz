@@ -183,3 +183,25 @@ func TestLoadEnterpriseHarnessConfig(t *testing.T) {
 		t.Fatalf("harness key = %q", cfg.EnterpriseHarnessS3Key)
 	}
 }
+
+func TestLoadNotificationChannelConfig(t *testing.T) {
+	t.Setenv("MODEL_SECRET_KEY", "model-key")
+	t.Setenv("NOTIFICATION_SECRET_KEY", "")
+	if cfg := Load("cp"); cfg.NotificationSecretKey != "model-key" {
+		t.Fatalf("notification secret fallback = %q", cfg.NotificationSecretKey)
+	}
+	t.Setenv("NOTIFICATION_SECRET_KEY", "channel-key")
+	t.Setenv("SMTP_HOST", "smtp.example.com")
+	t.Setenv("SMTP_PORT", "465")
+	t.Setenv("SMTP_USERNAME", "u")
+	t.Setenv("SMTP_PASSWORD", "p")
+	t.Setenv("SMTP_FROM", "noreply@example.com")
+	t.Setenv("SMTP_SECURITY", "tls")
+	cfg := Load("cp")
+	if cfg.NotificationSecretKey != "channel-key" || cfg.SMTPHost != "smtp.example.com" || cfg.SMTPPort != 465 || cfg.SMTPSecurity != "tls" {
+		t.Fatalf("notification config = %+v", cfg)
+	}
+	if cfg.SMTPUsername != "u" || cfg.SMTPPassword != "p" || cfg.SMTPFrom != "noreply@example.com" {
+		t.Fatalf("smtp config = %+v", cfg)
+	}
+}

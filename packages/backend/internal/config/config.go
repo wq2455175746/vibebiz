@@ -47,6 +47,14 @@ type Config struct {
 	S3PresignExpiryMinutes int
 	EnterpriseHarnessS3Key string
 	ModelSecretKey         string
+	NotificationSecretKey  string
+
+	SMTPHost     string
+	SMTPPort     int
+	SMTPUsername string
+	SMTPPassword string
+	SMTPFrom     string
+	SMTPSecurity string
 }
 
 func Load(plane string) Config {
@@ -91,6 +99,14 @@ func Load(plane string) Config {
 		S3PresignExpiryMinutes: getInt("S3_PRESIGN_EXPIRY_MINUTES", 15),
 		EnterpriseHarnessS3Key: getString("ENTERPRISE_HARNESS_S3_KEY", "tmp/vibebiz_prod/vibebiz-harness.zip"),
 		ModelSecretKey:         getString("MODEL_SECRET_KEY", ""),
+		NotificationSecretKey:  getString("NOTIFICATION_SECRET_KEY", getString("MODEL_SECRET_KEY", "")),
+
+		SMTPHost:     getString("SMTP_HOST", ""),
+		SMTPPort:     getInt("SMTP_PORT", 587),
+		SMTPUsername: getString("SMTP_USERNAME", ""),
+		SMTPPassword: getString("SMTP_PASSWORD", ""),
+		SMTPFrom:     getString("SMTP_FROM", ""),
+		SMTPSecurity: getString("SMTP_SECURITY", "starttls"),
 	}
 }
 

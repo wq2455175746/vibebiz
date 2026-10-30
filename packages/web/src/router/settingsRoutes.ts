@@ -17,6 +17,13 @@ export const settingsMenu: SettingsMenuItem[] = [
     group: '账户',
   },
   {
+    label: '通知渠道',
+    icon: 'pi pi-bell',
+    to: '/settings/notification-channels',
+    name: 'settings-notification-channels',
+    group: '账户',
+  },
+  {
     label: '磁盘空间',
     icon: 'pi pi-database',
     to: '/settings/storage',
@@ -50,6 +57,11 @@ export const settingsRoute: RouteRecordRaw = {
       path: 'profile',
       name: 'settings-profile',
       component: () => import('@/views/settings/ProfileView.vue'),
+    },
+    {
+      path: 'notification-channels',
+      name: 'settings-notification-channels',
+      component: () => import('@/views/settings/NotificationChannelsView.vue'),
     },
     {
       path: 'storage',

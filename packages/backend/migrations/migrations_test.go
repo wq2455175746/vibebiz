@@ -201,8 +201,8 @@ func TestGooseCanCollectMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("collect migrations: %v", err)
 	}
-	if len(migs) != 18 {
-		t.Fatalf("collected %d migrations, want 18", len(migs))
+	if len(migs) != 19 {
+		t.Fatalf("collected %d migrations, want 19", len(migs))
 	}
 	for i, mig := range migs {
 		want := int64(i + 1)
@@ -331,6 +331,23 @@ func TestProjectStageMigration(t *testing.T) {
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("project stage migration missing %q", want)
+		}
+	}
+}
+
+func TestNotificationChannelMigration(t *testing.T) {
+	body, err := fs.ReadFile(FS, "00019_notification_channel.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	for _, want := range []string{
+		"CREATE TABLE `notification_channel`", "user_id", "config_cipher",
+		"uk_notification_channel_user_name", "last_test_status",
+		"DROP TABLE IF EXISTS `notification_channel`", "-- +goose Up", "-- +goose Down",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("notification channel migration missing %q", want)
 		}
 	}
 }

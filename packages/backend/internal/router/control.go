@@ -14,7 +14,7 @@ import (
 	"vibebiz/internal/store"
 )
 
-func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.ProjectStore, provisioner handler.ProjectInitializer, obs *observability.Provider, authn *auth.Authenticator, authHandler *handler.AuthHandler, settingsHandler *handler.SettingsHandler, storageHandler *handler.StorageHandler, metas auth.ProjectMetaStore, notifications *handler.NotificationHandler, registry *handler.SandboxRegistryHandler, models *handler.ModelHandler, roles *handler.RoleHandler, coverSigner handler.CoverURLSigner, coverExpiry time.Duration, adminSandbox handler.AdminSandbox, templates *handler.TemplateHandler, harness handler.HarnessImporter, stageStore projectstage.Store, stageSandbox handler.StageSandbox) {
+func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.ProjectStore, provisioner handler.ProjectInitializer, obs *observability.Provider, authn *auth.Authenticator, authHandler *handler.AuthHandler, settingsHandler *handler.SettingsHandler, storageHandler *handler.StorageHandler, metas auth.ProjectMetaStore, notifications *handler.NotificationHandler, registry *handler.SandboxRegistryHandler, models *handler.ModelHandler, roles *handler.RoleHandler, coverSigner handler.CoverURLSigner, coverExpiry time.Duration, adminSandbox handler.AdminSandbox, templates *handler.TemplateHandler, harness handler.HarnessImporter, stageStore projectstage.Store, stageSandbox handler.StageSandbox, notificationChannels *handler.NotificationChannelHandler) {
 	var roleStore handler.AgentRoleStore
 	if roles != nil {
 		roleStore = roles.Service
@@ -57,6 +57,13 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 	meAPI.POST("/avatar/presign", settingsHandler.PresignAvatar)
 	meAPI.PUT("/avatar", settingsHandler.ConfirmAvatar)
 	meAPI.POST("/avatar/upload", settingsHandler.UploadAvatar)
+	if notificationChannels != nil {
+		meAPI.GET("/notification-channels", notificationChannels.List)
+		meAPI.POST("/notification-channels", notificationChannels.Create)
+		meAPI.PUT("/notification-channels/:id", notificationChannels.Update)
+		meAPI.DELETE("/notification-channels/:id", notificationChannels.Delete)
+		meAPI.POST("/notification-channels/:id/test", notificationChannels.Test)
+	}
 
 	workspaceAPI := api.Group("/workspaces", authn.RequireUser)
 	workspaceAPI.GET("/current", settingsHandler.GetWorkspace)
