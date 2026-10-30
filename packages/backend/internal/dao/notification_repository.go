@@ -12,8 +12,9 @@ import (
 )
 
 type NotificationFilter struct {
-	Type   string
-	Status string
+	Type    string
+	Status  string
+	Keyword string
 }
 
 type NotificationRepository struct {
@@ -31,6 +32,10 @@ func (r *NotificationRepository) List(ctx context.Context, filter NotificationFi
 	}
 	if filter.Status != "" {
 		query = query.Where("status = ?", filter.Status)
+	}
+	if filter.Keyword != "" {
+		like := "%" + filter.Keyword + "%"
+		query = query.Where("(title LIKE ? OR content LIKE ? OR version LIKE ? OR created_by_name LIKE ?)", like, like, like, like)
 	}
 	var total int64
 	if err := query.Count(&total).Error; err != nil {

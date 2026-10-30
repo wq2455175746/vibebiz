@@ -88,6 +88,7 @@ export interface NotificationPage {
 export interface NotificationQuery {
   page?: number
   pageSize?: number
+  keyword?: string
 }
 
 export interface NotificationInput {
@@ -97,6 +98,19 @@ export interface NotificationInput {
   version: string
   link: string
   expireAt: string
+}
+
+export interface PageQuery {
+  page?: number
+  pageSize?: number
+  keyword?: string
+}
+
+export interface PageResult<T> {
+  items: T[]
+  total: number
+  page: number
+  pageSize: number
 }
 
 export type TableRow = object
@@ -164,6 +178,12 @@ export interface RoleInput {
   systemPrompt: string
   avatarKey?: string
   sortOrder: number
+  status: number
+}
+
+export interface RoleUpdateInput {
+  description: string
+  systemPrompt: string
   status: number
 }
 

@@ -1,5 +1,10 @@
 import { request } from './client'
-import type { NotificationInput, NotificationPage, NotificationQuery, OpsNotification } from '@/types'
+import type {
+  NotificationInput,
+  NotificationPage,
+  NotificationQuery,
+  OpsNotification,
+} from '@/types'
 
 export async function listNotifications(query: NotificationQuery = {}): Promise<NotificationPage> {
   const page = query.page ?? 1
@@ -7,7 +12,7 @@ export async function listNotifications(query: NotificationQuery = {}): Promise<
   const result = await request<NotificationPage>({
     method: 'get',
     url: '/notifications',
-    params: { page, pageSize },
+    params: { page, pageSize, keyword: query.keyword },
   })
   return {
     notifications: result.notifications ?? [],

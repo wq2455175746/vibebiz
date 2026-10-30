@@ -41,6 +41,29 @@ func TestNotificationRepositoryListFilters(t *testing.T) {
 	}
 }
 
+func TestNotificationRepositoryListKeyword(t *testing.T) {
+	db, mock := newMockDB(t)
+	repo := NewNotificationRepository(db)
+
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `ops_notification` WHERE .*title LIKE").
+		WithArgs("%1.2%", "%1.2%", "%1.2%", "%1.2%").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	mock.ExpectQuery("SELECT \\* FROM `ops_notification` WHERE .*title LIKE").
+		WithArgs("%1.2%", "%1.2%", "%1.2%", "%1.2%", 20).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "title"}).AddRow(1, "v1.2.0"))
+
+	items, total, err := repo.List(context.Background(), NotificationFilter{Keyword: "1.2"}, 0, 20)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if total != 1 || len(items) != 1 || items[0].Title != "v1.2.0" {
+		t.Fatalf("items = %+v, total = %d", items, total)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestNotificationRepositoryListWithoutFilters(t *testing.T) {
 	db, mock := newMockDB(t)
 	repo := NewNotificationRepository(db)

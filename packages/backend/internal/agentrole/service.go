@@ -68,6 +68,44 @@ type CreateInput struct {
 	SortOrder    int
 }
 
+const (
+	DefaultPageSize = 10
+	MaxPageSize     = 100
+)
+
+type ListQuery struct {
+	Keyword  string
+	Page     int
+	PageSize int
+}
+
+type Page struct {
+	Items    []Role
+	Total    int64
+	Page     int
+	PageSize int
+}
+
+func normalizeListQuery(query ListQuery) ListQuery {
+	query.Keyword = strings.TrimSpace(query.Keyword)
+	if query.Page < 1 {
+		query.Page = 1
+	}
+	if query.PageSize <= 0 {
+		query.PageSize = DefaultPageSize
+	}
+	if query.PageSize > MaxPageSize {
+		query.PageSize = MaxPageSize
+	}
+	return query
+}
+
+type UpdateInput struct {
+	Description  string
+	SystemPrompt string
+	Status       int8
+}
+
 type Presign struct {
 	UploadURL string            `json:"uploadUrl"`
 	Key       string            `json:"key"`
@@ -76,9 +114,11 @@ type Presign struct {
 
 type Repository interface {
 	List(ctx context.Context) ([]Role, error)
+	ListPage(ctx context.Context, query ListQuery) (Page, error)
 	ListActive(ctx context.Context) ([]Role, error)
 	GetActive(ctx context.Context, id int64) (Role, error)
 	Create(ctx context.Context, input CreateInput, createdBy string) (Role, error)
+	Update(ctx context.Context, id int64, input UpdateInput, updatedBy string) (Role, error)
 }
 
 type Service struct {
@@ -102,6 +142,17 @@ func (s *Service) List(ctx context.Context) ([]Role, error) {
 		roles[index].AvatarURL = s.avatarURL(ctx, roles[index].AvatarURL)
 	}
 	return roles, nil
+}
+
+func (s *Service) ListPage(ctx context.Context, query ListQuery) (Page, error) {
+	page, err := s.Repo.ListPage(ctx, normalizeListQuery(query))
+	if err != nil {
+		return Page{}, err
+	}
+	for index := range page.Items {
+		page.Items[index].AvatarURL = s.avatarURL(ctx, page.Items[index].AvatarURL)
+	}
+	return page, nil
 }
 
 func (s *Service) ListActive(ctx context.Context) ([]Role, error) {
@@ -138,6 +189,19 @@ func (s *Service) Create(ctx context.Context, input CreateInput, createdBy strin
 		}
 	}
 	role, err := s.Repo.Create(ctx, normalized, createdBy)
+	if err != nil {
+		return Role{}, err
+	}
+	role.AvatarURL = s.avatarURL(ctx, role.AvatarURL)
+	return role, nil
+}
+
+func (s *Service) Update(ctx context.Context, id int64, input UpdateInput, updatedBy string) (Role, error) {
+	normalized, err := normalizeUpdate(input)
+	if err != nil {
+		return Role{}, err
+	}
+	role, err := s.Repo.Update(ctx, id, normalized, updatedBy)
 	if err != nil {
 		return Role{}, err
 	}
@@ -199,6 +263,22 @@ func (s *Service) expiry() time.Duration {
 		return 15 * time.Minute
 	}
 	return s.Expiry
+}
+
+func normalizeUpdate(input UpdateInput) (UpdateInput, error) {
+	input.Description = strings.TrimSpace(input.Description)
+	input.SystemPrompt = strings.TrimSpace(input.SystemPrompt)
+
+	if input.SystemPrompt == "" {
+		return UpdateInput{}, ErrInvalid
+	}
+	if utf8.RuneCountInString(input.Description) > 1000 || utf8.RuneCountInString(input.SystemPrompt) > 100000 {
+		return UpdateInput{}, ErrInvalid
+	}
+	if input.Status != 0 && input.Status != 1 {
+		return UpdateInput{}, ErrInvalid
+	}
+	return input, nil
 }
 
 func normalize(input CreateInput) (CreateInput, error) {

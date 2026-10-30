@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import ToolCallCard from './ToolCallCard.vue'
 import type { ChatMessage } from '@/types'
+import { formatDateTime } from '@/utils/storage'
 
 defineProps<{ message: ChatMessage }>()
 </script>
@@ -11,7 +12,12 @@ defineProps<{ message: ChatMessage }>()
       <p class="chat-note">{{ message.text }}</p>
     </template>
     <template v-else>
-      <p class="chat-role">{{ message.role === 'user' ? '你' : 'Vibebiz' }}</p>
+      <p class="chat-role">
+        <span>{{ message.role === 'user' ? '你' : 'Vibebiz' }}</span>
+        <time v-if="message.createdAt" :datetime="message.createdAt">
+          {{ formatDateTime(message.createdAt) }}
+        </time>
+      </p>
       <div class="chat-bubble">
         <p v-if="message.text" class="chat-text">{{ message.text }}</p>
         <div v-if="message.references?.length" class="chat-reference-list">

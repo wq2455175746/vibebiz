@@ -43,6 +43,16 @@ func (r *fakeRepo) List(ctx context.Context, filter dao.NotificationFilter, offs
 		if filter.Status != "" && string(item.Status) != filter.Status {
 			continue
 		}
+		if filter.Keyword != "" {
+			keyword := strings.ToLower(filter.Keyword)
+			matched := strings.Contains(strings.ToLower(item.Title), keyword) ||
+				strings.Contains(strings.ToLower(item.Content), keyword) ||
+				strings.Contains(strings.ToLower(item.Version), keyword) ||
+				strings.Contains(strings.ToLower(item.CreatedByName), keyword)
+			if !matched {
+				continue
+			}
+		}
 		out = append(out, item)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID > out[j].ID })

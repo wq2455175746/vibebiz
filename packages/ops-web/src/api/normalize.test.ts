@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { toEntity, toList } from './normalize'
+import { toEntity, toList, toPage } from './normalize'
 
 describe('toList', () => {
   it('keeps a bare list response', () => {
@@ -13,6 +13,26 @@ describe('toList', () => {
 
   it('returns an empty list for an unknown shape', () => {
     expect(toList({}, 'users')).toEqual([])
+  })
+})
+
+describe('toPage', () => {
+  it('unwraps a paginated response', () => {
+    expect(toPage({ users: [{ id: 'u_01' }], total: 21, page: 2, pageSize: 10 }, 'users')).toEqual({
+      items: [{ id: 'u_01' }],
+      total: 21,
+      page: 2,
+      pageSize: 10,
+    })
+  })
+
+  it('keeps a bare list response', () => {
+    expect(toPage([{ id: 'u_02' }], 'users')).toEqual({
+      items: [{ id: 'u_02' }],
+      total: 1,
+      page: 1,
+      pageSize: 1,
+    })
   })
 })
 

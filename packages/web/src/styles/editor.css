@@ -44,6 +44,28 @@
   white-space: nowrap;
 }
 
+.editor-roles {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.editor-role-chip {
+  max-width: 220px;
+  overflow: hidden;
+  padding: 3px 8px;
+  background: var(--blue-soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--blue);
+  font-size: 11px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .model-chip {
   display: inline-flex;
   align-items: center;
@@ -152,11 +174,21 @@
 }
 
 .chat-role {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 0;
   color: var(--muted);
   font-size: 10px;
   font-weight: 500;
   letter-spacing: 0.04em;
+}
+
+.chat-role time {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 0;
 }
 
 .chat-bubble {
@@ -944,6 +976,37 @@ button.file-row {
 .chat-reference-chip button:hover {
   color: var(--ink);
 }
+.composer-attach-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 150px;
+}
+
+.composer-attach-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.composer-attach-menu button:hover {
+  background: var(--soft);
+}
+
+.composer-attach-menu i {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 
 .chat-roles {
   display: flex;

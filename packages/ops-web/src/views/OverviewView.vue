@@ -37,14 +37,17 @@ async function load() {
   loading.value = true
   overviewError.value = ''
   projectsError.value = ''
-  const [overviewResult, projectsResult] = await Promise.allSettled([getOverview(), getProjects()])
+  const [overviewResult, projectsResult] = await Promise.allSettled([
+    getOverview(),
+    getProjects({ page: 1, pageSize: 5 }),
+  ])
   if (overviewResult.status === 'fulfilled') {
     overview.value = overviewResult.value
   } else {
     overviewError.value = message(overviewResult.reason)
   }
   if (projectsResult.status === 'fulfilled') {
-    projects.value = projectsResult.value.slice(0, 5)
+    projects.value = projectsResult.value.items
   } else {
     projectsError.value = message(projectsResult.reason)
   }

@@ -78,6 +78,7 @@ def build_options(
         agents=agent_defs or None,
         forward_subagent_text=False,
         resume=session_id,
+        max_buffer_size=settings.agent_max_buffer_bytes,
     )
 
 

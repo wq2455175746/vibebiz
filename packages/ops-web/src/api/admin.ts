@@ -1,5 +1,5 @@
 import { request } from './client'
-import { toEntity, toList } from './normalize'
+import { toEntity, toList, toPage } from './normalize'
 import type {
   AdminAgentRole,
   AdminLLMModel,
@@ -10,9 +10,16 @@ import type {
   AuditEvent,
   ModelInput,
   Overview,
+  PageQuery,
+  PageResult,
   RoleAvatarPresign,
   RoleInput,
+  RoleUpdateInput,
 } from '@/types'
+
+function pageParams(query: PageQuery): PageQuery {
+  return { page: query.page, pageSize: query.pageSize, keyword: query.keyword }
+}
 
 export async function getOverview(): Promise<Overview> {
   const result = await request<Overview | { overview: Overview }>({
@@ -22,28 +29,31 @@ export async function getOverview(): Promise<Overview> {
   return toEntity(result, 'overview')
 }
 
-export async function getUsers(): Promise<AdminUser[]> {
-  const result = await request<AdminUser[] | { users: AdminUser[] }>({
+export async function getUsers(query: PageQuery = {}): Promise<PageResult<AdminUser>> {
+  const result = await request<AdminUser[] | Record<string, unknown>>({
     method: 'get',
     url: '/users',
+    params: pageParams(query),
   })
-  return toList(result, 'users')
+  return toPage(result, 'users')
 }
 
-export async function getProjects(): Promise<AdminProject[]> {
-  const result = await request<AdminProject[] | { projects: AdminProject[] }>({
+export async function getProjects(query: PageQuery = {}): Promise<PageResult<AdminProject>> {
+  const result = await request<AdminProject[] | Record<string, unknown>>({
     method: 'get',
     url: '/projects',
+    params: pageParams(query),
   })
-  return toList(result, 'projects')
+  return toPage(result, 'projects')
 }
 
-export async function getSandboxes(): Promise<AdminSandbox[]> {
-  const result = await request<AdminSandbox[] | { sandboxes: AdminSandbox[] }>({
+export async function getSandboxes(query: PageQuery = {}): Promise<PageResult<AdminSandbox>> {
+  const result = await request<AdminSandbox[] | Record<string, unknown>>({
     method: 'get',
     url: '/sandboxes',
+    params: pageParams(query),
   })
-  return toList(result, 'sandboxes')
+  return toPage(result, 'sandboxes')
 }
 
 export async function getQuotas(): Promise<AdminQuota[]> {
@@ -54,12 +64,13 @@ export async function getQuotas(): Promise<AdminQuota[]> {
   return toList(result, 'quotas')
 }
 
-export async function getAudit(): Promise<AuditEvent[]> {
-  const result = await request<AuditEvent[] | { audit: AuditEvent[] }>({
+export async function getAudit(query: PageQuery = {}): Promise<PageResult<AuditEvent>> {
+  const result = await request<AuditEvent[] | Record<string, unknown>>({
     method: 'get',
     url: '/audit',
+    params: pageParams(query),
   })
-  return toList(result, 'audit')
+  return toPage(result, 'audit')
 }
 
 export async function getModels(): Promise<AdminLLMModel[]> {
@@ -74,16 +85,21 @@ export async function createModel(input: ModelInput): Promise<AdminLLMModel> {
   return request<AdminLLMModel>({ method: 'post', url: '/models', data: input })
 }
 
-export async function getRoles(): Promise<AdminAgentRole[]> {
-  const result = await request<AdminAgentRole[] | { roles: AdminAgentRole[] }>({
+export async function getRoles(query: PageQuery = {}): Promise<PageResult<AdminAgentRole>> {
+  const result = await request<AdminAgentRole[] | Record<string, unknown>>({
     method: 'get',
     url: '/roles',
+    params: pageParams(query),
   })
-  return toList(result, 'roles')
+  return toPage(result, 'roles')
 }
 
 export async function createRole(input: RoleInput): Promise<AdminAgentRole> {
   return request<AdminAgentRole>({ method: 'post', url: '/roles', data: input })
+}
+
+export async function updateRole(id: number, input: RoleUpdateInput): Promise<AdminAgentRole> {
+  return request<AdminAgentRole>({ method: 'put', url: `/roles/${id}`, data: input })
 }
 
 export async function presignRoleAvatar(input: {

@@ -23,11 +23,11 @@ class Versioning:
         lines = existing.splitlines()
         if not existing:
             ignore.write_text(
-                ".agent/\nnode_modules/\n__pycache__/\n.chathistory/\n.resources/\n",
+                ".agent/\nnode_modules/\n__pycache__/\n.chathistory/\n.resources/\n.logs/\n",
                 encoding="utf-8",
             )
             return
-        for item in (".chathistory/", ".resources/"):
+        for item in (".chathistory/", ".resources/", ".logs/"):
             if item not in lines:
                 suffix = "" if existing.endswith("\n") else "\n"
                 existing += suffix + item + "\n"

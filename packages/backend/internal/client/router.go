@@ -101,6 +101,14 @@ func (r *Router) StopChat(ctx context.Context, id string) error {
 	return sandbox.StopChat(ctx, id)
 }
 
+func (r *Router) ChatLogs(ctx context.Context, id string, limit int) ([]ChatLog, error) {
+	sandbox, err := r.client(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return sandbox.ChatLogs(ctx, id, limit)
+}
+
 func (r *Router) ChatStatus(ctx context.Context, id string) (ChatStatus, error) {
 	sandbox, err := r.client(ctx, id)
 	if err != nil {

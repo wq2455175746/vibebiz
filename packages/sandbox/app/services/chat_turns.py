@@ -209,6 +209,7 @@ class ChatTurnManager:
                     turn.team_mode,
                 ):
                     collector.consume(event)
+                    self._log_event(turn, event)
                     self._broadcast(turn, event)
             if collector.result_error:
                 status = "error"
@@ -271,12 +272,83 @@ class ChatTurnManager:
             if cancelled:
                 raise asyncio.CancelledError
 
+    def _log_event(self, turn: Turn, event: dict[str, Any]) -> None:
+        if event.get("type") != "agent":
+            return
+        payload = event.get("payload")
+        if not isinstance(payload, dict):
+            return
+        if payload.get("type") == "assistant":
+            message = payload.get("message")
+            blocks = message.get("content") if isinstance(message, dict) else None
+            if not isinstance(blocks, list):
+                return
+            for block in blocks:
+                if not isinstance(block, dict):
+                    continue
+                if block.get("type") == "text" and isinstance(block.get("text"), str):
+                    text = block["text"].strip()
+                    if text:
+                        logger.info(
+                            "%s",
+                            _clip(text),
+                            extra={"project_id": turn.project_id, "source": "agent"},
+                        )
+                if block.get("type") == "tool_use" and isinstance(block.get("name"), str):
+                    detail = _tool_detail(block.get("input"))
+                    logger.info(
+                        "%s %s" if detail else "%s",
+                        block["name"],
+                        *([detail] if detail else []),
+                        extra={"project_id": turn.project_id, "source": "tool"},
+                    )
+        elif payload.get("type") == "user":
+            message = payload.get("message")
+            blocks = message.get("content") if isinstance(message, dict) else None
+            if not isinstance(blocks, list):
+                return
+            for block in blocks:
+                if isinstance(block, dict) and block.get("type") == "tool_result":
+                    logger.info(
+                        "工具完成 %s",
+                        str(block.get("tool_use_id", "")),
+                        extra={"project_id": turn.project_id, "source": "tool"},
+                    )
+        elif payload.get("type") == "result":
+            parts = [str(payload.get("subtype", "success"))]
+            turns = payload.get("numTurns", payload.get("num_turns"))
+            duration = payload.get("durationMs", payload.get("duration_ms"))
+            if isinstance(turns, int):
+                parts.append(f"{turns} 轮")
+            if isinstance(duration, int):
+                parts.append(f"{duration / 1000:.1f}s")
+            logger.info(
+                "结果 %s",
+                " · ".join(parts),
+                extra={"project_id": turn.project_id, "source": "agent"},
+            )
+
     def _broadcast(self, turn: Turn, event: dict[str, Any] | None) -> None:
         for queue in list(turn.subscribers):
             try:
                 queue.put_nowait(event)
             except asyncio.QueueFull:
                 turn.subscribers.discard(queue)
+
+
+def _clip(value: str, limit: int = 500) -> str:
+    text = " ".join(value.split())
+    return text if len(text) <= limit else text[: limit - 3] + "..."
+
+
+def _tool_detail(value: Any) -> str:
+    if not isinstance(value, dict):
+        return ""
+    for key in ("file_path", "path", "command", "pattern", "query", "subagent_type", "description"):
+        detail = value.get(key)
+        if isinstance(detail, str) and detail.strip():
+            return _clip(detail, 160)
+    return ""
 
 
 def sse_done() -> dict[str, Any] | None:

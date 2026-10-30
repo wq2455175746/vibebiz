@@ -57,12 +57,34 @@ func TestAdminUsers(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d", rec.Code)
 	}
-	var users []admin.User
-	if err := json.Unmarshal(decodeEnvelope(t, rec.Body.Bytes()).Result, &users); err != nil {
+	var payload struct {
+		Users []admin.User `json:"users"`
+		Total int64        `json:"total"`
+		Page  int          `json:"page"`
+	}
+	if err := json.Unmarshal(decodeEnvelope(t, rec.Body.Bytes()).Result, &payload); err != nil {
 		t.Fatalf("decode users: %v", err)
 	}
-	if len(users) != 2 || users[0].ID == "" || users[0].CreatedAt.IsZero() {
-		t.Fatalf("unexpected users: %+v", users)
+	if len(payload.Users) != 2 || payload.Total != 2 || payload.Page != 1 || payload.Users[0].ID == "" || payload.Users[0].CreatedAt.IsZero() {
+		t.Fatalf("unexpected users: %+v", payload)
+	}
+}
+
+func TestAdminUsersSearchAndPagination(t *testing.T) {
+	e, _, authState := newCP(t, store.NewMemoryProjectStore())
+	rec := serveWithAuth(e, http.MethodGet, "/cp/api/v1/admin/users?keyword=vistor&page=1&pageSize=10", authState.opsCookie)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	var payload struct {
+		Users []admin.User `json:"users"`
+		Total int64        `json:"total"`
+	}
+	if err := json.Unmarshal(decodeEnvelope(t, rec.Body.Bytes()).Result, &payload); err != nil {
+		t.Fatalf("decode users: %v", err)
+	}
+	if len(payload.Users) != 1 || payload.Total != 1 || payload.Users[0].Name != "vistor" {
+		t.Fatalf("unexpected users: %+v", payload)
 	}
 }
 
@@ -145,9 +167,11 @@ func TestAdminSandboxesQuotasAudit(t *testing.T) {
 		decode func([]byte) (int, error)
 	}{
 		{"/cp/api/v1/admin/sandboxes", 2, func(raw []byte) (int, error) {
-			var v []admin.Sandbox
+			var v struct {
+				Items []admin.Sandbox `json:"sandboxes"`
+			}
 			err := json.Unmarshal(raw, &v)
-			return len(v), err
+			return len(v.Items), err
 		}},
 		{"/cp/api/v1/admin/quotas", 2, func(raw []byte) (int, error) {
 			var v []admin.Quota
@@ -155,9 +179,11 @@ func TestAdminSandboxesQuotasAudit(t *testing.T) {
 			return len(v), err
 		}},
 		{"/cp/api/v1/admin/audit", 3, func(raw []byte) (int, error) {
-			var v []admin.AuditEvent
+			var v struct {
+				Items []admin.AuditEvent `json:"audit"`
+			}
 			err := json.Unmarshal(raw, &v)
-			return len(v), err
+			return len(v.Items), err
 		}},
 	} {
 		rec := serveWithAuth(e, http.MethodGet, tc.path, authState.opsCookie)

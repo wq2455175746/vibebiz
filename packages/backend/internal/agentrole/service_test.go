@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 	"testing"
 	"time"
 )
@@ -142,6 +143,86 @@ func TestPresignAvatarBuildsKey(t *testing.T) {
 	}
 	if result.Key == "" || s3.putKey == "" {
 		t.Fatalf("result = %+v", result)
+	}
+}
+
+func TestListPageFiltersAndPaginates(t *testing.T) {
+	service := NewService(NewMemoryRepository(), nil, 0)
+	for _, code := range []string{"alex", "frank", "alice"} {
+		input := validRole()
+		input.RoleCode = code
+		input.RoleNameEN = code
+		if _, err := service.Create(context.Background(), input, "admin"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	page, err := service.ListPage(context.Background(), ListQuery{Keyword: "al", Page: 1, PageSize: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Total != 2 || len(page.Items) != 1 || page.Items[0].RoleCode != "alex" {
+		t.Fatalf("page = %+v", page)
+	}
+	page, err = service.ListPage(context.Background(), ListQuery{Keyword: "al", Page: 2, PageSize: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 1 || page.Items[0].RoleCode != "alice" {
+		t.Fatalf("page 2 = %+v", page)
+	}
+}
+
+func TestUpdateRole(t *testing.T) {
+	service := NewService(NewMemoryRepository(), nil, 0)
+	created, err := service.Create(context.Background(), validRole(), "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, err := service.Update(context.Background(), created.ID, UpdateInput{
+		Description:  "新的描述",
+		SystemPrompt: "新的提示词",
+		Status:       0,
+	}, "ops")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Description != "新的描述" || updated.SystemPrompt != "新的提示词" || updated.Status != 0 {
+		t.Fatalf("updated = %+v", updated)
+	}
+	if updated.Version != 2 {
+		t.Fatalf("version = %d, want 2", updated.Version)
+	}
+	if updated.RoleCode != created.RoleCode || updated.RoleNameZH != created.RoleNameZH || updated.SortOrder != created.SortOrder {
+		t.Fatalf("other fields changed: %+v", updated)
+	}
+}
+
+func TestUpdateRoleRejectsInvalidInput(t *testing.T) {
+	service := NewService(NewMemoryRepository(), nil, 0)
+	created, err := service.Create(context.Background(), validRole(), "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := []UpdateInput{
+		{Description: "d", SystemPrompt: "", Status: 1},
+		{Description: "d", SystemPrompt: "p", Status: 2},
+		{Description: strings.Repeat("a", 1001), SystemPrompt: "p", Status: 1},
+		{Description: "d", SystemPrompt: strings.Repeat("a", 100001), Status: 1},
+	}
+	for index, input := range cases {
+		if _, err := service.Update(context.Background(), created.ID, input, "ops"); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("case %d err = %v", index, err)
+		}
+	}
+}
+
+func TestUpdateRoleNotFound(t *testing.T) {
+	service := NewService(NewMemoryRepository(), nil, 0)
+	_, err := service.Update(context.Background(), 999, UpdateInput{
+		Description: "d", SystemPrompt: "p", Status: 1,
+	}, "ops")
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("err = %v", err)
 	}
 }
 

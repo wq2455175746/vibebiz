@@ -9,7 +9,7 @@ from claude_agent_sdk import (
     UserMessage,
 )
 
-from app.config import Settings
+from app.config import Settings, load_settings
 from app.services.agent import build_agent
 from app.services.claude_agent import build_options, serialize_sdk_message
 
@@ -22,6 +22,13 @@ def settings(tmp_path: Path) -> Settings:
         anthropic_auth_token="test-token",
         agent_model="deepseek-flash",
     )
+
+
+def test_load_settings_defaults_to_100_agent_turns(monkeypatch, tmp_path):
+    monkeypatch.delenv("AGENT_MAX_TURNS", raising=False)
+    monkeypatch.setenv("WORKSPACES_DIR", str(tmp_path / "workspaces"))
+
+    assert load_settings().agent_max_turns == 100
 
 
 def test_build_agent_uses_claude_when_configured(tmp_path):
@@ -40,6 +47,12 @@ def test_build_options_uses_anthropic_gateway_and_tools(tmp_path):
     assert "Read" in options.allowed_tools
     assert "Write" in options.allowed_tools
     assert options.skills == "all"
+
+
+def test_build_options_allows_large_image_tool_results(tmp_path):
+    options = build_options(settings(tmp_path), tmp_path / "project", None)
+
+    assert options.max_buffer_size == 32 * 1024 * 1024
 
 
 def test_build_options_supports_official_anthropic_without_gateway(tmp_path):

@@ -7,16 +7,19 @@ import CodePane from '@/components/editor/CodePane.vue'
 import EditorHeader from '@/components/editor/EditorHeader.vue'
 import LogConsole from '@/components/editor/LogConsole.vue'
 import PreviewPane from '@/components/editor/PreviewPane.vue'
+import { useAgentRolesStore } from '@/stores/agentRoles'
 import { useChatStore } from '@/stores/chat'
 import { useFileStore } from '@/stores/files'
 import { useLogStore } from '@/stores/logs'
 import { useProjectStore } from '@/stores/project'
+import type { AgentRole } from '@/types'
 import { shouldSendInitialPrompt, takeInitialAppend } from '@/utils/initialPrompt'
 import '@/styles/editor.css'
 
 const route = useRoute()
 const router = useRouter()
 const projectStore = useProjectStore()
+const agentRoles = useAgentRolesStore()
 const files = useFileStore()
 const chat = useChatStore()
 const logs = useLogStore()
@@ -24,6 +27,11 @@ const logs = useLogStore()
 const id = computed(() => String(route.params.id))
 const activeTab = ref<'preview' | 'code' | 'console'>('preview')
 const previewRevision = computed(() => chat.revision + files.revision)
+const headerRoles = computed(() =>
+  (projectStore.current?.agentRoleIds ?? [])
+    .map((id) => agentRoles.byId(id))
+    .filter((role): role is AgentRole => Boolean(role)),
+)
 const tabMeta = computed(() => {
   if (activeTab.value === 'preview') {
     return '实时预览'
@@ -31,12 +39,56 @@ const tabMeta = computed(() => {
   return activeTab.value === 'code' ? '只读文件' : '执行日志'
 })
 let statusTimer: ReturnType<typeof setInterval> | null = null
+let backgroundProjectId: string | null = null
 
 function stopStatusPolling() {
   if (statusTimer !== null) {
     clearInterval(statusTimer)
     statusTimer = null
   }
+}
+
+function stopBackgroundPolling() {
+  backgroundProjectId = null
+  stopStatusPolling()
+}
+
+async function refreshProjectLogs(projectId: string) {
+  try {
+    await logs.load(projectId)
+  } catch {
+    return
+  }
+}
+
+async function pollBackground(projectId: string) {
+  if (backgroundProjectId !== projectId) {
+    return
+  }
+  await refreshProjectLogs(projectId)
+  if (backgroundProjectId !== projectId) {
+    return
+  }
+
+  let active = false
+  try {
+    active = await chat.resume(projectId)
+  } catch {
+    return
+  }
+  if (backgroundProjectId !== projectId || active) {
+    return
+  }
+
+  backgroundProjectId = null
+  stopStatusPolling()
+  await refreshProjectLogs(projectId)
+}
+
+function startBackgroundPolling(projectId: string) {
+  backgroundProjectId = projectId
+  stopStatusPolling()
+  statusTimer = setInterval(() => void pollBackground(projectId), 2500)
 }
 
 function promptKey(projectId: string) {
@@ -76,11 +128,12 @@ function takeInitialPrompt(projectId: string) {
 async function load() {
   const projectId = id.value
   activeTab.value = 'preview'
+  stopBackgroundPolling()
   logs.clear()
   chat.reset()
+  void agentRoles.load()
   await projectStore.load(projectId)
 
-  stopStatusPolling()
   files.entries = []
   files.active = null
   files.activePath = null
@@ -97,7 +150,11 @@ async function load() {
   } catch {
     hasHistory = false
   }
-  await chat.syncStatus(projectId).catch(() => undefined)
+  const active = await chat.resume(projectId).catch(() => false)
+  await refreshProjectLogs(projectId)
+  if (active) {
+    startBackgroundPolling(projectId)
+  }
 
   const prompt = takeInitialPrompt(projectId)
   const references = takeInitialReferences(projectId)
@@ -130,22 +187,9 @@ watch(
   },
 )
 
-watch(
-  () => chat.agentRunning,
-  (running) => {
-    stopStatusPolling()
-    if (!running || chat.streaming) {
-      return
-    }
-    statusTimer = setInterval(() => {
-      void chat.syncStatus(id.value).catch(() => undefined)
-    }, 2500)
-  },
-)
-
 onMounted(load)
 onBeforeUnmount(() => {
-  stopStatusPolling()
+  stopBackgroundPolling()
   chat.disconnect()
 })
 </script>
@@ -155,6 +199,7 @@ onBeforeUnmount(() => {
     <EditorHeader
       :project-name="projectStore.current?.name || '加载中'"
       :project-state="projectStore.current?.state || 'starting'"
+      :roles="headerRoles"
       model-label="DeepSeek Flash"
       @back="goHome"
     />

@@ -17,7 +17,8 @@ class Settings:
     agent_model: str = "deepseek-flash"
     agent_skills: str = "all"
     agent_plugins: str = ""
-    agent_max_turns: int = 40
+    agent_max_turns: int = 100
+    agent_max_buffer_bytes: int = 32 * 1024 * 1024
     chat_turn_timeout_seconds: int = 600
     chat_history_max_bytes: int = 10 * 1024 * 1024
     sandbox_name: str = ""
@@ -61,7 +62,10 @@ def load_settings() -> Settings:
         ),
         agent_skills=os.getenv("AGENT_SKILLS", "all").strip(),
         agent_plugins=os.getenv("AGENT_PLUGINS", "").strip(),
-        agent_max_turns=int(os.getenv("AGENT_MAX_TURNS", "40")),
+        agent_max_turns=int(os.getenv("AGENT_MAX_TURNS", "100")),
+        agent_max_buffer_bytes=max(
+            1024 * 1024, int(os.getenv("AGENT_MAX_BUFFER_BYTES", str(32 * 1024 * 1024)))
+        ),
         chat_turn_timeout_seconds=int(os.getenv("CHAT_TURN_TIMEOUT_SECONDS", "600")),
         chat_history_max_bytes=int(os.getenv("CHAT_HISTORY_MAX_BYTES", str(10 * 1024 * 1024))),
         sandbox_name=sandbox_name,

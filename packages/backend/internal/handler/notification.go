@@ -73,7 +73,7 @@ func (h *NotificationHandler) AdminList(c echo.Context) error {
 	page := queryInt(c, "page", 1)
 	pageSize := queryInt(c, "pageSize", 20)
 	result, err := h.Service.List(c.Request().Context(), dao.NotificationFilter{
-		Type: c.QueryParam("type"), Status: c.QueryParam("status"),
+		Type: c.QueryParam("type"), Status: c.QueryParam("status"), Keyword: c.QueryParam("keyword"),
 	}, page, pageSize)
 	if err != nil {
 		return notificationError(c, err)

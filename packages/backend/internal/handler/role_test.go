@@ -15,16 +15,31 @@ import (
 )
 
 type fakeRoleService struct {
-	roles []agentrole.Role
-	role  agentrole.Role
-	input agentrole.CreateInput
-	by    string
-	err   error
-	key   string
+	roles       []agentrole.Role
+	role        agentrole.Role
+	input       agentrole.CreateInput
+	by          string
+	updateID    int64
+	updateInput agentrole.UpdateInput
+	updateBy    string
+	err         error
+	key         string
 }
 
 func (f *fakeRoleService) List(context.Context) ([]agentrole.Role, error) {
 	return f.roles, f.err
+}
+
+func (f *fakeRoleService) ListPage(_ context.Context, query agentrole.ListQuery) (agentrole.Page, error) {
+	page := query.Page
+	if page < 1 {
+		page = 1
+	}
+	pageSize := query.PageSize
+	if pageSize < 1 {
+		pageSize = 10
+	}
+	return agentrole.Page{Items: f.roles, Total: int64(len(f.roles)), Page: page, PageSize: pageSize}, f.err
 }
 
 func (f *fakeRoleService) ListActive(context.Context) ([]agentrole.Role, error) {
@@ -43,6 +58,13 @@ func (f *fakeRoleService) GetActive(_ context.Context, id int64) (agentrole.Role
 func (f *fakeRoleService) Create(_ context.Context, input agentrole.CreateInput, by string) (agentrole.Role, error) {
 	f.input = input
 	f.by = by
+	return f.role, f.err
+}
+
+func (f *fakeRoleService) Update(_ context.Context, id int64, input agentrole.UpdateInput, by string) (agentrole.Role, error) {
+	f.updateID = id
+	f.updateInput = input
+	f.updateBy = by
 	return f.role, f.err
 }
 
@@ -118,6 +140,38 @@ func TestRoleCreatePassesInput(t *testing.T) {
 	}
 	if service.input.RoleCode != "frank" || service.input.AvatarKey != "roles/avatar/x.png" || service.by != "admin" {
 		t.Fatalf("input = %+v by = %q", service.input, service.by)
+	}
+}
+
+func TestRoleUpdatePassesInput(t *testing.T) {
+	service := &fakeRoleService{role: agentrole.Role{ID: 7, RoleCode: "frank"}}
+	h := NewRoleHandler(service)
+	e := echo.New()
+	e.PUT("/cp/api/v1/admin/roles/:id", withModelSession(h.Update))
+	body := `{"description":"d","systemPrompt":"p","status":0}`
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/cp/api/v1/admin/roles/7", strings.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if service.updateID != 7 || service.updateInput.SystemPrompt != "p" || service.updateInput.Status != 0 || service.updateBy != "admin" {
+		t.Fatalf("id = %d input = %+v by = %q", service.updateID, service.updateInput, service.updateBy)
+	}
+}
+
+func TestRoleUpdateMapsNotFound(t *testing.T) {
+	h := NewRoleHandler(&fakeRoleService{err: agentrole.ErrNotFound})
+	e := echo.New()
+	e.PUT("/cp/api/v1/admin/roles/:id", withModelSession(h.Update))
+	body := `{"description":"d","systemPrompt":"p","status":1}`
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/cp/api/v1/admin/roles/7", strings.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
 }
 

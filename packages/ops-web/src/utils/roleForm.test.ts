@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildRoleInput, type RoleFormState } from './roleForm'
+import { buildRoleInput, buildRoleUpdateInput, type RoleFormState } from './roleForm'
 
 function form(overrides: Partial<RoleFormState> = {}): RoleFormState {
   return {
@@ -40,5 +40,40 @@ describe('buildRoleInput', () => {
   it('normalizes sort order and status', () => {
     const result = buildRoleInput(form({ sortOrder: Number.NaN, status: 1 }))
     expect('input' in result && result.input.sortOrder).toBe(0)
+  })
+})
+
+describe('buildRoleUpdateInput', () => {
+  it('builds an update input', () => {
+    const result = buildRoleUpdateInput({
+      description: ' 新描述 ',
+      systemPrompt: ' 新提示词 ',
+      status: 0,
+    })
+    expect(result).toEqual({
+      input: { description: '新描述', systemPrompt: '新提示词', status: 0 },
+    })
+  })
+
+  it('rejects empty prompt', () => {
+    expect(buildRoleUpdateInput({ description: 'd', systemPrompt: '  ', status: 1 })).toEqual({
+      error: '请填写 System Prompt',
+    })
+  })
+
+  it('rejects overlong description and prompt', () => {
+    expect(
+      'error' in
+        buildRoleUpdateInput({ description: 'a'.repeat(1001), systemPrompt: 'p', status: 1 }),
+    ).toBe(true)
+    expect(
+      'error' in
+        buildRoleUpdateInput({ description: 'd', systemPrompt: 'a'.repeat(100001), status: 1 }),
+    ).toBe(true)
+  })
+
+  it('normalizes status', () => {
+    const result = buildRoleUpdateInput({ description: 'd', systemPrompt: 'p', status: 7 })
+    expect('input' in result && result.input.status).toBe(1)
   })
 })

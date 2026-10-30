@@ -89,7 +89,6 @@ function highlighted(row: TableRow, column: TableColumn): boolean {
   overflow: hidden;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 14px;
 }
 
 .table-state {

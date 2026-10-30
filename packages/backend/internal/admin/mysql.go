@@ -46,7 +46,22 @@ func (r *MySQLRepository) Overview(ctx context.Context, projectCount int) (Overv
 	}, nil
 }
 
-func (r *MySQLRepository) Users(ctx context.Context) ([]User, error) {
+func (r *MySQLRepository) Users(ctx context.Context, query ListQuery) (Page[User], error) {
+	query = NormalizeQuery(query)
+	scope := func(db *gorm.DB) *gorm.DB {
+		tx := db.Table("user AS u").
+			Joins("LEFT JOIN user_quota AS q ON q.user_id = u.id AND q.deleted_at IS NULL").
+			Where("u.deleted_at IS NULL")
+		if query.Keyword != "" {
+			like := "%" + query.Keyword + "%"
+			tx = tx.Where("(u.username LIKE ? OR u.nickname LIKE ? OR u.email LIKE ?)", like, like, like)
+		}
+		return tx
+	}
+	var total int64
+	if err := r.db.WithContext(ctx).Scopes(scope).Count(&total).Error; err != nil {
+		return Page[User]{}, fmt.Errorf("count admin users: %w", err)
+	}
 	var rows []struct {
 		ID        int64
 		Username  string
@@ -56,15 +71,14 @@ func (r *MySQLRepository) Users(ctx context.Context) ([]User, error) {
 		Status    int8
 		CreatedAt time.Time
 	}
-	err := r.db.WithContext(ctx).
-		Table("user AS u").
+	err := r.db.WithContext(ctx).Scopes(scope).
 		Select("u.id, u.username, u.nickname, u.email, COALESCE(q.plan_code, 'free') AS plan_code, u.status, u.created_at").
-		Joins("LEFT JOIN user_quota AS q ON q.user_id = u.id AND q.deleted_at IS NULL").
-		Where("u.deleted_at IS NULL").
 		Order("u.id ASC").
+		Offset((query.Page - 1) * query.PageSize).
+		Limit(query.PageSize).
 		Scan(&rows).Error
 	if err != nil {
-		return nil, fmt.Errorf("list admin users: %w", err)
+		return Page[User]{}, fmt.Errorf("list admin users: %w", err)
 	}
 	out := make([]User, 0, len(rows))
 	for _, row := range rows {
@@ -85,13 +99,30 @@ func (r *MySQLRepository) Users(ctx context.Context) ([]User, error) {
 			CreatedAt: row.CreatedAt,
 		})
 	}
-	return out, nil
+	return Page[User]{Items: out, Total: total, Page: query.Page, PageSize: query.PageSize}, nil
 }
 
-func (r *MySQLRepository) Sandboxes(ctx context.Context) ([]Sandbox, error) {
+func (r *MySQLRepository) Sandboxes(ctx context.Context, query ListQuery) (Page[Sandbox], error) {
+	query = NormalizeQuery(query)
+	scope := func(db *gorm.DB) *gorm.DB {
+		tx := db.Model(&model.SandboxInstance{})
+		if query.Keyword != "" {
+			like := "%" + query.Keyword + "%"
+			tx = tx.Where("(name LIKE ? OR host LIKE ? OR status LIKE ?)", like, like, like)
+		}
+		return tx
+	}
+	var total int64
+	if err := r.db.WithContext(ctx).Scopes(scope).Count(&total).Error; err != nil {
+		return Page[Sandbox]{}, fmt.Errorf("count admin sandboxes: %w", err)
+	}
 	var rows []model.SandboxInstance
-	if err := r.db.WithContext(ctx).Order("name ASC").Find(&rows).Error; err != nil {
-		return nil, fmt.Errorf("list admin sandboxes: %w", err)
+	if err := r.db.WithContext(ctx).Scopes(scope).
+		Order("name ASC").
+		Offset((query.Page - 1) * query.PageSize).
+		Limit(query.PageSize).
+		Find(&rows).Error; err != nil {
+		return Page[Sandbox]{}, fmt.Errorf("list admin sandboxes: %w", err)
 	}
 	out := make([]Sandbox, 0, len(rows))
 	for i := range rows {
@@ -110,7 +141,7 @@ func (r *MySQLRepository) Sandboxes(ctx context.Context) ([]Sandbox, error) {
 			HealthError:     row.HealthError,
 		})
 	}
-	return out, nil
+	return Page[Sandbox]{Items: out, Total: total, Page: query.Page, PageSize: query.PageSize}, nil
 }
 
 func (r *MySQLRepository) Quotas(ctx context.Context) ([]Quota, error) {
@@ -143,10 +174,27 @@ func (r *MySQLRepository) Quotas(ctx context.Context) ([]Quota, error) {
 	return out, nil
 }
 
-func (r *MySQLRepository) Audit(ctx context.Context) ([]AuditEvent, error) {
+func (r *MySQLRepository) Audit(ctx context.Context, query ListQuery) (Page[AuditEvent], error) {
+	query = NormalizeQuery(query)
+	scope := func(db *gorm.DB) *gorm.DB {
+		tx := db.Model(&model.OpsAuditLog{})
+		if query.Keyword != "" {
+			like := "%" + query.Keyword + "%"
+			tx = tx.Where("(actor_name LIKE ? OR action LIKE ? OR resource_id LIKE ? OR request_path LIKE ?)", like, like, like, like)
+		}
+		return tx
+	}
+	var total int64
+	if err := r.db.WithContext(ctx).Scopes(scope).Count(&total).Error; err != nil {
+		return Page[AuditEvent]{}, fmt.Errorf("count admin audit: %w", err)
+	}
 	var rows []model.OpsAuditLog
-	if err := r.db.WithContext(ctx).Order("created_at DESC, id DESC").Limit(200).Find(&rows).Error; err != nil {
-		return nil, fmt.Errorf("list admin audit: %w", err)
+	if err := r.db.WithContext(ctx).Scopes(scope).
+		Order("created_at DESC, id DESC").
+		Offset((query.Page - 1) * query.PageSize).
+		Limit(query.PageSize).
+		Find(&rows).Error; err != nil {
+		return Page[AuditEvent]{}, fmt.Errorf("list admin audit: %w", err)
 	}
 	out := make([]AuditEvent, 0, len(rows))
 	for _, row := range rows {
@@ -162,7 +210,7 @@ func (r *MySQLRepository) Audit(ctx context.Context) ([]AuditEvent, error) {
 			CreatedAt: row.CreatedAt,
 		})
 	}
-	return out, nil
+	return Page[AuditEvent]{Items: out, Total: total, Page: query.Page, PageSize: query.PageSize}, nil
 }
 
 func (r *MySQLRepository) RecordAudit(ctx context.Context, event AuditRecord) error {

@@ -80,3 +80,24 @@ func TestSandboxWriteConflict(t *testing.T) {
 		t.Fatalf("status = %d, want 409", apiErr.Status)
 	}
 }
+
+func TestSandboxChatLogs(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/internal/projects/p1/logs" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		if r.URL.Query().Get("limit") != "100" {
+			t.Fatalf("limit = %q", r.URL.Query().Get("limit"))
+		}
+		w.Write([]byte(`{"code":0,"message":"ok","result":{"logs":[{"ts":"2026-10-30T01:00:00.000Z","level":"info","source":"agent","message":"agent.run.start"}]}}`))
+	}))
+	defer srv.Close()
+
+	logs, err := NewSandbox(srv.URL, nil).ChatLogs(context.Background(), "p1", 100)
+	if err != nil {
+		t.Fatalf("logs: %v", err)
+	}
+	if len(logs) != 1 || logs[0].Message != "agent.run.start" {
+		t.Fatalf("logs = %+v", logs)
+	}
+}

@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
 
+import { roleDisplayLabel } from '@/utils/agentRoles'
+import type { AgentRole } from '@/types'
+
 defineProps<{
   projectName: string
   projectState: string
   modelLabel: string
+  roles: AgentRole[]
 }>()
 
 const emit = defineEmits<{
@@ -17,6 +21,11 @@ const emit = defineEmits<{
     <div class="editor-identity">
       <Button icon="pi pi-angle-left" text rounded aria-label="返回首页" @click="emit('back')" />
       <strong class="project-title">{{ projectName }}</strong>
+      <span v-if="roles.length" class="editor-roles">
+        <span v-for="role in roles" :key="role.id" class="editor-role-chip">
+          {{ roleDisplayLabel(role) }}
+        </span>
+      </span>
       <span class="tag">{{ projectState }}</span>
     </div>
 

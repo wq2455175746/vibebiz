@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { getAudit } from '@/api/admin'
 import DataTable from '@/components/DataTable.vue'
-import { useAdminList } from '@/composables/useAdminList'
+import TablePagination from '@/components/TablePagination.vue'
+import TableSearch from '@/components/TableSearch.vue'
+import { useAdminPage } from '@/composables/useAdminPage'
 import type { TableColumn } from '@/types'
 import { formatDateTime } from '@/utils/format'
 
-const { rows, loading, error, load } = useAdminList(getAudit)
+const { rows, total, page, pageSize, keyword, loading, error, load, search, setPage, setPageSize } =
+  useAdminPage(getAudit)
 
 const columns: TableColumn[] = [
   { key: 'actor', label: '操作人', width: '150px' },
@@ -23,8 +26,10 @@ const columns: TableColumn[] = [
         <h1>审计日志</h1>
         <p class="page-desc">控制面关键操作事件，只读。</p>
       </div>
-      <span class="tag">{{ rows.length }} 条</span>
+      <span class="tag">{{ total }} 条</span>
     </header>
+
+    <TableSearch v-model:keyword="keyword" @search="search" />
 
     <DataTable
       :columns="columns"
@@ -33,6 +38,14 @@ const columns: TableColumn[] = [
       :error="error"
       empty-text="暂无审计事件"
       @retry="load"
+    />
+
+    <TablePagination
+      :page="page"
+      :page-size="pageSize"
+      :total="total"
+      @page="setPage"
+      @page-size="setPageSize"
     />
   </div>
 </template>

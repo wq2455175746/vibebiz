@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import Popover from 'primevue/popover'
 
 import AgentRoleMenu from '@/components/AgentRoleMenu.vue'
 import ChatMessage from './ChatMessage.vue'
@@ -17,6 +18,8 @@ import {
   consumeRoleTrigger,
   filterRoleOptions,
   findRoleTrigger,
+  roleSaveContextMatches,
+  type RoleSaveContext,
   toggleRoleSelection,
 } from '@/utils/agentRoles'
 import {
@@ -43,6 +46,7 @@ const agentRoles = useAgentRolesStore()
 const prompt = ref('')
 const composerNote = ref('')
 const resourceInput = ref<HTMLInputElement | null>(null)
+const attachMenu = ref<InstanceType<typeof Popover> | null>(null)
 const textarea = ref<HTMLTextAreaElement | null>(null)
 const attachedIds = ref<string[]>([])
 const mentionOpen = ref(false)
@@ -59,8 +63,12 @@ const roleQuery = ref('')
 const roleIndex = ref(0)
 const roleSaving = ref(false)
 const roleError = ref('')
+const roleCatalogNotice = ref('')
+const lastConfirmedRoleIds = ref<number[]>([])
 let stickToBottom = true
-let roleRequestSeq = 0
+let roleContextVersion = 0
+let roleOpenSeq = 0
+let roleWriteQueue: Promise<void> = Promise.resolve()
 
 const candidates = computed(() => matchCommands(prompt.value, 'editor'))
 const menuOpen = computed(
@@ -79,6 +87,8 @@ const attached = computed(() =>
 const roleOptions = computed(() =>
   filterRoleOptions(agentRoles.roles, roleQuery.value).slice(0, 10),
 )
+
+const roleCatalogError = computed(() => roleCatalogNotice.value || agentRoles.error)
 
 const selectedRoles = computed(() =>
   selectedRoleIds.value
@@ -153,15 +163,48 @@ function updateMention() {
   }
 }
 
-function updateComposer(event: Event): void {
+async function ensureRoleCatalog(): Promise<boolean> {
+  if (agentRoles.roles.length) {
+    roleCatalogNotice.value = ''
+    return true
+  }
+  await agentRoles.load(true)
+  if (agentRoles.roles.length) {
+    roleCatalogNotice.value = ''
+    return true
+  }
+  roleCatalogNotice.value = agentRoles.error || '角色列表暂不可用，请稍后重试'
+  return false
+}
+
+async function updateComposer(event: Event): Promise<void> {
+  const seq = ++roleOpenSeq
   updateMention()
   const target = event.target as HTMLTextAreaElement
-  const match = findRoleTrigger(target.value, target.selectionStart ?? target.value.length)
+  let match = findRoleTrigger(target.value, target.selectionStart ?? target.value.length)
   if (!match) {
     roleOpen.value = false
     return
   }
-  const consumed = consumeRoleTrigger(target.value, match.start, match.end)
+  if (!(await ensureRoleCatalog())) {
+    if (seq === roleOpenSeq) {
+      roleOpen.value = false
+    }
+    return
+  }
+  if (seq !== roleOpenSeq) {
+    return
+  }
+  const latest = textarea.value
+  const currentMatch = latest
+    ? findRoleTrigger(latest.value, latest.selectionStart ?? latest.value.length)
+    : null
+  if (!latest || !currentMatch) {
+    roleOpen.value = false
+    return
+  }
+  match = currentMatch
+  const consumed = consumeRoleTrigger(latest.value, match.start, match.end)
   prompt.value = consumed.value
   roleQuery.value = match.query
   roleOpen.value = true
@@ -172,55 +215,91 @@ function updateComposer(event: Event): void {
   })
 }
 
+function currentRoleContext(): RoleSaveContext {
+  return { projectId: props.projectId, version: roleContextVersion }
+}
+
 function syncRolesFromProject(): void {
-  selectedRoleIds.value = [...(projectStore.current?.agentRoleIds ?? [])]
+  const current = projectStore.current
+  if (current && current.id !== props.projectId) {
+    return
+  }
+  const ids = [...(current?.agentRoleIds ?? [])]
+  selectedRoleIds.value = ids
+  lastConfirmedRoleIds.value = [...ids]
 }
 
 async function persistRoles(next: number[]): Promise<void> {
-  const seq = ++roleRequestSeq
-  const previous = [...selectedRoleIds.value]
-  selectedRoleIds.value = next
+  if (roleSaving.value) {
+    return
+  }
+  const context = currentRoleContext()
+  const savedProjectId = context.projectId
+  selectedRoleIds.value = [...next]
   roleSaving.value = true
   roleError.value = ''
-  try {
-    const saved = await updateProjectAgentRoles(props.projectId, next)
-    if (seq !== roleRequestSeq) {
-      return
-    }
-    selectedRoleIds.value = saved
-    if (projectStore.current) {
-      projectStore.current.agentRoleIds = saved
-      projectStore.current.defaultAgentRoleId = saved[0] ?? null
-    }
-  } catch (err) {
-    if (seq !== roleRequestSeq) {
-      return
-    }
-    selectedRoleIds.value = previous
-    roleError.value = (err as Error).message
-  } finally {
-    if (seq === roleRequestSeq) {
-      roleSaving.value = false
+  const run = async () => {
+    try {
+      const saved = await updateProjectAgentRoles(savedProjectId, next)
+      if (!roleSaveContextMatches(context, currentRoleContext())) {
+        return
+      }
+      const ids = [...saved]
+      lastConfirmedRoleIds.value = [...ids]
+      selectedRoleIds.value = [...ids]
+      if (projectStore.current?.id === savedProjectId) {
+        projectStore.current.agentRoleIds = [...ids]
+        projectStore.current.defaultAgentRoleId = ids[0] ?? null
+      }
+    } catch (err) {
+      if (!roleSaveContextMatches(context, currentRoleContext())) {
+        return
+      }
+      selectedRoleIds.value = [...lastConfirmedRoleIds.value]
+      roleError.value = (err as Error).message
+    } finally {
+      if (roleSaveContextMatches(context, currentRoleContext())) {
+        roleSaving.value = false
+      }
     }
   }
+  roleWriteQueue = roleWriteQueue.then(run, run)
+  await roleWriteQueue
 }
 
 async function toggleRole(role: { id: number }): Promise<void> {
+  if (roleSaving.value) {
+    return
+  }
   const next = toggleRoleSelection(agentRoles.roles, selectedRoleIds.value, role.id)
   await persistRoles(next)
 }
 
 async function removeRole(id: number): Promise<void> {
+  if (roleSaving.value) {
+    return
+  }
   await persistRoles(selectedRoleIds.value.filter((item) => item !== id))
 }
 
-function toggleRoleMenu(): void {
+async function toggleRoleMenu(): Promise<void> {
   roleQuery.value = ''
   roleIndex.value = 0
-  roleOpen.value = !roleOpen.value
+  if (roleOpen.value) {
+    roleOpen.value = false
+    return
+  }
+  if (!(await ensureRoleCatalog())) {
+    roleOpen.value = false
+    return
+  }
+  roleOpen.value = true
 }
 
 function onRoleEnter(): boolean {
+  if (roleSaving.value) {
+    return false
+  }
   if (!roleOpen.value || !roleOptions.value.length) {
     return false
   }
@@ -232,6 +311,9 @@ function onRoleEnter(): boolean {
 }
 
 function onRoleArrow(step: number, event: KeyboardEvent): boolean {
+  if (roleSaving.value) {
+    return false
+  }
   if (!roleOpen.value || !roleOptions.value.length) {
     return false
   }
@@ -250,6 +332,15 @@ function selectMention(option: { insert: string }) {
     textarea.value?.focus()
     textarea.value?.setSelectionRange(result.cursor, result.cursor)
   })
+}
+
+function toggleAttachMenu(event: Event) {
+  attachMenu.value?.toggle(event)
+}
+
+function chooseAttachment() {
+  attachMenu.value?.hide()
+  resourceInput.value?.click()
 }
 
 async function chooseFiles(event: Event) {
@@ -416,12 +507,24 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  roleContextVersion += 1
+  roleOpenSeq += 1
+  roleSaving.value = false
   document.removeEventListener('mousedown', onDocumentMousedown)
   document.removeEventListener('keydown', onDocumentKeydown)
 })
 watch(
   () => props.projectId,
   () => {
+    roleContextVersion += 1
+    roleOpenSeq += 1
+    roleSaving.value = false
+    roleError.value = ''
+    roleCatalogNotice.value = ''
+    roleOpen.value = false
+    roleQuery.value = ''
+    selectedRoleIds.value = []
+    lastConfirmedRoleIds.value = []
     syncRolesFromProject()
     void load()
   },
@@ -473,6 +576,7 @@ watch(
           </button>
         </span>
       </div>
+      <p v-if="roleCatalogError" class="chat-note chat-composer-note">{{ roleCatalogError }}</p>
       <p v-if="roleError" class="chat-note chat-composer-note">{{ roleError }}</p>
       <div v-if="attached.length" class="chat-attachments">
         <span v-for="item in attached" :key="item.id" class="chat-reference-chip">
@@ -490,6 +594,7 @@ watch(
           :roles="roleOptions"
           :selected="selectedRoleIds"
           :active-index="roleIndex"
+          :disabled="roleSaving"
           @toggle="toggleRole"
         />
         <SlashCommandMenu
@@ -541,7 +646,7 @@ watch(
           type="button"
           aria-label="添加资料"
           :disabled="chat.busy || resources.uploading"
-          @click="resourceInput?.click()"
+          @click="toggleAttachMenu"
         >
           <i :class="resources.uploading ? 'pi pi-spin pi-spinner' : 'pi pi-plus'" />
         </button>
@@ -559,6 +664,14 @@ watch(
           <i class="pi pi-arrow-up" />
         </button>
       </div>
+      <Popover ref="attachMenu">
+        <div class="composer-attach-menu">
+          <button type="button" @click="chooseAttachment">
+            <i class="pi pi-upload" />
+            <span>上传文件</span>
+          </button>
+        </div>
+      </Popover>
     </form>
     <SkillsDialog v-if="showSkills" :project-id="props.projectId" @close="showSkills = false" />
   </aside>

@@ -6,6 +6,22 @@ export interface RoleTrigger {
   query: string
 }
 
+export interface RoleSaveContext {
+  projectId: string
+  version: number
+}
+
+export function roleSaveContextMatches(
+  saved: RoleSaveContext,
+  current: RoleSaveContext,
+): boolean {
+  return saved.projectId === current.projectId && saved.version === current.version
+}
+
+export function roleDisplayLabel(role: AgentRole): string {
+  return `@${role.roleCode} ${role.roleNameZh || role.roleNameEn || role.roleCode}`
+}
+
 export function findRoleTrigger(value: string, cursor: number): RoleTrigger | null {
   const before = value.slice(0, cursor)
   const start = before.lastIndexOf('#')

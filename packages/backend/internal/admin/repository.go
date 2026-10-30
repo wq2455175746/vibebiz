@@ -2,8 +2,70 @@ package admin
 
 import (
 	"context"
+	"strings"
 	"time"
 )
+
+const (
+	DefaultPageSize = 10
+	MaxPageSize     = 100
+)
+
+type ListQuery struct {
+	Keyword  string
+	Page     int
+	PageSize int
+}
+
+func NormalizeQuery(query ListQuery) ListQuery {
+	query.Keyword = strings.TrimSpace(query.Keyword)
+	if query.Page < 1 {
+		query.Page = 1
+	}
+	if query.PageSize <= 0 {
+		query.PageSize = DefaultPageSize
+	}
+	if query.PageSize > MaxPageSize {
+		query.PageSize = MaxPageSize
+	}
+	return query
+}
+
+type Page[T any] struct {
+	Items    []T
+	Total    int64
+	Page     int
+	PageSize int
+}
+
+func Paginate[T any](items []T, query ListQuery) Page[T] {
+	query = NormalizeQuery(query)
+	total := int64(len(items))
+	start := (query.Page - 1) * query.PageSize
+	if start > len(items) {
+		start = len(items)
+	}
+	end := start + query.PageSize
+	if end > len(items) {
+		end = len(items)
+	}
+	pageItems := make([]T, end-start)
+	copy(pageItems, items[start:end])
+	return Page[T]{Items: pageItems, Total: total, Page: query.Page, PageSize: query.PageSize}
+}
+
+func MatchesKeyword(keyword string, fields ...string) bool {
+	keyword = strings.ToLower(strings.TrimSpace(keyword))
+	if keyword == "" {
+		return true
+	}
+	for _, field := range fields {
+		if strings.Contains(strings.ToLower(field), keyword) {
+			return true
+		}
+	}
+	return false
+}
 
 type Overview struct {
 	Projects         int `json:"projects"`
@@ -78,9 +140,9 @@ type AuditRecorder interface {
 type Repository interface {
 	AuditRecorder
 	Overview(ctx context.Context, projectCount int) (Overview, error)
-	Users(ctx context.Context) ([]User, error)
-	Sandboxes(ctx context.Context) ([]Sandbox, error)
+	Users(ctx context.Context, query ListQuery) (Page[User], error)
+	Sandboxes(ctx context.Context, query ListQuery) (Page[Sandbox], error)
 	Quotas(ctx context.Context) ([]Quota, error)
-	Audit(ctx context.Context) ([]AuditEvent, error)
+	Audit(ctx context.Context, query ListQuery) (Page[AuditEvent], error)
 	RecordAudit(ctx context.Context, event AuditRecord) error
 }

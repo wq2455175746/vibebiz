@@ -30,6 +30,35 @@ func (r *MySQLRepository) List(ctx context.Context) ([]Role, error) {
 	return out, nil
 }
 
+func (r *MySQLRepository) ListPage(ctx context.Context, query ListQuery) (Page, error) {
+	query = normalizeListQuery(query)
+	scope := func(db *gorm.DB) *gorm.DB {
+		tx := db.Model(&daomodel.AgentRole{})
+		if query.Keyword != "" {
+			like := "%" + query.Keyword + "%"
+			tx = tx.Where("(role_code LIKE ? OR role_name_en LIKE ? OR role_name_zh LIKE ?)", like, like, like)
+		}
+		return tx
+	}
+	var total int64
+	if err := r.db.WithContext(ctx).Scopes(scope).Count(&total).Error; err != nil {
+		return Page{}, err
+	}
+	var rows []daomodel.AgentRole
+	if err := r.db.WithContext(ctx).Scopes(scope).
+		Order("sort_order ASC, id ASC").
+		Offset((query.Page - 1) * query.PageSize).
+		Limit(query.PageSize).
+		Find(&rows).Error; err != nil {
+		return Page{}, err
+	}
+	items := make([]Role, 0, len(rows))
+	for index := range rows {
+		items = append(items, toRole(&rows[index]))
+	}
+	return Page{Items: items, Total: total, Page: query.Page, PageSize: query.PageSize}, nil
+}
+
 func (r *MySQLRepository) Create(ctx context.Context, input CreateInput, createdBy string) (Role, error) {
 	row := &daomodel.AgentRole{
 		RoleCode: input.RoleCode, RoleNameEN: input.RoleNameEN, RoleNameZH: input.RoleNameZH,
@@ -45,6 +74,33 @@ func (r *MySQLRepository) Create(ctx context.Context, input CreateInput, created
 		return Role{}, err
 	}
 	return toRole(row), nil
+}
+
+func (r *MySQLRepository) Update(ctx context.Context, id int64, input UpdateInput, updatedBy string) (Role, error) {
+	result := r.db.WithContext(ctx).Model(&daomodel.AgentRole{}).
+		Where("id = ?", id).
+		Updates(map[string]any{
+			"description":   input.Description,
+			"system_prompt": input.SystemPrompt,
+			"status":        input.Status,
+			"version":       gorm.Expr("version + 1"),
+			"updated_by":    updatedBy,
+		})
+	if result.Error != nil {
+		return Role{}, result.Error
+	}
+	return r.getByID(ctx, id)
+}
+
+func (r *MySQLRepository) getByID(ctx context.Context, id int64) (Role, error) {
+	var row daomodel.AgentRole
+	if err := r.db.WithContext(ctx).Where("id = ?", id).Take(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return Role{}, ErrNotFound
+		}
+		return Role{}, err
+	}
+	return toRole(&row), nil
 }
 
 func toRole(row *daomodel.AgentRole) Role {

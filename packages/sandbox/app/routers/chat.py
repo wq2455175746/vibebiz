@@ -79,35 +79,35 @@ async def chat(project_id: str, body: ChatRequest, request: Request) -> Streamin
         raise
 
     async def generate():
-        tracer = get_tracer()
-        with tracer.start_as_current_span("chat.stream") as span:
-            span.set_attribute("project.id", project_id)
-            status = "error"
-            try:
-                async for event in iter_turn_events(manager, turn):
-                    if event is None:
-                        break
-                    SSE_EVENTS.labels(
-                        project_id=project_id, type=str(event.get("type", "unknown"))
-                    ).inc()
-                    yield sse(event)
-                status = "success"
-            except Exception as exc:
-                logger.error(
-                    "chat.stream.error",
-                    extra={
-                        "project_id": project_id,
-                        "status": "error",
-                        "code": getattr(exc, "code", 50000),
-                        "error_message": str(exc),
-                    },
-                    exc_info=True,
-                )
-                yield sse({"type": "error", "message": str(exc)})
-            finally:
-                span.set_attribute("sse.done", True)
-                _count(project_id, status)
-                yield DONE
+        span = get_tracer().start_span("chat.stream")
+        span.set_attribute("project.id", project_id)
+        status = "error"
+        try:
+            async for event in iter_turn_events(manager, turn):
+                if event is None:
+                    break
+                SSE_EVENTS.labels(
+                    project_id=project_id, type=str(event.get("type", "unknown"))
+                ).inc()
+                yield sse(event)
+            status = "success"
+        except Exception as exc:
+            logger.error(
+                "chat.stream.error",
+                extra={
+                    "project_id": project_id,
+                    "status": "error",
+                    "code": getattr(exc, "code", 50000),
+                    "error_message": str(exc),
+                },
+                exc_info=True,
+            )
+            yield sse({"type": "error", "message": str(exc)})
+        finally:
+            span.set_attribute("sse.done", status == "success")
+            span.end()
+            _count(project_id, status)
+        yield DONE
 
     headers = {
         "Cache-Control": "no-cache",

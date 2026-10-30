@@ -41,19 +41,23 @@ func (h *AdminHandler) Overview(c echo.Context) error {
 }
 
 func (h *AdminHandler) Users(c echo.Context) error {
-	users, err := h.Repo.Users(c.Request().Context())
+	page, err := h.Repo.Users(c.Request().Context(), adminListQuery(c))
 	if err != nil {
 		return adminRepoError(c, err)
 	}
-	return response.OK(c, users)
+	return response.OK(c, map[string]any{
+		"users": page.Items, "total": page.Total, "page": page.Page, "pageSize": page.PageSize,
+	})
 }
 
 func (h *AdminHandler) Sandboxes(c echo.Context) error {
-	sandboxes, err := h.Repo.Sandboxes(c.Request().Context())
+	page, err := h.Repo.Sandboxes(c.Request().Context(), adminListQuery(c))
 	if err != nil {
 		return adminRepoError(c, err)
 	}
-	return response.OK(c, sandboxes)
+	return response.OK(c, map[string]any{
+		"sandboxes": page.Items, "total": page.Total, "page": page.Page, "pageSize": page.PageSize,
+	})
 }
 
 func (h *AdminHandler) Quotas(c echo.Context) error {
@@ -65,28 +69,44 @@ func (h *AdminHandler) Quotas(c echo.Context) error {
 }
 
 func (h *AdminHandler) Audit(c echo.Context) error {
-	events, err := h.Repo.Audit(c.Request().Context())
+	page, err := h.Repo.Audit(c.Request().Context(), adminListQuery(c))
 	if err != nil {
 		return adminRepoError(c, err)
 	}
-	return response.OK(c, events)
+	return response.OK(c, map[string]any{
+		"audit": page.Items, "total": page.Total, "page": page.Page, "pageSize": page.PageSize,
+	})
 }
 
 func (h *AdminHandler) Projects(c echo.Context) error {
+	query := admin.NormalizeQuery(adminListQuery(c))
 	projects := h.ProjectsStore.List(c.Request().Context())
-	out := make([]adminProject, 0, len(projects))
+	filtered := make([]adminProject, 0, len(projects))
 	for _, project := range projects {
-		out = append(out, adminProject{
+		owner := strconv.FormatInt(project.OwnerUserID, 10)
+		if !admin.MatchesKeyword(query.Keyword, project.ID, project.Name, owner) {
+			continue
+		}
+		filtered = append(filtered, adminProject{
 			ID:          project.ID,
 			Name:        project.Name,
 			State:       project.State,
-			Owner:       strconv.FormatInt(project.OwnerUserID, 10),
+			Owner:       owner,
 			OwnerUserID: project.OwnerUserID,
 			WorkspaceID: project.WorkspaceID,
 			CreatedAt:   project.CreatedAt,
 		})
 	}
-	return response.OK(c, map[string]any{"projects": out})
+	page := admin.Paginate(filtered, query)
+	return response.OK(c, map[string]any{
+		"projects": page.Items, "total": page.Total, "page": page.Page, "pageSize": page.PageSize,
+	})
+}
+
+func adminListQuery(c echo.Context) admin.ListQuery {
+	page, _ := strconv.Atoi(c.QueryParam("page"))
+	pageSize, _ := strconv.Atoi(c.QueryParam("pageSize"))
+	return admin.ListQuery{Keyword: c.QueryParam("keyword"), Page: page, PageSize: pageSize}
 }
 
 func adminRepoError(c echo.Context, _ error) error {

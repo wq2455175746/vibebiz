@@ -4,6 +4,8 @@ import {
   consumeRoleTrigger,
   filterRoleOptions,
   findRoleTrigger,
+  roleDisplayLabel,
+  roleSaveContextMatches,
   toggleRoleSelection,
 } from './agentRoles'
 
@@ -55,6 +57,33 @@ describe('agent role selection', () => {
 
   it('returns the selection unchanged for an unknown role', () => {
     expect(toggleRoleSelection(roles, [1, 4], 99)).toEqual([1, 4])
+  })
+})
+
+describe('agent role save context guard', () => {
+  const saved = { projectId: 'project-a', version: 3 }
+
+  it('accepts the same project and context version', () => {
+    expect(roleSaveContextMatches(saved, { projectId: 'project-a', version: 3 })).toBe(true)
+  })
+
+  it('rejects a response from a different project', () => {
+    expect(roleSaveContextMatches(saved, { projectId: 'project-b', version: 3 })).toBe(false)
+  })
+
+  it('rejects a response after the project context version advances', () => {
+    expect(roleSaveContextMatches(saved, { projectId: 'project-a', version: 4 })).toBe(false)
+  })
+})
+
+describe('agent role labels', () => {
+  it('formats the role code and Chinese name for the editor header', () => {
+    expect(roleDisplayLabel(roles[1])).toBe('@alex 全栈工程师')
+    expect(roleDisplayLabel(roles[0])).toBe('@team 团队')
+  })
+
+  it('falls back to the English name when the Chinese name is empty', () => {
+    expect(roleDisplayLabel({ ...roles[1], roleNameZh: '' })).toBe('@alex Alex')
   })
 })
 

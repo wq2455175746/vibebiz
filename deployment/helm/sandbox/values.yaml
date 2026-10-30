@@ -24,7 +24,7 @@ config:
   agentModel: deepseek-flash
   agentSkills: all
   agentPlugins: ""
-  agentMaxTurns: "40"
+  agentMaxTurns: "100"
   llmBaseUrl: https://api.deepseek.com
   llmModelName: deepseek-flash
   logLevel: info

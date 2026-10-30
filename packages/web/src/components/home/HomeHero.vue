@@ -48,6 +48,8 @@ const selectedRoleIds = ref<number[]>([])
 const roleOpen = ref(false)
 const roleQuery = ref('')
 const roleIndex = ref(0)
+const roleCatalogNotice = ref('')
+let roleInputSeq = 0
 
 const candidates = computed(() => matchCommands(prompt.value, 'home'))
 const menuOpen = computed(
@@ -56,6 +58,7 @@ const menuOpen = computed(
 const roleOptions = computed(() =>
   filterRoleOptions(rolesStore.roles, roleQuery.value).slice(0, 10),
 )
+const roleCatalogError = computed(() => roleCatalogNotice.value || rolesStore.error)
 
 onMounted(() => {
   void rolesStore.load()
@@ -113,7 +116,22 @@ function onEscape() {
   roleOpen.value = false
 }
 
+async function ensureRoleCatalog(): Promise<boolean> {
+  if (rolesStore.roles.length) {
+    roleCatalogNotice.value = ''
+    return true
+  }
+  await rolesStore.load(true)
+  if (rolesStore.roles.length) {
+    roleCatalogNotice.value = ''
+    return true
+  }
+  roleCatalogNotice.value = rolesStore.error || '角色列表暂不可用，请稍后重试'
+  return false
+}
+
 async function openRoleMenu(value: string, cursor: number): Promise<void> {
+  const seq = ++roleInputSeq
   if (props.targetProject) {
     roleOpen.value = false
     return
@@ -123,9 +141,26 @@ async function openRoleMenu(value: string, cursor: number): Promise<void> {
     roleOpen.value = false
     return
   }
-  const consumed = consumeRoleTrigger(value, match.start, match.end)
+  if (!(await ensureRoleCatalog())) {
+    if (seq === roleInputSeq) {
+      roleOpen.value = false
+    }
+    return
+  }
+  if (seq !== roleInputSeq) {
+    return
+  }
+  const latest = textarea.value
+  const currentMatch = latest
+    ? findRoleTrigger(latest.value, latest.selectionStart ?? latest.value.length)
+    : null
+  if (!latest || !currentMatch) {
+    roleOpen.value = false
+    return
+  }
+  const consumed = consumeRoleTrigger(latest.value, currentMatch.start, currentMatch.end)
   prompt.value = consumed.value
-  roleQuery.value = match.query
+  roleQuery.value = currentMatch.query
   roleOpen.value = true
   roleIndex.value = 0
   await nextTick()
@@ -291,6 +326,7 @@ function submit() {
         accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.html,.css,.js,.ts,.json,.yaml,.yml,.xml,.csv,.png,.jpg,.jpeg,.webp,.gif"
         @change="chooseFiles"
       />
+      <p v-if="roleCatalogError" class="error-text composer-file-error">{{ roleCatalogError }}</p>
       <p v-if="commandNote" class="error-text composer-file-error">{{ commandNote }}</p>
       <p v-if="fileError" class="error-text composer-file-error">{{ fileError }}</p>
       <div class="composer-bar">

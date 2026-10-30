@@ -281,6 +281,17 @@ func serveWithAuth(e *echo.Echo, method, target string, cookie *http.Cookie) *ht
 	return rec
 }
 
+func serveWithAuthBody(e *echo.Echo, method, target string, cookie *http.Cookie, body string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(method, target, strings.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	if cookie != nil {
+		req.AddCookie(cookie)
+	}
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	return rec
+}
+
 type mapResolver map[string]string
 
 func (m mapResolver) ResolveBaseURL(_ context.Context, projectID string) (string, error) {

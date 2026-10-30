@@ -3,6 +3,7 @@ package agentrole
 import (
 	"context"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -31,6 +32,37 @@ func (r *MemoryRepository) List(context.Context) ([]Role, error) {
 	return out, nil
 }
 
+func (r *MemoryRepository) ListPage(ctx context.Context, query ListQuery) (Page, error) {
+	roles, err := r.List(ctx)
+	if err != nil {
+		return Page{}, err
+	}
+	query = normalizeListQuery(query)
+	keyword := strings.ToLower(query.Keyword)
+	filtered := make([]Role, 0, len(roles))
+	for _, role := range roles {
+		if keyword != "" &&
+			!strings.Contains(strings.ToLower(role.RoleCode), keyword) &&
+			!strings.Contains(strings.ToLower(role.RoleNameEN), keyword) &&
+			!strings.Contains(strings.ToLower(role.RoleNameZH), keyword) {
+			continue
+		}
+		filtered = append(filtered, role)
+	}
+	total := int64(len(filtered))
+	start := (query.Page - 1) * query.PageSize
+	if start > len(filtered) {
+		start = len(filtered)
+	}
+	end := start + query.PageSize
+	if end > len(filtered) {
+		end = len(filtered)
+	}
+	items := make([]Role, end-start)
+	copy(items, filtered[start:end])
+	return Page{Items: items, Total: total, Page: query.Page, PageSize: query.PageSize}, nil
+}
+
 func (r *MemoryRepository) Create(_ context.Context, input CreateInput, createdBy string) (Role, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -50,6 +82,23 @@ func (r *MemoryRepository) Create(_ context.Context, input CreateInput, createdB
 	}
 	r.items = append(r.items, item)
 	return item, nil
+}
+
+func (r *MemoryRepository) Update(_ context.Context, id int64, input UpdateInput, _ string) (Role, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for index := range r.items {
+		if r.items[index].ID != id {
+			continue
+		}
+		r.items[index].Description = input.Description
+		r.items[index].SystemPrompt = input.SystemPrompt
+		r.items[index].Status = input.Status
+		r.items[index].Version++
+		r.items[index].UpdatedAt = time.Now().UTC()
+		return r.items[index], nil
+	}
+	return Role{}, ErrNotFound
 }
 
 func (r *MemoryRepository) ListActive(ctx context.Context) ([]Role, error) {

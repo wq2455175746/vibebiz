@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -276,3 +277,23 @@ def test_daily_file_handler_writes_text_and_zips_previous_day(tmp_path):
     content = (log_dir / "sandbox_2026-10-30.log").read_text(encoding="utf-8")
     assert "hello file log" in content
     assert "INFO" in content
+
+
+def test_chat_stream_disconnect_closes_cleanly(tmp_path, caplog):
+    client = make_client(tmp_path)
+    init_project(client)
+
+    with client.stream(
+        "POST",
+        "/internal/projects/p1/chat",
+        json={"message": "disconnect"},
+    ) as response:
+        assert response.status_code == 200
+        next(response.iter_lines())
+
+    client.close()
+    time.sleep(0.1)
+    messages = [record.getMessage() for record in caplog.records]
+    messages.extend(str(record.exc_info) for record in caplog.records if record.exc_info)
+    assert not any("async generator ignored GeneratorExit" in item for item in messages)
+    assert not any("Failed to detach context" in item for item in messages)

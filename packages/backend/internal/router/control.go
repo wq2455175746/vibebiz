@@ -84,6 +84,7 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 	if roles != nil {
 		adminProtected.GET("/roles", roles.List)
 		adminProtected.POST("/roles", roles.Create)
+		adminProtected.PUT("/roles/:id", roles.Update)
 		adminProtected.POST("/roles/avatar/presign", roles.PresignAvatar)
 		adminProtected.POST("/roles/avatar/upload", roles.UploadAvatar)
 	}

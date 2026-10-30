@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { getSandboxes } from '@/api/admin'
 import DataTable from '@/components/DataTable.vue'
-import { useAdminList } from '@/composables/useAdminList'
+import TablePagination from '@/components/TablePagination.vue'
+import TableSearch from '@/components/TableSearch.vue'
+import { useAdminPage } from '@/composables/useAdminPage'
 import type { AdminSandbox, TableColumn } from '@/types'
 import { formatDateTime } from '@/utils/format'
 
-const { rows, loading, error, load } = useAdminList(getSandboxes)
+const { rows, total, page, pageSize, keyword, loading, error, load, search, setPage, setPageSize } =
+  useAdminPage(getSandboxes)
 
 const columns: TableColumn[] = [
   { key: 'name', label: '名称', width: '160px' },
@@ -45,8 +48,10 @@ const columns: TableColumn[] = [
         <h1>沙箱节点</h1>
         <p class="page-desc">sandbox 实例注册、健康状态与实时并发。</p>
       </div>
-      <span class="tag">{{ rows.length }} 条</span>
+      <span class="tag">{{ total }} 条</span>
     </header>
+
+    <TableSearch v-model:keyword="keyword" @search="search" />
 
     <DataTable
       :columns="columns"
@@ -55,6 +60,14 @@ const columns: TableColumn[] = [
       :error="error"
       empty-text="暂无沙箱节点"
       @retry="load"
+    />
+
+    <TablePagination
+      :page="page"
+      :page-size="pageSize"
+      :total="total"
+      @page="setPage"
+      @page-size="setPageSize"
     />
   </div>
 </template>

@@ -44,20 +44,38 @@ func (r *MemoryRepository) Overview(_ context.Context, projectCount int) (Overvi
 	}, nil
 }
 
-func (r *MemoryRepository) Users(_ context.Context) ([]User, error) {
-	return clone(r.users), nil
+func (r *MemoryRepository) Users(_ context.Context, query ListQuery) (Page[User], error) {
+	filtered := make([]User, 0, len(r.users))
+	for _, item := range r.users {
+		if MatchesKeyword(query.Keyword, item.Name, item.Email) {
+			filtered = append(filtered, item)
+		}
+	}
+	return Paginate(filtered, query), nil
 }
 
-func (r *MemoryRepository) Sandboxes(_ context.Context) ([]Sandbox, error) {
-	return clone(r.sandboxes), nil
+func (r *MemoryRepository) Sandboxes(_ context.Context, query ListQuery) (Page[Sandbox], error) {
+	filtered := make([]Sandbox, 0, len(r.sandboxes))
+	for _, item := range r.sandboxes {
+		if MatchesKeyword(query.Keyword, item.Name, item.Host, item.Status) {
+			filtered = append(filtered, item)
+		}
+	}
+	return Paginate(filtered, query), nil
 }
 
 func (r *MemoryRepository) Quotas(_ context.Context) ([]Quota, error) {
 	return clone(r.quotas), nil
 }
 
-func (r *MemoryRepository) Audit(_ context.Context) ([]AuditEvent, error) {
-	return clone(r.audit), nil
+func (r *MemoryRepository) Audit(_ context.Context, query ListQuery) (Page[AuditEvent], error) {
+	filtered := make([]AuditEvent, 0, len(r.audit))
+	for _, item := range r.audit {
+		if MatchesKeyword(query.Keyword, item.Actor, item.Action, item.Target) {
+			filtered = append(filtered, item)
+		}
+	}
+	return Paginate(filtered, query), nil
 }
 
 func (r *MemoryRepository) RecordAudit(_ context.Context, event AuditRecord) error {

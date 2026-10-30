@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/labstack/echo/v4"
@@ -16,9 +17,11 @@ import (
 
 type RoleService interface {
 	List(ctx context.Context) ([]agentrole.Role, error)
+	ListPage(ctx context.Context, query agentrole.ListQuery) (agentrole.Page, error)
 	ListActive(ctx context.Context) ([]agentrole.Role, error)
 	GetActive(ctx context.Context, id int64) (agentrole.Role, error)
 	Create(ctx context.Context, input agentrole.CreateInput, createdBy string) (agentrole.Role, error)
+	Update(ctx context.Context, id int64, input agentrole.UpdateInput, updatedBy string) (agentrole.Role, error)
 	PresignAvatar(ctx context.Context, filename, contentType string, size int64) (agentrole.Presign, error)
 	UploadAvatar(ctx context.Context, contentType string, size int64, body io.Reader) (string, error)
 }
@@ -49,11 +52,19 @@ type roleAvatarPresignRequest struct {
 }
 
 func (h *RoleHandler) List(c echo.Context) error {
-	roles, err := h.Service.List(c.Request().Context())
+	page, err := h.Service.ListPage(c.Request().Context(), roleListQuery(c))
 	if err != nil {
 		return roleError(c, err)
 	}
-	return response.OK(c, map[string]any{"roles": roles})
+	return response.OK(c, map[string]any{
+		"roles": page.Items, "total": page.Total, "page": page.Page, "pageSize": page.PageSize,
+	})
+}
+
+func roleListQuery(c echo.Context) agentrole.ListQuery {
+	page, _ := strconv.Atoi(c.QueryParam("page"))
+	pageSize, _ := strconv.Atoi(c.QueryParam("pageSize"))
+	return agentrole.ListQuery{Keyword: c.QueryParam("keyword"), Page: page, PageSize: pageSize}
 }
 
 type publicRoleResponse struct {
@@ -104,6 +115,32 @@ func (h *RoleHandler) Create(c echo.Context) error {
 	return response.OK(c, role)
 }
 
+func (h *RoleHandler) Update(c echo.Context) error {
+	session, ok := auth.SessionFrom(c)
+	if !ok {
+		return response.Fail(c, http.StatusUnauthorized, 40101, "unauthorized")
+	}
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		return response.Fail(c, http.StatusBadRequest, 40001, "invalid role id")
+	}
+	var req roleRequest
+	if err := c.Bind(&req); err != nil {
+		return response.Fail(c, http.StatusBadRequest, 40001, "invalid body")
+	}
+	status := int8(1)
+	if req.Status != nil {
+		status = *req.Status
+	}
+	role, err := h.Service.Update(c.Request().Context(), id, agentrole.UpdateInput{
+		Description: req.Description, SystemPrompt: req.SystemPrompt, Status: status,
+	}, session.Username)
+	if err != nil {
+		return roleError(c, err)
+	}
+	return response.OK(c, role)
+}
+
 func (h *RoleHandler) PresignAvatar(c echo.Context) error {
 	var req roleAvatarPresignRequest
 	if err := c.Bind(&req); err != nil || req.Filename == "" || req.ContentType == "" || req.Size <= 0 {
@@ -133,6 +170,8 @@ func roleError(c echo.Context, err error) error {
 	switch {
 	case errors.Is(err, agentrole.ErrInvalid), errors.Is(err, agentrole.ErrAvatarInvalid), errors.Is(err, agentrole.ErrAvatarNotFound):
 		return response.Fail(c, http.StatusBadRequest, 40001, "invalid role")
+	case errors.Is(err, agentrole.ErrNotFound):
+		return response.Fail(c, http.StatusNotFound, 40401, "role not found")
 	case errors.Is(err, agentrole.ErrConflict):
 		return response.Fail(c, http.StatusConflict, 40901, "role code already exists")
 	case errors.Is(err, agentrole.ErrStorageUnavailable):

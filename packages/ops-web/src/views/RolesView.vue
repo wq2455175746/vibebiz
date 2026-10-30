@@ -8,14 +8,22 @@ import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import Textarea from 'primevue/textarea'
 
-import { createRole, getRoles, presignRoleAvatar, uploadRoleAvatar } from '@/api/admin'
+import { createRole, getRoles, presignRoleAvatar, updateRole, uploadRoleAvatar } from '@/api/admin'
 import DataTable from '@/components/DataTable.vue'
-import { useAdminList } from '@/composables/useAdminList'
+import TablePagination from '@/components/TablePagination.vue'
+import TableSearch from '@/components/TableSearch.vue'
+import { useAdminPage } from '@/composables/useAdminPage'
 import type { TableColumn } from '@/types'
 import { formatDateTime } from '@/utils/format'
-import { buildRoleInput, type RoleFormState } from '@/utils/roleForm'
+import {
+  buildRoleInput,
+  buildRoleUpdateInput,
+  type RoleFormState,
+  type RoleUpdateFormState,
+} from '@/utils/roleForm'
 
-const { rows, loading, error, load } = useAdminList(getRoles)
+const { rows, total, page, pageSize, keyword, loading, error, load, search, setPage, setPageSize } =
+  useAdminPage(getRoles)
 
 const columns: TableColumn[] = [
   { key: 'avatarUrl', label: '头像', width: '70px' },
@@ -36,9 +44,13 @@ const columns: TableColumn[] = [
   },
   { key: 'sortOrder', label: '排序', width: '70px' },
   { key: 'createdAt', label: '创建时间', width: '160px', format: (value) => formatDateTime(value) },
+  { key: 'actions', label: '操作', width: '80px' },
 ]
 
 const dialogVisible = ref(false)
+const dialogMode = ref<'create' | 'edit'>('create')
+const editingId = ref<number | null>(null)
+const editingLabel = ref('')
 const saving = ref(false)
 const uploading = ref(false)
 const actionError = ref('')
@@ -60,10 +72,29 @@ function emptyForm(): RoleFormState {
 }
 
 const form = ref<RoleFormState>(emptyForm())
+const editForm = ref<RoleUpdateFormState>({ description: '', systemPrompt: '', status: 1 })
 
 function openCreate() {
+  dialogMode.value = 'create'
+  editingId.value = null
+  editingLabel.value = ''
   form.value = emptyForm()
   avatarPreview.value = ''
+  actionError.value = ''
+  notice.value = ''
+  dialogVisible.value = true
+}
+
+function openEdit(row: unknown) {
+  const record = row as Record<string, unknown>
+  dialogMode.value = 'edit'
+  editingId.value = Number(record.id)
+  editingLabel.value = String(record.roleNameZh ?? record.roleNameEn ?? '')
+  editForm.value = {
+    description: String(record.description ?? ''),
+    systemPrompt: String(record.systemPrompt ?? ''),
+    status: Number(record.status ?? 1),
+  }
   actionError.value = ''
   notice.value = ''
   dialogVisible.value = true
@@ -113,6 +144,10 @@ function updateSortOrder(value: number | null) {
 }
 
 async function submit() {
+  if (dialogMode.value === 'edit') {
+    await submitEdit()
+    return
+  }
   const result = buildRoleInput(form.value)
   if ('error' in result) {
     actionError.value = result.error
@@ -132,13 +167,39 @@ async function submit() {
   }
 }
 
+async function submitEdit() {
+  if (editingId.value === null) {
+    actionError.value = '缺少角色 ID'
+    return
+  }
+  const result = buildRoleUpdateInput(editForm.value)
+  if ('error' in result) {
+    actionError.value = result.error
+    return
+  }
+  saving.value = true
+  actionError.value = ''
+  try {
+    await updateRole(editingId.value, result.input)
+    notice.value = '角色已更新'
+    dialogVisible.value = false
+    await load()
+  } catch (err) {
+    actionError.value = err instanceof Error ? err.message : '保存失败'
+  } finally {
+    saving.value = false
+  }
+}
+
 function avatarUrl(row: unknown): string {
   return String((row as Record<string, unknown>).avatarUrl ?? '')
 }
 
 function initial(row: unknown): string {
   const record = row as Record<string, unknown>
-  return String(record.roleNameZh ?? record.roleNameEn ?? '?').slice(0, 1).toUpperCase()
+  return String(record.roleNameZh ?? record.roleNameEn ?? '?')
+    .slice(0, 1)
+    .toUpperCase()
 }
 </script>
 
@@ -150,12 +211,14 @@ function initial(row: unknown): string {
         <p class="page-desc">内置与自定义 Agent 角色、提示词和头像。</p>
       </div>
       <div class="page-side">
-        <span class="tag">{{ rows.length }} 条</span>
+        <span class="tag">{{ total }} 条</span>
         <Button label="新增角色" icon="pi pi-plus" @click="openCreate" />
       </div>
     </header>
 
     <p v-if="notice" class="inline-notice">{{ notice }}</p>
+
+    <TableSearch v-model:keyword="keyword" @search="search" />
 
     <DataTable
       :columns="columns"
@@ -169,17 +232,31 @@ function initial(row: unknown): string {
         <img v-if="avatarUrl(row)" class="role-avatar" :src="avatarUrl(row)" alt="" />
         <span v-else class="role-avatar role-avatar-fallback">{{ initial(row) }}</span>
       </template>
+      <template #cell-actions="{ row }">
+        <button class="link-button" type="button" @click="openEdit(row)">编辑</button>
+      </template>
     </DataTable>
+
+    <TablePagination
+      :page="page"
+      :page-size="pageSize"
+      :total="total"
+      @page="setPage"
+      @page-size="setPageSize"
+    />
 
     <Dialog
       v-model:visible="dialogVisible"
-      header="新增角色"
+      :header="dialogMode === 'create' ? '新增角色' : '编辑角色'"
       modal
       :style="{ width: '680px' }"
       @hide="actionError = ''"
     >
       <div class="form">
-        <div class="avatar-field">
+        <p v-if="dialogMode === 'edit'" class="edit-hint">
+          {{ editingLabel }}（仅可修改描述、System Prompt 与状态）
+        </p>
+        <div v-if="dialogMode === 'create'" class="avatar-field">
           <img
             v-if="avatarPreview"
             class="role-avatar role-avatar-large"
@@ -203,27 +280,46 @@ function initial(row: unknown): string {
             @click="avatarInput?.click()"
           />
         </div>
-        <label class="field">
+        <label v-if="dialogMode === 'create'" class="field">
           <span>角色编码</span>
           <InputText v-model="form.roleCode" maxlength="32" placeholder="例如 frank" />
         </label>
-        <label class="field">
+        <label v-if="dialogMode === 'create'" class="field">
           <span>中文名</span>
           <InputText v-model="form.roleNameZh" maxlength="64" />
         </label>
-        <label class="field">
+        <label v-if="dialogMode === 'create'" class="field">
           <span>英文名</span>
           <InputText v-model="form.roleNameEn" maxlength="64" />
         </label>
         <label class="field">
           <span>描述</span>
-          <Textarea v-model="form.description" rows="2" maxlength="1000" />
+          <Textarea
+            :model-value="dialogMode === 'create' ? form.description : editForm.description"
+            rows="2"
+            maxlength="1000"
+            @update:model-value="
+              (value) =>
+                dialogMode === 'create'
+                  ? (form.description = String(value ?? ''))
+                  : (editForm.description = String(value ?? ''))
+            "
+          />
         </label>
         <label class="field">
           <span>System Prompt</span>
-          <Textarea v-model="form.systemPrompt" rows="6" />
+          <Textarea
+            :model-value="dialogMode === 'create' ? form.systemPrompt : editForm.systemPrompt"
+            rows="6"
+            @update:model-value="
+              (value) =>
+                dialogMode === 'create'
+                  ? (form.systemPrompt = String(value ?? ''))
+                  : (editForm.systemPrompt = String(value ?? ''))
+            "
+          />
         </label>
-        <label class="field">
+        <label v-if="dialogMode === 'create'" class="field">
           <span>排序</span>
           <InputNumber
             :model-value="form.sortOrder"
@@ -235,13 +331,19 @@ function initial(row: unknown): string {
         <label class="field">
           <span>状态</span>
           <Select
-            v-model="form.status"
+            :model-value="dialogMode === 'create' ? form.status : editForm.status"
             :options="[
               { label: '启用', value: 1 },
               { label: '禁用', value: 0 },
             ]"
             option-label="label"
             option-value="value"
+            @update:model-value="
+              (value) =>
+                dialogMode === 'create'
+                  ? (form.status = Number(value))
+                  : (editForm.status = Number(value))
+            "
           />
         </label>
         <p v-if="actionError" class="error-text">{{ actionError }}</p>
@@ -266,6 +368,25 @@ function initial(row: unknown): string {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.edit-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.link-button {
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--blue);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.link-button:hover {
+  text-decoration: underline;
 }
 
 .field {

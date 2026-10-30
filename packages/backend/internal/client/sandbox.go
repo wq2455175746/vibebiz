@@ -72,6 +72,13 @@ type ChatStatus struct {
 	TurnID string `json:"turnId"`
 }
 
+type ChatLog struct {
+	TS      string `json:"ts"`
+	Level   string `json:"level"`
+	Source  string `json:"source"`
+	Message string `json:"message"`
+}
+
 type SkillInfo struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
@@ -229,6 +236,22 @@ func (s *Sandbox) ReadChatHistory(ctx context.Context, id string, limit int) (Ch
 func (s *Sandbox) StopChat(ctx context.Context, id string) error {
 	_, err := s.doJSON(ctx, "stop_chat", id, http.MethodPost, "/internal/projects/"+url.PathEscape(id)+"/chat/stop", map[string]string{})
 	return err
+}
+
+func (s *Sandbox) ChatLogs(ctx context.Context, id string, limit int) ([]ChatLog, error) {
+	q := url.Values{}
+	q.Set("limit", strconv.Itoa(limit))
+	raw, err := s.doJSON(ctx, "chat_logs", id, http.MethodGet, "/internal/projects/"+url.PathEscape(id)+"/logs?"+q.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	var payload struct {
+		Logs []ChatLog `json:"logs"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, err
+	}
+	return payload.Logs, nil
 }
 
 func (s *Sandbox) ChatStatus(ctx context.Context, id string) (ChatStatus, error) {

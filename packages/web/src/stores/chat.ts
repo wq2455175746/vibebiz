@@ -112,6 +112,14 @@ export const useChatStore = defineStore('chat', () => {
     return status.active
   }
 
+  async function resume(projectId: string): Promise<boolean> {
+    const active = await syncStatus(projectId)
+    if (!active) {
+      await loadHistory(projectId)
+    }
+    return active
+  }
+
   async function loadHistory(projectId: string): Promise<boolean> {
     const history = await fetchChatHistory(projectId)
     if (history.messages.length === 0) {
@@ -123,6 +131,7 @@ export const useChatStore = defineStore('chat', () => {
         id: message.id,
         role: message.role,
         text: message.text,
+        createdAt: message.createdAt,
         tools: message.tools.map((tool) => ({
           id: tool.id,
           name: tool.name,
@@ -142,10 +151,12 @@ export const useChatStore = defineStore('chat', () => {
       return
     }
     clearMockTimers()
+    const now = new Date().toISOString()
     messages.value.push({
       id: nextId(),
       role: 'user',
       text,
+      createdAt: now,
       tools: [],
       pending: false,
     })
@@ -153,6 +164,7 @@ export const useChatStore = defineStore('chat', () => {
       id: nextId(),
       role: 'assistant',
       text: '',
+      createdAt: now,
       tools: [],
       pending: true,
     })
@@ -201,10 +213,12 @@ export const useChatStore = defineStore('chat', () => {
       return
     }
     const logs = useLogStore()
+    const now = new Date().toISOString()
     messages.value.push({
       id: nextId(),
       role: 'user',
       text,
+      createdAt: now,
       tools: [],
       references: references.map((item) => ({
         kind: item.kind,
@@ -220,6 +234,7 @@ export const useChatStore = defineStore('chat', () => {
       id: nextId(),
       role: 'assistant',
       text: '',
+      createdAt: now,
       tools: [],
       pending: true,
     })
@@ -345,6 +360,7 @@ export const useChatStore = defineStore('chat', () => {
     busy,
     revision,
     syncStatus,
+    resume,
     reset,
     loadHistory,
     send,

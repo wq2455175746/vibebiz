@@ -1,4 +1,4 @@
-import type { RoleInput } from '@/types'
+import type { RoleInput, RoleUpdateInput } from '@/types'
 
 export interface RoleFormState {
   roleCode: string
@@ -11,11 +11,15 @@ export interface RoleFormState {
   status: number
 }
 
+export interface RoleUpdateFormState {
+  description: string
+  systemPrompt: string
+  status: number
+}
+
 const roleCodePattern = /^[a-z][a-z0-9_-]{0,31}$/
 
-export function buildRoleInput(
-  form: RoleFormState,
-): { input: RoleInput } | { error: string } {
+export function buildRoleInput(form: RoleFormState): { input: RoleInput } | { error: string } {
   const roleCode = form.roleCode.trim()
   const roleNameEn = form.roleNameEn.trim()
   const roleNameZh = form.roleNameZh.trim()
@@ -50,4 +54,18 @@ export function buildRoleInput(
       status,
     },
   }
+}
+
+export function buildRoleUpdateInput(
+  form: RoleUpdateFormState,
+): { input: RoleUpdateInput } | { error: string } {
+  const description = form.description.trim()
+  const systemPrompt = form.systemPrompt.trim()
+
+  if (!systemPrompt) return { error: '请填写 System Prompt' }
+  if (description.length > 1000) return { error: '角色描述不能超过 1000 个字符' }
+  if (systemPrompt.length > 100000) return { error: 'System Prompt 过长' }
+
+  const status = form.status === 0 ? 0 : 1
+  return { input: { description, systemPrompt, status } }
 }

@@ -1,4 +1,5 @@
 import { cpHttp, dpHttp, request } from './client'
+import type { LogLevel } from '@/types'
 import { splitSSE } from '@/utils/sse'
 
 export interface StreamEvent {
@@ -54,6 +55,13 @@ export interface ChatStatus {
   turnId: string | null
 }
 
+export interface ChatLogEntry {
+  ts: string
+  level: LogLevel
+  source: string
+  message: string
+}
+
 const API_BASE = import.meta.env.VITE_DP_BASE || '/dp/api/v1'
 
 export async function fetchChatHistory(projectId: string, limit = 100): Promise<ChatHistory> {
@@ -69,6 +77,15 @@ export async function fetchChatStatus(projectId: string): Promise<ChatStatus> {
     method: 'get',
     url: `/projects/${encodeURIComponent(projectId)}/chat/status`,
   })
+}
+
+export async function fetchChatLogs(projectId: string, limit = 100): Promise<ChatLogEntry[]> {
+  const result = await request<{ logs: ChatLogEntry[]; limit: number }>(dpHttp, {
+    method: 'get',
+    url: `/projects/${encodeURIComponent(projectId)}/logs`,
+    params: { limit },
+  })
+  return result.logs
 }
 
 export async function stopChat(projectId: string): Promise<void> {

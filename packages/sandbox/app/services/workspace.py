@@ -12,6 +12,7 @@ IGNORED_PARTS = {
     ".agent",
     ".chathistory",
     ".resources",
+    ".logs",
     "node_modules",
     "__pycache__",
     ".venv",

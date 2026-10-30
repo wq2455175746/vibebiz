@@ -36,20 +36,20 @@ func TestMySQLRepositoryUsers(t *testing.T) {
 	db, mock := newAdminMockDB(t)
 	repo := NewMySQLRepository(db, fixedCounter(0))
 	created := time.Date(2026, 10, 29, 8, 0, 0, 0, time.UTC)
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM user AS u LEFT JOIN user_quota AS q").
+		WithArgs("%wang%", "%wang%", "%wang%").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
 	mock.ExpectQuery("SELECT .* FROM user AS u LEFT JOIN user_quota AS q").
+		WithArgs("%wang%", "%wang%", "%wang%", 10).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "nickname", "email", "plan_code", "status", "created_at"}).
-			AddRow(1, "wanghg11", "", "wang@example.com", "free", 1, created).
-			AddRow(2, "vistor", "Vistor", "vistor@example.com", "team", 0, created))
+			AddRow(1, "wanghg11", "", "wang@example.com", "free", 1, created))
 
-	users, err := repo.Users(context.Background())
+	users, err := repo.Users(context.Background(), ListQuery{Keyword: "wang", Page: 1, PageSize: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(users) != 2 || users[0].Name != "wanghg11" || users[0].Plan != "free" || users[0].Status != "active" {
+	if users.Total != 1 || len(users.Items) != 1 || users.Items[0].Name != "wanghg11" || users.Items[0].Plan != "free" || users.Items[0].Status != "active" {
 		t.Fatalf("users = %+v", users)
-	}
-	if users[1].Name != "Vistor" || users[1].Status != "disabled" {
-		t.Fatalf("second user = %+v", users[1])
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
@@ -76,16 +76,19 @@ func TestMySQLRepositoryAuditAndRecord(t *testing.T) {
 	db, mock := newAdminMockDB(t)
 	repo := NewMySQLRepository(db, fixedCounter(0))
 	created := time.Date(2026, 10, 29, 8, 0, 0, 0, time.UTC)
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `ops_audit_log`").
+		WithArgs("%admin%", "%admin%", "%admin%", "%admin%").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
 	mock.ExpectQuery("SELECT \\* FROM `ops_audit_log`").
-		WithArgs(200).
+		WithArgs("%admin%", "%admin%", "%admin%", "%admin%", 10).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "actor_name", "action", "resource_id", "request_path", "created_at"}).
 			AddRow(9, "admin", "notification.publish", "12", "/cp/api/v1/admin/notifications/12/publish", created))
 
-	events, err := repo.Audit(context.Background())
+	events, err := repo.Audit(context.Background(), ListQuery{Keyword: "admin", Page: 1, PageSize: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(events) != 1 || events[0].ID != "9" || events[0].Target != "12" || events[0].Action != "notification.publish" {
+	if events.Total != 1 || len(events.Items) != 1 || events.Items[0].ID != "9" || events.Items[0].Target != "12" || events.Items[0].Action != "notification.publish" {
 		t.Fatalf("events = %+v", events)
 	}
 
@@ -127,22 +130,22 @@ func TestMySQLRepositorySandboxes(t *testing.T) {
 	db, mock := newAdminMockDB(t)
 	repo := NewMySQLRepository(db, fixedCounter(0))
 	now := time.Date(2026, 10, 29, 8, 0, 0, 0, time.UTC)
-	mock.ExpectQuery("SELECT \\* FROM `sandbox_instance` WHERE `sandbox_instance`.`deleted_at` IS NULL ORDER BY name ASC").
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `sandbox_instance`").
+		WithArgs("%sandbox%", "%sandbox%", "%sandbox%").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	mock.ExpectQuery("SELECT \\* FROM `sandbox_instance` WHERE").
+		WithArgs("%sandbox%", "%sandbox%", "%sandbox%", 10).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "public_id", "name", "scheme", "host", "port", "status", "health_status",
 			"active_requests", "max_concurrency", "last_heartbeat_at", "last_health_at", "health_error",
 		}).
-			AddRow(1, "sb-1", "sandbox-a", "http", "10.0.0.11", 8000, "online", "healthy", 2, 8, now, now, "").
-			AddRow(2, "sb-2", "sandbox-b", "http", "10.0.0.12", 8000, "offline", "unhealthy", 0, 8, now, now, "timeout"))
+			AddRow(1, "sb-1", "sandbox-a", "http", "10.0.0.11", 8000, "online", "healthy", 2, 8, now, now, ""))
 
-	sandboxes, err := repo.Sandboxes(context.Background())
+	sandboxes, err := repo.Sandboxes(context.Background(), ListQuery{Keyword: "sandbox", Page: 1, PageSize: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(sandboxes) != 2 || sandboxes[0].Name != "sandbox-a" || sandboxes[0].Status != "online" || sandboxes[0].ActiveRequests != 2 {
+	if sandboxes.Total != 1 || len(sandboxes.Items) != 1 || sandboxes.Items[0].Name != "sandbox-a" || sandboxes.Items[0].Status != "online" || sandboxes.Items[0].ActiveRequests != 2 {
 		t.Fatalf("sandboxes = %+v", sandboxes)
-	}
-	if sandboxes[1].HealthStatus != "unhealthy" || sandboxes[1].HealthError != "timeout" {
-		t.Fatalf("second sandbox = %+v", sandboxes[1])
 	}
 }

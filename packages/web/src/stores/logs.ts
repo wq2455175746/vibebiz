@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
+import { fetchChatLogs, type ChatLogEntry } from '@/api/chat'
 import type { EditorLog, LogLevel } from '@/types'
 
 const MAX_ENTRIES = 10_000
@@ -36,6 +37,18 @@ export const useLogStore = defineStore('logs', () => {
     seq = 0
   }
 
+  function replace(items: ChatLogEntry[]) {
+    seq = 0
+    entries.value = items.map((item) => {
+      seq += 1
+      return { ...item, id: `log-${seq}`, seq }
+    })
+  }
+
+  async function load(projectId: string, limit = 100) {
+    replace(await fetchChatLogs(projectId, limit))
+  }
+
   function setPaused(value: boolean) {
     paused.value = value
   }
@@ -44,5 +57,5 @@ export const useLogStore = defineStore('logs', () => {
     level.value = value
   }
 
-  return { entries, visible, paused, level, append, clear, setPaused, setLevel }
+  return { entries, visible, paused, level, append, replace, load, clear, setPaused, setLevel }
 })

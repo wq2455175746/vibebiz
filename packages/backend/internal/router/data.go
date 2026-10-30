@@ -13,6 +13,7 @@ type DataSandbox interface {
 	handler.ChatClient
 	handler.ChatStopClient
 	handler.ChatStatusClient
+	handler.ChatLogsClient
 	handler.SkillClient
 	handler.PreviewClient
 }
@@ -23,6 +24,7 @@ func RegisterData(e *echo.Echo, sandbox DataSandbox, obs *observability.Provider
 	chat.Roles = roles
 	stopChat := handler.NewChatStopHandler(sandbox, obs)
 	chatStatus := handler.NewChatStatusHandler(sandbox, obs)
+	chatLogs := handler.NewChatLogsHandler(sandbox, obs)
 	skills := handler.NewSkillHandler(sandbox, obs)
 	preview := handler.NewPreviewHandler(sandbox, obs)
 
@@ -42,6 +44,7 @@ func RegisterData(e *echo.Echo, sandbox DataSandbox, obs *observability.Provider
 	projects.POST("/chat", chat.Chat)
 	projects.POST("/chat/stop", stopChat.Stop)
 	projects.GET("/chat/status", chatStatus.Get)
+	projects.GET("/logs", chatLogs.Get)
 	projects.GET("/skills", skills.List)
 	projects.GET("/preview/*", preview.Serve)
 

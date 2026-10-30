@@ -212,6 +212,7 @@ describe('chat store history', () => {
     expect(chat.messages.at(-1)).toMatchObject({
       id: 'h2',
       text: '改好了',
+      createdAt: '2026-10-29T10:00:01Z',
       pending: false,
       tools: [{ id: 't1', name: 'Edit', status: 'done' }],
     })
@@ -252,5 +253,57 @@ describe('chat store agent status', () => {
 
     expect(streamMock).not.toHaveBeenCalled()
     expect(chat.messages.map((message) => message.role)).toEqual(['system'])
+  })
+})
+
+describe('chat store background turn recovery', () => {
+  it('keeps a running turn in the background without reloading history', async () => {
+    statusMock.mockResolvedValue({ active: true, turnId: 'turn-1' })
+
+    const chat = useChatStore()
+    chat.reset()
+
+    await expect(chat.resume('p1')).resolves.toBe(true)
+
+    expect(chat.agentRunning).toBe(true)
+    expect(historyMock).not.toHaveBeenCalled()
+  })
+
+  it('reloads history when the background turn has completed', async () => {
+    statusMock.mockResolvedValue({ active: false, turnId: null })
+    historyMock.mockResolvedValue({
+      messages: [
+        {
+          id: 'h1',
+          role: 'user',
+          text: '继续执行',
+          status: 'completed',
+          tools: [],
+          createdAt: '2026-10-30T01:00:00Z',
+        },
+        {
+          id: 'h2',
+          role: 'assistant',
+          text: '后台已完成',
+          status: 'completed',
+          tools: [],
+          createdAt: '2026-10-30T01:00:01Z',
+        },
+      ],
+      truncated: false,
+      limit: 100,
+    })
+
+    const chat = useChatStore()
+    chat.reset()
+
+    await expect(chat.resume('p1')).resolves.toBe(false)
+
+    expect(chat.agentRunning).toBe(false)
+    expect(chat.messages.map((message) => message.text)).toEqual([
+      '描述你的需求，我会直接修改代码并刷新右侧预览。',
+      '继续执行',
+      '后台已完成',
+    ])
   })
 })

@@ -5,6 +5,7 @@ defineProps<{
   roles: AgentRole[]
   selected: number[]
   activeIndex: number
+  disabled?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -22,6 +23,7 @@ const emit = defineEmits<{
       :class="{ active: activeIndex === index, selected: selected.includes(role.id) }"
       role="option"
       :aria-selected="selected.includes(role.id)"
+      :disabled="disabled"
       @click="emit('toggle', role)"
     >
       <span class="agent-role-check">{{ selected.includes(role.id) ? '✓' : '' }}</span>

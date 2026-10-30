@@ -12,6 +12,7 @@ import zipfile
 from collections.abc import Callable
 from contextvars import ContextVar
 from datetime import UTC, datetime
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import Response
@@ -30,6 +31,8 @@ from opentelemetry.sdk.trace.sampling import (
     TraceIdRatioBased,
 )
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
+
+from app.services.project_logs import ProjectLogStore
 
 SERVICE_NAME = os.getenv("OTEL_SERVICE_NAME", "").strip() or "vibebiz-sandbox"
 PLANE = "sandbox"
@@ -65,6 +68,7 @@ _request_id: ContextVar[str] = ContextVar("request_id", default="")
 _project_id: ContextVar[str] = ContextVar("project_id", default="")
 _logger = logging.getLogger("vibebiz.sandbox")
 _tracer_provider: TracerProvider | None = None
+_project_root: Path | None = None
 
 
 class JsonFormatter(logging.Formatter):
@@ -129,6 +133,49 @@ class PlainFormatter(logging.Formatter):
         if record.exc_info:
             line += "\n" + self.formatException(record.exc_info)
         return line
+
+
+def _project_source(record: logging.LogRecord) -> str:
+    source = str(getattr(record, "source", "") or "")
+    if source:
+        return source
+    message = record.getMessage()
+    if message.startswith(("agent.", "chat.")):
+        return "agent"
+    if message.startswith("workspace."):
+        return "sandbox"
+    return "system"
+
+
+class ProjectLogHandler(logging.Handler):
+    def __init__(self, root: Path, retention_days: int = 30) -> None:
+        super().__init__()
+        self.store = ProjectLogStore(root, retention_days)
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            message = record.getMessage()
+            if message in {"request.complete", "sandbox.call"} or message.startswith("workspace."):
+                return
+            project_id = str(getattr(record, "project_id", "") or _project_id.get())
+            if not project_id:
+                return
+            level = record.levelname.lower()
+            if level == "warning":
+                level = "warn"
+            elif level == "critical":
+                level = "error"
+            entry = {
+                "ts": datetime.fromtimestamp(record.created, UTC)
+                .isoformat(timespec="milliseconds")
+                .replace("+00:00", "Z"),
+                "level": level,
+                "source": _project_source(record),
+                "message": message,
+            }
+            self.store.append(project_id, entry, record.created)
+        except Exception:
+            self.handleError(record)
 
 
 class DailyZipFileHandler(logging.Handler):
@@ -203,7 +250,8 @@ class DailyZipFileHandler(logging.Handler):
         super().close()
 
 
-def configure_logging() -> None:
+def configure_logging(workspace_root: Path | None = None) -> None:
+    global _project_root
     level_name = os.getenv("LOG_LEVEL", "info").upper()
     _logger.setLevel(getattr(logging, level_name, logging.INFO))
     _logger.propagate = False
@@ -224,6 +272,15 @@ def configure_logging() -> None:
             _logger.addHandler(file_handler)
         except OSError as exc:
             _logger.warning("file logging disabled: %s", exc)
+
+    if workspace_root is not None and workspace_root != _project_root:
+        for handler in list(_logger.handlers):
+            if getattr(handler, "_vibebiz_project", False):
+                _logger.removeHandler(handler)
+        project_handler = ProjectLogHandler(workspace_root)
+        project_handler._vibebiz_project = True
+        _logger.addHandler(project_handler)
+        _project_root = workspace_root
 
 
 def get_logger() -> logging.Logger:
@@ -359,10 +416,14 @@ async def _http_metrics_middleware(request: Request, call_next):
         _request_id.reset(request_token)
 
 
-def configure_observability(app: FastAPI, tracer_provider: TracerProvider | None = None) -> None:
+def configure_observability(
+    app: FastAPI,
+    tracer_provider: TracerProvider | None = None,
+    workspace_root: Path | None = None,
+) -> None:
     global _tracer_provider
 
-    configure_logging()
+    configure_logging(workspace_root)
     _tracer_provider = tracer_provider or _build_provider()
 
     app.middleware("http")(_http_metrics_middleware)

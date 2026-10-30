@@ -4,7 +4,6 @@ import Button from 'primevue/button'
 import DatePicker from 'primevue/datepicker'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
-import Paginator from 'primevue/paginator'
 import Select from 'primevue/select'
 import Textarea from 'primevue/textarea'
 
@@ -17,6 +16,8 @@ import {
   updateNotification,
 } from '@/api/notifications'
 import DataTable from '@/components/DataTable.vue'
+import TablePagination from '@/components/TablePagination.vue'
+import TableSearch from '@/components/TableSearch.vue'
 import type {
   NotificationInput,
   NotificationStatus,
@@ -42,12 +43,17 @@ const error = ref('')
 const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
+const keyword = ref('')
 
 async function load(): Promise<void> {
   loading.value = true
   error.value = ''
   try {
-    const result = await listNotifications({ page: page.value, pageSize: pageSize.value })
+    const result = await listNotifications({
+      page: page.value,
+      pageSize: pageSize.value,
+      keyword: keyword.value.trim(),
+    })
     rows.value = result.notifications
     total.value = result.total
     page.value = result.page
@@ -59,9 +65,19 @@ async function load(): Promise<void> {
   }
 }
 
-function onPage(event: { page: number; rows: number }): void {
-  page.value = event.page + 1
-  pageSize.value = event.rows
+function search(): void {
+  page.value = 1
+  void load()
+}
+
+function setPage(next: number): void {
+  page.value = next
+  void load()
+}
+
+function setPageSize(next: number): void {
+  pageSize.value = next
+  page.value = 1
   void load()
 }
 
@@ -279,6 +295,8 @@ function asNotification(row: TableRow): OpsNotification {
     <p v-if="actionError" class="inline-error error-text">{{ actionError }}</p>
     <p v-if="notice" class="inline-notice">{{ notice }}</p>
 
+    <TableSearch v-model:keyword="keyword" @search="search" />
+
     <DataTable
       :columns="columns"
       :rows="rows"
@@ -324,12 +342,12 @@ function asNotification(row: TableRow): OpsNotification {
       </template>
     </DataTable>
 
-    <Paginator
-      :rows="pageSize"
-      :total-records="total"
-      :first="(page - 1) * pageSize"
-      :rows-per-page-options="[10, 20, 50]"
-      @page="onPage"
+    <TablePagination
+      :page="page"
+      :page-size="pageSize"
+      :total="total"
+      @page="setPage"
+      @page-size="setPageSize"
     />
 
     <Dialog
