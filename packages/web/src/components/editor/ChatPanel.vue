@@ -36,7 +36,11 @@ import {
   type SlashCommand,
 } from '@/utils/slashCommands'
 
-const props = defineProps<{ projectId: string }>()
+const props = defineProps<{
+  projectId: string
+  readonly?: boolean
+  requiredRoleCode?: string
+}>()
 
 const chat = useChatStore()
 const files = useFileStore()
@@ -92,6 +96,9 @@ const selectedRoles = computed(() =>
   selectedRoleIds.value
     .map((id) => agentRoles.byId(id))
     .filter((role): role is AgentRole => Boolean(role)),
+)
+const requiredRoleId = computed(
+  () => agentRoles.roles.find((role) => role.roleCode === props.requiredRoleCode)?.id ?? null,
 )
 
 const mentionOptions = computed(() => {
@@ -269,12 +276,15 @@ async function toggleRole(role: { id: number }): Promise<void> {
   if (roleSaving.value) {
     return
   }
+  if (role.id === requiredRoleId.value && selectedRoleIds.value.includes(role.id)) {
+    return
+  }
   const next = toggleRoleSelection(agentRoles.roles, selectedRoleIds.value, role.id)
   await persistRoles(next)
 }
 
 async function removeRole(id: number): Promise<void> {
-  if (roleSaving.value) {
+  if (roleSaving.value || id === requiredRoleId.value) {
     return
   }
   await persistRoles(selectedRoleIds.value.filter((item) => item !== id))
@@ -425,7 +435,7 @@ function onArrow(step: number, event: KeyboardEvent) {
 
 function send() {
   const text = prompt.value.trim()
-  if (!text || chat.busy) {
+  if (!text || chat.busy || props.readonly) {
     return
   }
   const command = resolveCommand(text, 'editor')
@@ -536,7 +546,7 @@ watch(
 </script>
 
 <template>
-  <aside class="chat-panel">
+  <aside class="chat-panel" :class="{ readonly }">
     <header class="chat-head">
       <div>
         <p class="chat-eyebrow">任务对话</p>
@@ -562,6 +572,7 @@ watch(
         >
           #{{ role.roleNameZh }}
           <button
+            v-if="role.roleCode !== requiredRoleCode"
             type="button"
             aria-label="移除角色"
             :disabled="roleSaving"
@@ -583,6 +594,9 @@ watch(
         </span>
       </div>
       <p v-if="composerNote" class="chat-note chat-composer-note">{{ composerNote }}</p>
+      <p v-if="readonly" class="chat-note chat-composer-note">
+        历史阶段只读，返回当前阶段后继续对话。
+      </p>
       <div class="chat-input-wrap">
         <AgentRoleMenu
           v-if="roleOpen && roleOptions.length"
@@ -603,7 +617,7 @@ watch(
           v-model="prompt"
           rows="3"
           placeholder="描述你想实现或修改的内容… 输入 @ 引用文件"
-          :disabled="chat.busy"
+          :disabled="chat.busy || readonly"
           @input="updateComposer"
           @click="updateMention"
           @keydown.enter.exact="onEnter"
@@ -640,12 +654,14 @@ watch(
           class="chat-plus"
           type="button"
           aria-label="添加资料"
-          :disabled="chat.busy || resources.uploading"
+          :disabled="chat.busy || readonly || resources.uploading"
           @click="toggleAttachMenu"
         >
           <i :class="resources.uploading ? 'pi pi-spin pi-spinner' : 'pi pi-plus'" />
         </button>
-        <span class="chat-hint">输入 / 查看可用命令 · Ctrl / ⌘ + Enter 发送</span>
+        <span class="chat-hint">{{
+          readonly ? '历史阶段只读' : '输入 / 查看可用命令 · Ctrl / ⌘ + Enter 发送'
+        }}</span>
         <button
           v-if="chat.busy"
           class="chat-send chat-stop"
@@ -655,7 +671,13 @@ watch(
         >
           <i class="pi pi-stop" />
         </button>
-        <button v-else class="chat-send" type="submit" aria-label="发送" :disabled="!prompt.trim()">
+        <button
+          v-else
+          class="chat-send"
+          type="submit"
+          aria-label="发送"
+          :disabled="!prompt.trim() || readonly"
+        >
           <i class="pi pi-arrow-up" />
         </button>
       </div>

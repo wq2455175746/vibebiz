@@ -9,7 +9,8 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_INDEX_URL=${PIP_INDEX_URL} \
-    WORKSPACES_DIR=/data/workspaces
+    WORKSPACES_DIR=/data/workspaces \
+    HOME=/home/appuser
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
@@ -31,8 +32,8 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 COPY . .
 
-RUN groupadd -r appuser \
-    && useradd -r -g appuser -m appuser \
+RUN groupadd -r -g 10001 appuser \
+    && useradd -r -u 10001 -g appuser -m appuser \
     && mkdir -p /data/workspaces \
     && chown -R appuser:appuser /app /data/workspaces
 

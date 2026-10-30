@@ -6,11 +6,15 @@ export async function listProjects(): Promise<Project[]> {
   return result.projects
 }
 
-export async function createProject(prompt: string, agentRoleIds: number[] = []): Promise<Project> {
+export async function createProject(
+  prompt: string,
+  agentRoleIds: number[] = [],
+  mode?: Project['mode'],
+): Promise<Project> {
   return request<Project>(cpHttp, {
     method: 'post',
     url: '/projects',
-    data: { prompt, agentRoleIds },
+    data: { prompt, agentRoleIds, ...(mode ? { mode } : {}) },
   })
 }
 

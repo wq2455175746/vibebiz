@@ -49,9 +49,9 @@ func TestMySQLProjectStoreGetMapsPublicFields(t *testing.T) {
 	mock.ExpectQuery("SELECT \\* FROM `project` WHERE public_id = \\? AND `project`\\.`deleted_at` IS NULL").
 		WithArgs("d5f5e1d0-0000-4000-8000-000000000001", 1).
 		WillReturnRows(sqlmock.NewRows([]string{
-			"id", "public_id", "workspace_id", "user_id", "name", "prompt", "status",
+			"id", "public_id", "workspace_id", "user_id", "name", "prompt", "mode", "status",
 			"sandbox_id", "created_at", "updated_at",
-		}).AddRow(42, "d5f5e1d0-0000-4000-8000-000000000001", 3, 7, "demo", "make a game", "ready", 9, now, now))
+		}).AddRow(42, "d5f5e1d0-0000-4000-8000-000000000001", 3, 7, "demo", "make a game", "enterprise", "ready", 9, now, now))
 	mock.ExpectQuery("SELECT agent_role_id FROM `project_agent_role`").
 		WithArgs(int64(42)).
 		WillReturnRows(sqlmock.NewRows([]string{"agent_role_id"}))
@@ -65,6 +65,9 @@ func TestMySQLProjectStoreGetMapsPublicFields(t *testing.T) {
 	}
 	if got.WorkspaceID != 3 || got.OwnerUserID != 7 || got.Name != "demo" {
 		t.Fatalf("mapped project = %+v", got)
+	}
+	if got.Mode != model.ProjectModeEnterprise {
+		t.Fatalf("mode = %q", got.Mode)
 	}
 	if got.SandboxID == nil || *got.SandboxID != 9 {
 		t.Fatalf("sandbox id = %+v, want 9", got.SandboxID)

@@ -6,6 +6,7 @@ import { deleteStaging } from '@/api/resources'
 import { createProject, deleteProject, listProjects } from '@/api/projects'
 import { listTemplates, useTemplate as createFromTemplate } from '@/api/templates'
 import { fetchChatStatus } from '@/api/chat'
+import EnterpriseRoadmap from '@/components/enterprise/EnterpriseRoadmap.vue'
 import HomeDiscovery from '@/components/home/HomeDiscovery.vue'
 import HomeHero from '@/components/home/HomeHero.vue'
 import HomeSidebar from '@/components/home/HomeSidebar.vue'
@@ -16,6 +17,11 @@ import { useNotificationSocket } from '@/composables/useNotificationSocket'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useResourceStore } from '@/stores/resources'
+import {
+  DEFAULT_ENTERPRISE_PROMPT,
+  markEnterpriseProject,
+  resolveEditorPath,
+} from '@/utils/enterprise'
 import { canAppendToProject, resolveHomeSubmit } from '@/utils/homeSubmit'
 import '@/styles/home.css'
 import type { Project, Template } from '@/types'
@@ -37,10 +43,29 @@ const pickerOpen = ref(false)
 const sidebarCollapsed = ref(localStorage.getItem('vibebiz:sidebar-collapsed') === '1')
 const isProjectsPage = computed(() => route.name === 'projects')
 const isResourcesPage = computed(() => route.name === 'resources')
+const isEnterprisePage = computed(() => route.name === 'enterprise')
+let wasEnterprise = false
+let homeDraft = ''
+let enterpriseDraft = ''
 
 const { connect, disconnect } = useNotificationSocket(() => {
   void notifications.load(true)
 })
+
+watch(
+  isEnterprisePage,
+  (enterprise) => {
+    if (enterprise && !wasEnterprise) {
+      homeDraft = prompt.value
+      prompt.value = enterpriseDraft || DEFAULT_ENTERPRISE_PROMPT
+    } else if (!enterprise && wasEnterprise) {
+      enterpriseDraft = prompt.value
+      prompt.value = homeDraft
+    }
+    wasEnterprise = enterprise
+  },
+  { immediate: true },
+)
 
 watch(
   () => auth.isAuthenticated,
@@ -109,8 +134,15 @@ async function create(files: File[] = [], agentRoleIds: number[] = []) {
     for (const file of files) {
       staged.push(await resources.stage(file))
     }
-    const project = await createProject(text, agentRoleIds)
+    const project = await createProject(
+      text,
+      agentRoleIds,
+      isEnterprisePage.value ? 'enterprise' : undefined,
+    )
     projectId = project.id
+    if (isEnterprisePage.value) {
+      markEnterpriseProject(project.id)
+    }
     const references = []
     for (const resourceId of staged) {
       const item = await resources.adopt(project.id, resourceId)
@@ -126,7 +158,7 @@ async function create(files: File[] = [], agentRoleIds: number[] = []) {
     sessionStorage.setItem(`vibebiz:initial-prompt:${project.id}`, text)
     sessionStorage.setItem(`vibebiz:initial-references:${project.id}`, JSON.stringify(references))
     void router.push({
-      name: 'editor',
+      name: isEnterprisePage.value ? 'enterprise-editor' : 'editor',
       params: { id: project.id },
       state: { initialPrompt: text },
     })
@@ -183,6 +215,11 @@ async function useTemplate(template: Template) {
 }
 
 function openProject(id: string) {
+  const project = projects.value.find((item) => item.id === id)
+  if (project && resolveEditorPath(project).startsWith('/enterprise/')) {
+    void router.push(`/enterprise/editor/${id}`)
+    return
+  }
   void router.push({ name: 'editor', params: { id } })
 }
 
@@ -252,6 +289,26 @@ onMounted(async () => {
             @use="useTemplate"
           />
         </div>
+      </div>
+
+      <div v-else-if="isEnterprisePage" class="enterprise-home">
+        <HomeHero
+          v-model="prompt"
+          title="企业工程开发"
+          subtitle="由团队角色按阶段完成需求梳理、设计、测试与开发，每一步确认后才会继续。"
+          placeholder="描述你的企业级工程需求…"
+          composer-hint="企业模式将自动加载 Harness 工程模板 · Ctrl / ⌘ + Enter 发送"
+          required-role-code="team"
+          :input-rows="5"
+          :creating="creating"
+          :error="error"
+          @submit="create"
+        />
+        <EnterpriseRoadmap />
+        <p class="enterprise-home-note">
+          <i class="pi pi-info-circle" />
+          企业项目会强制使用团队角色，并按阶段锁定工作区。
+        </p>
       </div>
 
       <div v-else class="home-main-inner">

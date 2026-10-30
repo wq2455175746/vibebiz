@@ -22,6 +22,7 @@ import (
 	"vibebiz/internal/config"
 	"vibebiz/internal/dao"
 	"vibebiz/internal/handler"
+	harnesssvc "vibebiz/internal/harness"
 	"vibebiz/internal/llmmodel"
 	"vibebiz/internal/notification"
 	"vibebiz/internal/observability"
@@ -93,6 +94,7 @@ func main() {
 	metas := auth.NewProjectMetaStore(redisClient, redisPrefix)
 
 	var avatarPresigner account.Presigner
+	var s3Presigner *storages3.Presigner
 	if cfg.S3Bucket != "" {
 		presigner, err := storages3.NewPresigner(ctx, storages3.Config{
 			Bucket:          cfg.S3Bucket,
@@ -107,6 +109,7 @@ func main() {
 			obs.Logger.Error("s3 presigner init failed", "error", err)
 		} else {
 			avatarPresigner = presigner
+			s3Presigner = presigner
 		}
 	}
 	settingsRepo := dao.NewSettingsRepository(db)
@@ -138,6 +141,10 @@ func main() {
 	resolver := sandboxregistry.NewResolver(registryRepo, selector, cfg.SandboxHeartbeatTTL, time.Now)
 	provisioner := sandboxregistry.NewProvisioner(selector, sandboxregistry.NewHTTPInitializer(obs), 3)
 	sandboxRouter := client.NewRouter(resolver, obs)
+	var harnessImporter handler.HarnessImporter
+	if s3Presigner != nil {
+		harnessImporter = harnesssvc.NewService(s3Presigner, sandboxRouter, cfg.EnterpriseHarnessS3Key)
+	}
 	registryHandler := handler.NewSandboxRegistryHandler(registryRepo, cfg.SandboxRegistryToken, obs)
 	storageHandler := &handler.StorageHandler{Projects: projectStore, Storage: storagesync.NewMySQLRepository(db), Account: accountService}
 
@@ -188,7 +195,7 @@ func main() {
 	templateHandler := handler.NewTemplateHandler(templateService, projectStore, provisioner, sandboxRouter)
 	templateHandler.Metas = metas
 
-	router.RegisterControl(e, adminRepo, projectStore, provisioner, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler, registryHandler, modelHandler, roleHandler, avatarPresigner, cfg.S3PresignExpiry(), sandboxRouter, templateHandler)
+	router.RegisterControl(e, adminRepo, projectStore, provisioner, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler, registryHandler, modelHandler, roleHandler, avatarPresigner, cfg.S3PresignExpiry(), sandboxRouter, templateHandler, harnessImporter)
 	router.RegisterChatHistory(e, handler.NewChatHistoryHandler(sandboxRouter, projectStore), authn)
 
 	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))

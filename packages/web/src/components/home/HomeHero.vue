@@ -27,6 +27,12 @@ const props = defineProps<{
   creating: boolean
   error: string
   targetProject?: Project | null
+  title?: string
+  subtitle?: string
+  placeholder?: string
+  composerHint?: string
+  requiredRoleCode?: string
+  inputRows?: number
 }>()
 
 const emit = defineEmits<{
@@ -59,10 +65,29 @@ const roleOptions = computed(() =>
   filterRoleOptions(rolesStore.roles, roleQuery.value).slice(0, 10),
 )
 const roleCatalogError = computed(() => roleCatalogNotice.value || rolesStore.error)
+const requiredRole = computed(() =>
+  props.requiredRoleCode
+    ? rolesStore.roles.find((role) => role.roleCode === props.requiredRoleCode)
+    : undefined,
+)
+const requiredRoleMissing = computed(
+  () => Boolean(props.requiredRoleCode) && rolesStore.loaded && !requiredRole.value,
+)
 
 onMounted(() => {
   void rolesStore.load()
 })
+
+watch(
+  () => [props.requiredRoleCode, rolesStore.loaded, rolesStore.roles.length] as const,
+  () => {
+    const role = requiredRole.value
+    if (role && !selectedRoleIds.value.includes(role.id)) {
+      selectedRoleIds.value = [...selectedRoleIds.value, role.id]
+    }
+  },
+  { immediate: true },
+)
 
 watch(
   () => props.targetProject,
@@ -174,11 +199,17 @@ function onInput(event: Event): void {
   void openRoleMenu(target.value, target.selectionStart ?? target.value.length)
 }
 
-function toggleRole(role: { id: number }): void {
+function toggleRole(role: { id: number; roleCode?: string }): void {
+  if (role.roleCode === props.requiredRoleCode && selectedRoleIds.value.includes(role.id)) {
+    return
+  }
   selectedRoleIds.value = toggleRoleSelection(rolesStore.roles, selectedRoleIds.value, role.id)
 }
 
 function removeRole(id: number): void {
+  if (rolesStore.byId(id)?.roleCode === props.requiredRoleCode) {
+    return
+  }
   selectedRoleIds.value = selectedRoleIds.value.filter((item) => item !== id)
 }
 
@@ -246,6 +277,10 @@ function onArrow(step: number, event: KeyboardEvent) {
 
 function submit() {
   const text = prompt.value.trim()
+  if (requiredRoleMissing.value) {
+    commandNote.value = '必需角色尚未加载，请稍后重试'
+    return
+  }
   const command = resolveCommand(text, 'home')
   if (command) {
     executeCommand(command)
@@ -264,7 +299,8 @@ function submit() {
 
 <template>
   <section class="home-hero">
-    <h1 class="hero-title">你想创造什么，wangh11？</h1>
+    <h1 class="hero-title">{{ title || '你想创造什么，wangh11？' }}</h1>
+    <p v-if="subtitle" class="hero-subtitle">{{ subtitle }}</p>
 
     <div class="hero-composer">
       <div v-if="targetProject" class="composer-target">
@@ -290,8 +326,12 @@ function submit() {
         ref="textarea"
         v-model="prompt"
         class="hero-input"
-        rows="3"
-        :placeholder="targetProject ? '描述要追加到该项目的修改…' : '请 Vibebiz 生成你的 LinkHub。'"
+        :rows="inputRows || 3"
+        :placeholder="
+          targetProject
+            ? '描述要追加到该项目的修改…'
+            : placeholder || '请 Vibebiz 生成你的 LinkHub。'
+        "
         @input="onInput"
         @blur="roleOpen = false"
         @keydown.enter.exact="onEnter"
@@ -304,7 +344,12 @@ function submit() {
       <div v-if="roleChips().length" class="composer-roles">
         <span v-for="role in roleChips()" :key="role.id" class="composer-role-chip">
           #{{ role.roleNameZh }}
-          <button type="button" aria-label="移除角色" @click="removeRole(role.id)">
+          <button
+            v-if="role.roleCode !== requiredRoleCode"
+            type="button"
+            aria-label="移除角色"
+            @click="removeRole(role.id)"
+          >
             <i class="pi pi-times" />
           </button>
         </span>
@@ -333,15 +378,14 @@ function submit() {
         <button class="composer-plus" type="button" aria-label="添加" @click="toggleAttachMenu">
           <i class="pi pi-plus" />
         </button>
-        <span class="composer-hint">输入 / 选择已有项目 · Ctrl / ⌘ + Enter 发送</span>
+        <span class="composer-hint">{{
+          composerHint || '输入 / 选择已有项目 · Ctrl / ⌘ + Enter 发送'
+        }}</span>
         <div class="composer-actions">
-          <button class="composer-icon" type="button" aria-label="语音输入">
-            <i class="pi pi-microphone" />
-          </button>
           <button
             class="composer-send"
             type="button"
-            :disabled="!prompt.trim() || creating"
+            :disabled="!prompt.trim() || creating || requiredRoleMissing"
             aria-label="生成"
             @click="submit"
           >

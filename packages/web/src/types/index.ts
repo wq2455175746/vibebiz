@@ -68,6 +68,7 @@ export interface StorageSummary {
 
 export interface Project {
   id: string
+  mode?: 'standard' | 'enterprise'
   name: string
   prompt: string
   state: string

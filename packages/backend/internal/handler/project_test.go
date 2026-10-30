@@ -462,3 +462,161 @@ func TestListProjectsAttachesCoverURL(t *testing.T) {
 		t.Fatalf("projects = %+v", env.Result.Projects)
 	}
 }
+
+type fakeHarnessImporter struct {
+	id    string
+	err   error
+	calls int
+}
+
+func (f *fakeHarnessImporter) Import(_ context.Context, projectID string) error {
+	f.calls++
+	f.id = projectID
+	return f.err
+}
+
+func TestCreateEnterpriseProjectImportsHarness(t *testing.T) {
+	projectStore := store.NewMemoryProjectStore()
+	roles := &fakeAgentRoles{roles: []agentrole.Role{
+		{ID: 6, RoleCode: "team", RoleNameZH: "团队", Status: 1},
+	}}
+	harness := &fakeHarnessImporter{}
+	h := newProjectHandlerForTest(projectStore, &fakeInitializer{sandboxID: 42}, newFakeMetaStore(), roles)
+	h.Harness = harness
+	e := echo.New()
+	routeWithSession(e, http.MethodPost, "/cp/api/v1/projects", h.Create, sessionForTest(3))
+	req := httptest.NewRequest(http.MethodPost, "/cp/api/v1/projects", strings.NewReader(`{"prompt":"enterprise","mode":"enterprise","agentRoleIds":[6]}`))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	project := decodeProjectEnvelope(t, rec)
+	if project.Mode != model.ProjectModeEnterprise {
+		t.Fatalf("mode = %q", project.Mode)
+	}
+	if harness.calls != 1 || harness.id != project.ID {
+		t.Fatalf("harness calls=%d id=%q, project=%q", harness.calls, harness.id, project.ID)
+	}
+	stored, err := projectStore.Get(context.Background(), project.ID)
+	if err != nil || stored.Mode != model.ProjectModeEnterprise {
+		t.Fatalf("stored = %+v err=%v", stored, err)
+	}
+}
+
+func TestCreateEnterpriseProjectRequiresTeamRole(t *testing.T) {
+	projectStore := store.NewMemoryProjectStore()
+	roles := &fakeAgentRoles{roles: []agentrole.Role{
+		{ID: 2, RoleCode: "alex", RoleNameZH: "全栈工程师", Status: 1},
+	}}
+	harness := &fakeHarnessImporter{}
+	init := &fakeInitializer{sandboxID: 42}
+	h := newProjectHandlerForTest(projectStore, init, newFakeMetaStore(), roles)
+	h.Harness = harness
+	e := echo.New()
+	routeWithSession(e, http.MethodPost, "/cp/api/v1/projects", h.Create, sessionForTest(3))
+	req := httptest.NewRequest(http.MethodPost, "/cp/api/v1/projects", strings.NewReader(`{"prompt":"enterprise","mode":"enterprise","agentRoleIds":[2]}`))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if init.calledID != "" || harness.calls != 0 {
+		t.Fatalf("should not initialize or import: init=%q harness=%d", init.calledID, harness.calls)
+	}
+	if len(projectStore.List(context.Background())) != 0 {
+		t.Fatal("project should not be stored")
+	}
+}
+
+func TestCreateStandardProjectDoesNotImportHarness(t *testing.T) {
+	projectStore := store.NewMemoryProjectStore()
+	harness := &fakeHarnessImporter{}
+	h := newProjectHandlerForTest(projectStore, &fakeInitializer{sandboxID: 42}, newFakeMetaStore(), &fakeAgentRoles{})
+	h.Harness = harness
+	e := echo.New()
+	routeWithSession(e, http.MethodPost, "/cp/api/v1/projects", h.Create, sessionForTest(3))
+	req := httptest.NewRequest(http.MethodPost, "/cp/api/v1/projects", strings.NewReader(`{"prompt":"small app"}`))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if project := decodeProjectEnvelope(t, rec); project.Mode != model.ProjectModeStandard {
+		t.Fatalf("mode = %q", project.Mode)
+	}
+	if harness.calls != 0 {
+		t.Fatalf("harness calls = %d", harness.calls)
+	}
+}
+
+func TestCreateEnterpriseProjectHarnessFailureRollsBack(t *testing.T) {
+	projectStore := store.NewMemoryProjectStore()
+	metas := newFakeMetaStore()
+	roles := &fakeAgentRoles{roles: []agentrole.Role{
+		{ID: 6, RoleCode: "team", RoleNameZH: "团队", Status: 1},
+	}}
+	harness := &fakeHarnessImporter{err: errors.New("s3 down")}
+	h := newProjectHandlerForTest(projectStore, &fakeInitializer{sandboxID: 42}, metas, roles)
+	h.Harness = harness
+	e := echo.New()
+	routeWithSession(e, http.MethodPost, "/cp/api/v1/projects", h.Create, sessionForTest(3))
+	req := httptest.NewRequest(http.MethodPost, "/cp/api/v1/projects", strings.NewReader(`{"prompt":"enterprise","mode":"enterprise","agentRoleIds":[6]}`))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if len(projectStore.List(context.Background())) != 0 {
+		t.Fatal("project should be rolled back")
+	}
+	if len(metas.deleted) != 1 {
+		t.Fatalf("meta should be deleted: %v", metas.deleted)
+	}
+}
+
+func TestCreateEnterpriseProjectWithoutHarnessImporterFails(t *testing.T) {
+	roles := &fakeAgentRoles{roles: []agentrole.Role{
+		{ID: 6, RoleCode: "team", RoleNameZH: "团队", Status: 1},
+	}}
+	h := newProjectHandlerForTest(store.NewMemoryProjectStore(), &fakeInitializer{sandboxID: 42}, newFakeMetaStore(), roles)
+	e := echo.New()
+	routeWithSession(e, http.MethodPost, "/cp/api/v1/projects", h.Create, sessionForTest(3))
+	req := httptest.NewRequest(http.MethodPost, "/cp/api/v1/projects", strings.NewReader(`{"prompt":"enterprise","mode":"enterprise","agentRoleIds":[6]}`))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestUpdateEnterpriseProjectAgentRolesRequiresTeam(t *testing.T) {
+	projectStore := store.NewMemoryProjectStore()
+	_ = projectStore.Create(context.Background(), &model.Project{
+		ID: "p1", WorkspaceID: 3, Mode: model.ProjectModeEnterprise,
+	})
+	roles := &fakeAgentRoles{roles: []agentrole.Role{
+		{ID: 2, RoleCode: "alex", RoleNameZH: "全栈工程师", Status: 1},
+	}}
+	h := NewProjectHandler(projectStore, &fakeInitializer{}, nil, newFakeMetaStore(), roles)
+	e := echo.New()
+	routeWithSession(e, http.MethodPut, "/cp/api/v1/projects/:id/agent-roles", h.UpdateAgentRoles, sessionForTest(3))
+	req := httptest.NewRequest(http.MethodPut, "/cp/api/v1/projects/p1/agent-roles", strings.NewReader(`{"agentRoleIds":[2]}`))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+}

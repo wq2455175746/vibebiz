@@ -3,9 +3,10 @@ name: vibebiz
 services:
   logs-init:
     image: alpine:3.20
-    command: ["sh", "-c", "mkdir -p /logs/backend /logs/sandbox && chmod 0777 /logs/backend /logs/sandbox"]
+    command: ["sh", "-c", "mkdir -p /logs/backend /logs/sandbox /data/workspaces && chmod 0777 /logs/backend /logs/sandbox /data/workspaces"]
     volumes:
       - ./logs:/logs
+      - ./workspaces:/data/workspaces
     restart: "no"
 
   sandbox:
@@ -18,7 +19,7 @@ services:
     env_file:
       - .env
     volumes:
-      - workspaces:/data/workspaces
+      - ./workspaces:/data/workspaces
       - ./logs/sandbox:/app/logs
     depends_on:
       logs-init:
@@ -69,6 +70,3 @@ services:
     ports:
       - "${OPS_WEB_PORT:-5174}:80"
     restart: unless-stopped
-
-volumes:
-  workspaces:

@@ -3,6 +3,7 @@ import Popover from 'primevue/popover'
 import { ref } from 'vue'
 
 import type { Project } from '@/types'
+import { resolveEditorPath } from '@/utils/enterprise'
 import { formatDate } from '@/utils/storage'
 
 const props = defineProps<{ project: Project }>()
@@ -27,7 +28,9 @@ function openProject() {
 async function copyLink() {
   menu.value?.hide()
   try {
-    await navigator.clipboard?.writeText(`${window.location.origin}/editor/${props.project.id}`)
+    await navigator.clipboard?.writeText(
+      `${window.location.origin}${resolveEditorPath(props.project)}`,
+    )
   } catch {
     return
   }

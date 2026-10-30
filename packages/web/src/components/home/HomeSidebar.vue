@@ -8,8 +8,9 @@ import NotificationsDialog from '@/components/home/NotificationsDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
 import type { Project, WorkspaceFolder } from '@/types'
+import { resolveEditorPath } from '@/utils/enterprise'
 
-defineProps<{ recentProjects: Project[]; collapsed?: boolean }>()
+const props = defineProps<{ recentProjects: Project[]; collapsed?: boolean }>()
 
 const emit = defineEmits<{
   (event: 'workspace-changed'): void
@@ -58,6 +59,11 @@ const folderError = ref('')
 const rootFolders = computed(() => folders.value.filter((folder) => folder.parentId === 0))
 
 function openProject(id: string) {
+  const project = props.recentProjects.find((item) => item.id === id)
+  if (project && resolveEditorPath(project).startsWith('/enterprise/')) {
+    void router.push(`/enterprise/editor/${id}`)
+    return
+  }
   void router.push({ name: 'editor', params: { id } })
 }
 
@@ -167,6 +173,7 @@ async function logout() {
 
 const navigation = [
   { label: '首页', icon: 'pi pi-home', route: 'home', visible: true },
+  { label: '企业工程开发', icon: 'pi pi-sitemap', route: 'enterprise', visible: true },
   { label: '资源', icon: 'pi pi-book', route: 'resources', visible: true },
   { label: '我的项目', icon: 'pi pi-folder', route: 'projects', visible: true },
   { label: '定时任务', icon: 'pi pi-clock', route: '', visible: true },

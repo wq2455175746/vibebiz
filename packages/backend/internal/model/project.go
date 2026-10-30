@@ -3,6 +3,11 @@ package model
 import "time"
 
 const (
+	ProjectModeStandard   = "standard"
+	ProjectModeEnterprise = "enterprise"
+)
+
+const (
 	ProjectStateReady    = "ready"
 	ProjectStateError    = "error"
 	ProjectStateDisabled = "disabled"
@@ -19,6 +24,7 @@ type Project struct {
 	ID                 string     `json:"id"`
 	Name               string     `json:"name"`
 	Prompt             string     `json:"prompt"`
+	Mode               string     `json:"mode"`
 	State              string     `json:"state"`
 	ReviewStatus       string     `json:"reviewStatus"`
 	ReviewNote         string     `json:"reviewNote"`

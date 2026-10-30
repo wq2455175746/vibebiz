@@ -108,9 +108,17 @@ func (p *Presigner) Copy(ctx context.Context, srcKey, dstKey, contentType string
 }
 
 func (p *Presigner) Get(ctx context.Context, key string) (io.ReadCloser, int64, error) {
+	return p.get(ctx, p.key(key))
+}
+
+func (p *Presigner) GetRaw(ctx context.Context, key string) (io.ReadCloser, int64, error) {
+	return p.get(ctx, strings.TrimPrefix(strings.TrimSpace(key), "/"))
+}
+
+func (p *Presigner) get(ctx context.Context, key string) (io.ReadCloser, int64, error) {
 	out, err := p.client.GetObject(ctx, &awss3.GetObjectInput{
 		Bucket: aws.String(p.bucket),
-		Key:    aws.String(p.key(key)),
+		Key:    aws.String(key),
 	})
 	if err != nil {
 		return nil, 0, fmt.Errorf("get object: %w", err)

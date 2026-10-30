@@ -44,12 +44,17 @@ func (s *MySQLProjectStore) Create(ctx context.Context, project *model.Project) 
 		if reviewStatus == "" {
 			reviewStatus = model.ReviewStatusPending
 		}
+		mode := project.Mode
+		if mode == "" {
+			mode = model.ProjectModeStandard
+		}
 		row := &daomodel.Project{
 			PublicID:           project.ID,
 			WorkspaceID:        project.WorkspaceID,
 			UserID:             project.OwnerUserID,
 			Name:               project.Name,
 			Prompt:             project.Prompt,
+			Mode:               mode,
 			SandboxID:          project.SandboxID,
 			CoverS3Path:        project.CoverS3Path,
 			TopicID:            topicID,
@@ -232,11 +237,16 @@ func (s *MySQLProjectStore) Delete(ctx context.Context, id string) error {
 }
 
 func toProject(row *daomodel.Project) *model.Project {
+	mode := row.Mode
+	if mode == "" {
+		mode = model.ProjectModeStandard
+	}
 	return &model.Project{
 		InternalID:         row.ID,
 		ID:                 row.PublicID,
 		Name:               row.Name,
 		Prompt:             row.Prompt,
+		Mode:               mode,
 		State:              row.Status,
 		ReviewStatus:       row.ReviewStatus,
 		ReviewNote:         row.ReviewNote,

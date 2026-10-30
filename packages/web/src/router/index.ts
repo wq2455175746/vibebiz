@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
 import EditorView from '@/views/EditorView.vue'
+import EnterpriseEditorView from '@/views/EnterpriseEditorView.vue'
 import HomeView from '@/views/HomeView.vue'
 import LoginView from '@/views/LoginView.vue'
 
@@ -12,8 +13,10 @@ const router = createRouter({
   routes: [
     { path: '/login', name: 'login', component: LoginView, meta: { public: true } },
     { path: '/', name: 'home', component: HomeView },
+    { path: '/enterprise', name: 'enterprise', component: HomeView },
     { path: '/projects', name: 'projects', component: HomeView },
     { path: '/resources', name: 'resources', component: HomeView },
+    { path: '/enterprise/editor/:id', name: 'enterprise-editor', component: EnterpriseEditorView },
     settingsRoute,
     { path: '/editor/:id', name: 'editor', component: EditorView },
   ],
@@ -40,11 +43,13 @@ router.afterEach((to) => {
   document.title =
     name === 'editor'
       ? 'Vibebiz · 编辑器'
-      : name === 'login'
-        ? 'Vibebiz · 登录'
-        : name.startsWith('settings')
-          ? 'Vibebiz · 设置'
-          : 'Vibebiz'
+      : name === 'enterprise-editor'
+        ? 'Vibebiz · 企业工程开发'
+        : name === 'login'
+          ? 'Vibebiz · 登录'
+          : name.startsWith('settings')
+            ? 'Vibebiz · 设置'
+            : 'Vibebiz'
 })
 
 export default router

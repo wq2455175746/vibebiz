@@ -171,3 +171,15 @@ func TestLoadModelSecretKey(t *testing.T) {
 		t.Fatalf("model secret key = %q", cfg.ModelSecretKey)
 	}
 }
+
+func TestLoadEnterpriseHarnessConfig(t *testing.T) {
+	t.Setenv("ENTERPRISE_HARNESS_S3_KEY", "")
+	if cfg := Load("cp"); cfg.EnterpriseHarnessS3Key != "tmp/vibebiz_prod/vibebiz-harness.zip" {
+		t.Fatalf("harness key = %q", cfg.EnterpriseHarnessS3Key)
+	}
+
+	t.Setenv("ENTERPRISE_HARNESS_S3_KEY", "enterprise/harness.zip")
+	if cfg := Load("cp"); cfg.EnterpriseHarnessS3Key != "enterprise/harness.zip" {
+		t.Fatalf("harness key = %q", cfg.EnterpriseHarnessS3Key)
+	}
+}

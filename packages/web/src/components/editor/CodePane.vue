@@ -7,7 +7,7 @@ import { useChatStore } from '@/stores/chat'
 import { useFileStore } from '@/stores/files'
 import { detectLanguage } from '@/utils/language'
 
-const props = defineProps<{ projectId: string }>()
+const props = defineProps<{ projectId: string; locked?: boolean }>()
 
 const chat = useChatStore()
 const files = useFileStore()
@@ -63,7 +63,7 @@ function updateEditorMode() {
 }
 
 async function startEdit() {
-  if (!files.active || files.active.isBinary || editing.value) {
+  if (!files.active || files.active.isBinary || editing.value || props.locked) {
     return
   }
   notice.value = ''
@@ -223,7 +223,9 @@ onBeforeUnmount(() => {
             </button>
             <button type="button" class="code-action" @click="cancelEdit">取消</button>
           </template>
-          <button v-else type="button" class="code-action" @click="startEdit">编辑</button>
+          <button v-else-if="!locked" type="button" class="code-action" @click="startEdit">
+            编辑
+          </button>
         </div>
       </div>
       <p v-if="message" class="code-message">{{ message }}</p>
