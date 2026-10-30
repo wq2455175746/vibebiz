@@ -85,6 +85,22 @@ func (r *Router) ProjectStats(ctx context.Context, id string) (ProjectStats, err
 	return sandbox.ProjectStats(ctx, id)
 }
 
+func (r *Router) ExportArchive(ctx context.Context, id string) ([]byte, error) {
+	sandbox, err := r.client(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return sandbox.ExportArchive(ctx, id)
+}
+
+func (r *Router) ImportArchive(ctx context.Context, id string, data []byte) error {
+	sandbox, err := r.client(ctx, id)
+	if err != nil {
+		return err
+	}
+	return sandbox.ImportArchive(ctx, id, data)
+}
+
 func (r *Router) ReadChatHistory(ctx context.Context, id string, limit int) (ChatHistoryTail, error) {
 	sandbox, err := r.client(ctx, id)
 	if err != nil {

@@ -25,6 +25,7 @@ import (
 	"vibebiz/internal/llmmodel"
 	"vibebiz/internal/notification"
 	"vibebiz/internal/observability"
+	"vibebiz/internal/projecttemplate"
 	"vibebiz/internal/requestcount"
 	"vibebiz/internal/router"
 	storages3 "vibebiz/internal/s3"
@@ -182,7 +183,12 @@ func main() {
 
 	e := server.New(cfg, obs)
 	e.Use(requestCounter.Middleware())
-	router.RegisterControl(e, adminRepo, projectStore, provisioner, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler, registryHandler, modelHandler, roleHandler, avatarPresigner, cfg.S3PresignExpiry())
+	templateService := projecttemplate.NewService(projecttemplate.NewMySQLRepository(db), projectStore, sandboxRouter, avatarPresigner, cfg.S3PresignExpiry())
+	templateService.Logger = obs.Logger
+	templateHandler := handler.NewTemplateHandler(templateService, projectStore, provisioner, sandboxRouter)
+	templateHandler.Metas = metas
+
+	router.RegisterControl(e, adminRepo, projectStore, provisioner, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler, registryHandler, modelHandler, roleHandler, avatarPresigner, cfg.S3PresignExpiry(), sandboxRouter, templateHandler)
 	router.RegisterChatHistory(e, handler.NewChatHistoryHandler(sandboxRouter, projectStore), authn)
 
 	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))

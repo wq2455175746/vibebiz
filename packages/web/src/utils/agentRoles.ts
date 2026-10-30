@@ -11,10 +11,7 @@ export interface RoleSaveContext {
   version: number
 }
 
-export function roleSaveContextMatches(
-  saved: RoleSaveContext,
-  current: RoleSaveContext,
-): boolean {
+export function roleSaveContextMatches(saved: RoleSaveContext, current: RoleSaveContext): boolean {
   return saved.projectId === current.projectId && saved.version === current.version
 }
 
@@ -60,11 +57,7 @@ export function filterRoleOptions(roles: AgentRole[], query: string): AgentRole[
   )
 }
 
-export function toggleRoleSelection(
-  roles: AgentRole[],
-  selected: number[],
-  id: number,
-): number[] {
+export function toggleRoleSelection(roles: AgentRole[], selected: number[], id: number): number[] {
   const target = roles.find((role) => role.id === id)
   if (!target) {
     return selected

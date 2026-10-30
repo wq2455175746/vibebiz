@@ -873,9 +873,7 @@
 }
 
 .project-cover.empty {
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.55), transparent),
-    var(--soft);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.55), transparent), var(--soft);
 }
 
 .project-cover-empty {

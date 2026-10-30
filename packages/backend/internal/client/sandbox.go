@@ -219,6 +219,54 @@ func (s *Sandbox) ProjectStats(ctx context.Context, id string) (ProjectStats, er
 	return stats, nil
 }
 
+func (s *Sandbox) ExportArchive(ctx context.Context, id string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.baseURL+"/internal/projects/"+url.PathEscape(id)+"/archive", nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := s.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= http.StatusBadRequest {
+		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		var env envelope
+		_ = json.Unmarshal(raw, &env)
+		return nil, &APIError{Status: resp.StatusCode, Code: env.Code, Message: env.Message}
+	}
+	return io.ReadAll(io.LimitReader(resp.Body, 100<<20))
+}
+
+func (s *Sandbox) ImportArchive(ctx context.Context, id string, data []byte) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		s.baseURL+"/internal/projects/"+url.PathEscape(id)+"/archive/import", bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/gzip")
+	req.ContentLength = int64(len(data))
+	resp, err := s.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode >= http.StatusBadRequest {
+		var env envelope
+		_ = json.Unmarshal(raw, &env)
+		message := env.Message
+		if message == "" {
+			message = strings.TrimSpace(string(raw))
+		}
+		return &APIError{Status: resp.StatusCode, Code: env.Code, Message: message}
+	}
+	return nil
+}
+
 func (s *Sandbox) ReadChatHistory(ctx context.Context, id string, limit int) (ChatHistoryTail, error) {
 	q := url.Values{}
 	q.Set("limit", strconv.Itoa(limit))

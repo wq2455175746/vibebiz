@@ -4,9 +4,7 @@ import { safeNotificationLink } from './notificationLink'
 
 describe('safeNotificationLink', () => {
   it('allows http and https links', () => {
-    expect(safeNotificationLink('https://example.com/release')).toBe(
-      'https://example.com/release',
-    )
+    expect(safeNotificationLink('https://example.com/release')).toBe('https://example.com/release')
     expect(safeNotificationLink('http://example.com')).toBe('http://example.com')
   })
 

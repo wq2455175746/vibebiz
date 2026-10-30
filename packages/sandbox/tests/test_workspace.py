@@ -155,3 +155,39 @@ def test_chathistory_is_internal(tmp_path):
     assert all(not path.startswith(".chathistory") for path in paths)
     with pytest.raises(WorkspaceError):
         workspace.read_file("p1", ".chathistory/session.jsonl")
+
+
+def test_archive_round_trip_replaces_files(tmp_path):
+    source = make_workspace(tmp_path / "source")
+    source_project = source.init_project("p1")
+    (source_project / "styles.css").write_text("body{}", encoding="utf-8")
+    (source_project / "nested").mkdir()
+    (source_project / "nested" / "app.js").write_text("console.log(1)", encoding="utf-8")
+    data = source.archive("p1")
+
+    target = make_workspace(tmp_path / "target")
+    target.init_project("p1")
+    (target.project_dir("p1") / "stale.txt").write_text("stale", encoding="utf-8")
+    target.import_archive("p1", data)
+
+    project = target.project_dir("p1")
+    assert (project / "styles.css").read_text(encoding="utf-8") == "body{}"
+    assert (project / "nested" / "app.js").read_text(encoding="utf-8") == "console.log(1)"
+    assert not (project / "stale.txt").exists()
+
+
+def test_import_archive_rejects_path_traversal(tmp_path):
+    import io
+    import tarfile
+
+    workspace = make_workspace(tmp_path)
+    workspace.init_project("p1")
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
+        info = tarfile.TarInfo("../evil.txt")
+        payload = b"bad"
+        info.size = len(payload)
+        archive.addfile(info, io.BytesIO(payload))
+
+    with pytest.raises(WorkspaceError):
+        workspace.import_archive("p1", buffer.getvalue())

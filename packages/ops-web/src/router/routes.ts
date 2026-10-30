@@ -9,6 +9,8 @@ import ProjectsView from '@/views/ProjectsView.vue'
 import QuotasView from '@/views/QuotasView.vue'
 import SandboxesView from '@/views/SandboxesView.vue'
 import SettingsView from '@/views/SettingsView.vue'
+import TemplatesView from '@/views/TemplatesView.vue'
+import TopicsView from '@/views/TopicsView.vue'
 import UsersView from '@/views/UsersView.vue'
 
 export const childRoutes: RouteRecordRaw[] = [
@@ -23,6 +25,8 @@ export const childRoutes: RouteRecordRaw[] = [
   },
   { path: 'models', name: 'models', component: ModelsView, meta: { title: '模型管理' } },
   { path: 'roles', name: 'roles', component: RolesView, meta: { title: '角色管理' } },
+  { path: 'topics', name: 'topics', component: TopicsView, meta: { title: '类别管理' } },
+  { path: 'templates', name: 'templates', component: TemplatesView, meta: { title: '模板管理' } },
   { path: 'quotas', name: 'quotas', component: QuotasView, meta: { title: '配额' } },
   { path: 'audit', name: 'audit', component: AuditView, meta: { title: '审计日志' } },
   {

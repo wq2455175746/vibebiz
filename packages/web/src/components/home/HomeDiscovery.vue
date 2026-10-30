@@ -2,14 +2,24 @@
 import { computed, ref } from 'vue'
 
 import ProjectCard from './ProjectCard.vue'
-import type { Project } from '@/types'
+import type { Project, Template } from '@/types'
 
-const props = defineProps<{ projects: Project[]; limit?: number }>()
+const props = withDefaults(
+  defineProps<{
+    projects: Project[]
+    templates?: Template[]
+    templatesLoading?: boolean
+    templatesError?: string
+    limit?: number
+  }>(),
+  { templates: () => [], templatesLoading: false, templatesError: '' },
+)
 
 const emit = defineEmits<{
   (event: 'open-project', id: string): void
   (event: 'delete-project', project: Project): void
   (event: 'view-all'): void
+  (event: 'use-template', template: Template): void
 }>()
 
 type DiscoveryTab = 'projects' | 'templates'
@@ -64,6 +74,88 @@ const tabs: { key: DiscoveryTab; label: string }[] = [
       </div>
     </template>
 
-    <p v-else class="discovery-empty">暂无模板</p>
+    <template v-else>
+      <p v-if="templatesError" class="error-text">{{ templatesError }}</p>
+      <p v-else-if="templatesLoading" class="discovery-empty">加载中...</p>
+      <p v-else-if="templates.length === 0" class="discovery-empty">暂无模板</p>
+      <div v-else class="project-grid">
+        <article v-for="template in templates" :key="template.id" class="template-card">
+          <span class="template-cover" :class="{ empty: !template.coverUrl }">
+            <img v-if="template.coverUrl" :src="template.coverUrl" alt="" />
+            <i v-else class="pi pi-image" />
+          </span>
+          <div class="template-body">
+            <div class="template-title-row">
+              <strong>{{ template.templateName }}</strong>
+            </div>
+            <p class="template-desc">{{ template.description || '暂无描述' }}</p>
+            <div class="template-meta">
+              <span>{{ template.parentTopicName }} / {{ template.topicName }}</span>
+              <button type="button" @click="emit('use-template', template)">使用模板</button>
+            </div>
+          </div>
+        </article>
+      </div>
+    </template>
   </section>
 </template>
+
+<style scoped>
+.template-card {
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+
+.template-cover {
+  display: grid;
+  place-items: center;
+  height: 150px;
+  background: var(--soft);
+  color: var(--muted);
+}
+
+.template-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.template-body {
+  padding: 14px;
+}
+
+.template-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.template-desc {
+  min-height: 36px;
+  margin: 8px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.template-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.template-meta button {
+  padding: 6px 14px;
+  background: var(--ink);
+  border: none;
+  border-radius: 999px;
+  color: var(--surface);
+  cursor: pointer;
+  font-size: 12px;
+}
+</style>

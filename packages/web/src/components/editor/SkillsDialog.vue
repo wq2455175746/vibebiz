@@ -46,7 +46,12 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="dialog-backdrop" @click.self="emit('close')">
-    <section class="dialog-card skills-dialog" role="dialog" aria-modal="true" aria-label="Skills 列表">
+    <section
+      class="dialog-card skills-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Skills 列表"
+    >
       <header class="dialog-head">
         <div>
           <p class="dialog-eyebrow">AGENT SKILLS</p>

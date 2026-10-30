@@ -69,11 +69,7 @@ function close(): void {
       <TabPanels>
         <TabPanel value="version_release">
           <p v-if="groups.version_release.length === 0" class="notifications-empty">暂无消息</p>
-          <article
-            v-for="item in groups.version_release"
-            :key="item.id"
-            class="notification-item"
-          >
+          <article v-for="item in groups.version_release" :key="item.id" class="notification-item">
             <div class="notification-head">
               <h3 class="notification-title">{{ item.title }}</h3>
               <span v-if="item.version" class="tag">v{{ item.version }}</span>

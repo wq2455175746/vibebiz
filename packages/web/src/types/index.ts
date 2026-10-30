@@ -79,6 +79,27 @@ export interface Project {
   coverUrl?: string | null
 }
 
+export interface Template {
+  id: number
+  templateCode: string
+  templateName: string
+  description: string
+  topicId: number
+  topicName: string
+  parentTopicId: number
+  parentTopicName: string
+  coverUrl: string
+  recommendScore: number
+  status: number
+}
+
+export interface TopicNode {
+  id: number
+  code: string
+  name: string
+  children: TopicNode[]
+}
+
 export interface AgentRole {
   id: number
   roleCode: string

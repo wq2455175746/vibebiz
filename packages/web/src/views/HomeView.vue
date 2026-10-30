@@ -4,11 +4,13 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { deleteStaging } from '@/api/resources'
 import { createProject, deleteProject, listProjects } from '@/api/projects'
+import { listTemplates, useTemplate as createFromTemplate } from '@/api/templates'
 import { fetchChatStatus } from '@/api/chat'
 import HomeDiscovery from '@/components/home/HomeDiscovery.vue'
 import HomeHero from '@/components/home/HomeHero.vue'
 import HomeSidebar from '@/components/home/HomeSidebar.vue'
 import ProjectCard from '@/components/home/ProjectCard.vue'
+import TemplateCard from '@/components/home/TemplateCard.vue'
 import ProjectPickerDialog from '@/components/home/ProjectPickerDialog.vue'
 import { useNotificationSocket } from '@/composables/useNotificationSocket'
 import { useAuthStore } from '@/stores/auth'
@@ -16,7 +18,7 @@ import { useNotificationsStore } from '@/stores/notifications'
 import { useResourceStore } from '@/stores/resources'
 import { canAppendToProject, resolveHomeSubmit } from '@/utils/homeSubmit'
 import '@/styles/home.css'
-import type { Project } from '@/types'
+import type { Project, Template } from '@/types'
 
 const router = useRouter()
 const route = useRoute()
@@ -27,10 +29,14 @@ const prompt = ref('')
 const creating = ref(false)
 const error = ref('')
 const projects = ref<Project[]>([])
+const templates = ref<Template[]>([])
+const templatesLoading = ref(false)
+const templatesError = ref('')
 const targetProject = ref<Project | null>(null)
 const pickerOpen = ref(false)
 const sidebarCollapsed = ref(localStorage.getItem('vibebiz:sidebar-collapsed') === '1')
 const isProjectsPage = computed(() => route.name === 'projects')
+const isResourcesPage = computed(() => route.name === 'resources')
 
 const { connect, disconnect } = useNotificationSocket(() => {
   void notifications.load(true)
@@ -87,7 +93,10 @@ async function create(files: File[] = [], agentRoleIds: number[] = []) {
       }
       projectId = plan.projectId
       sessionStorage.setItem(`vibebiz:initial-prompt:${plan.projectId}`, text)
-      sessionStorage.setItem(`vibebiz:initial-references:${plan.projectId}`, JSON.stringify(references))
+      sessionStorage.setItem(
+        `vibebiz:initial-references:${plan.projectId}`,
+        JSON.stringify(references),
+      )
       sessionStorage.setItem(`vibebiz:initial-append:${plan.projectId}`, '1')
       void router.push({
         name: 'editor',
@@ -149,6 +158,30 @@ async function loadProjects() {
   }
 }
 
+async function loadTemplates() {
+  templatesLoading.value = true
+  templatesError.value = ''
+  try {
+    const result = await listTemplates({ page: 1, pageSize: 12 })
+    templates.value = result.templates
+  } catch (err) {
+    templatesError.value = err instanceof Error ? err.message : '加载模板失败'
+    templates.value = []
+  } finally {
+    templatesLoading.value = false
+  }
+}
+
+async function useTemplate(template: Template) {
+  error.value = ''
+  try {
+    const project = await createFromTemplate(template.id)
+    await router.push({ name: 'editor', params: { id: project.id } })
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : '使用模板失败'
+  }
+}
+
 function openProject(id: string) {
   void router.push({ name: 'editor', params: { id } })
 }
@@ -171,7 +204,7 @@ onMounted(async () => {
   if (auth.isAuthenticated) {
     connect()
   }
-  await loadProjects()
+  await Promise.allSettled([loadProjects(), loadTemplates()])
 })
 </script>
 
@@ -203,6 +236,24 @@ onMounted(async () => {
         </div>
       </div>
 
+      <div v-else-if="isResourcesPage" class="projects-page">
+        <header class="projects-head">
+          <h1>资源 · 模板</h1>
+          <span>{{ templates.length }} 个模板</span>
+        </header>
+        <p v-if="templatesError" class="error-text">{{ templatesError }}</p>
+        <p v-else-if="templatesLoading" class="discovery-empty">加载中...</p>
+        <p v-else-if="templates.length === 0" class="discovery-empty">暂无模板</p>
+        <div v-else class="project-grid">
+          <TemplateCard
+            v-for="template in templates"
+            :key="template.id"
+            :template="template"
+            @use="useTemplate"
+          />
+        </div>
+      </div>
+
       <div v-else class="home-main-inner">
         <HomeHero
           v-model="prompt"
@@ -215,10 +266,14 @@ onMounted(async () => {
         />
         <HomeDiscovery
           :projects="projects"
+          :templates="templates"
+          :templates-loading="templatesLoading"
+          :templates-error="templatesError"
           :limit="4"
           @open-project="openProject"
           @delete-project="removeProject"
           @view-all="router.push({ name: 'projects' })"
+          @use-template="useTemplate"
         />
       </div>
     </main>

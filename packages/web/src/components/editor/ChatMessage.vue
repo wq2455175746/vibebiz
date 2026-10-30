@@ -26,7 +26,11 @@ const toolSummary = computed(() => summarizeTools(props.message.tools))
       <div class="chat-bubble">
         <p v-if="message.text" class="chat-text">{{ message.text }}</p>
         <div v-if="message.references?.length" class="chat-reference-list">
-          <span v-for="reference in message.references" :key="`${reference.kind}:${reference.id ?? reference.path}`" class="chat-reference-chip">
+          <span
+            v-for="reference in message.references"
+            :key="`${reference.kind}:${reference.id ?? reference.path}`"
+            class="chat-reference-chip"
+          >
             <i :class="reference.resourceKind === 'image' ? 'pi pi-image' : 'pi pi-file'" />
             {{ reference.name }}
           </span>

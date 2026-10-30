@@ -1,12 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import {
-  fetchChatHistory,
-  fetchChatStatus,
-  streamChat,
-  type StreamEvent,
-} from '@/api/chat'
+import { fetchChatHistory, fetchChatStatus, streamChat, type StreamEvent } from '@/api/chat'
 import { useChatStore } from './chat'
 import { useLogStore } from './logs'
 
@@ -228,7 +223,6 @@ describe('chat store history', () => {
     expect(chat.messages.map((message) => message.role)).toEqual(['system'])
   })
 })
-
 
 describe('chat store agent status', () => {
   it('tracks a server-side active turn as busy', async () => {

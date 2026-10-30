@@ -36,6 +36,14 @@ func (s *MySQLProjectStore) Create(ctx context.Context, project *model.Project) 
 		status = model.ProjectStateReady
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		topicID := project.TopicID
+		if topicID <= 0 {
+			topicID = s.commonTopicID
+		}
+		reviewStatus := project.ReviewStatus
+		if reviewStatus == "" {
+			reviewStatus = model.ReviewStatusPending
+		}
 		row := &daomodel.Project{
 			PublicID:           project.ID,
 			WorkspaceID:        project.WorkspaceID,
@@ -44,7 +52,12 @@ func (s *MySQLProjectStore) Create(ctx context.Context, project *model.Project) 
 			Prompt:             project.Prompt,
 			SandboxID:          project.SandboxID,
 			CoverS3Path:        project.CoverS3Path,
-			TopicID:            s.commonTopicID,
+			TopicID:            topicID,
+			TemplateID:         project.TemplateID,
+			ReviewStatus:       reviewStatus,
+			ReviewNote:         project.ReviewNote,
+			ReviewedBy:         project.ReviewedBy,
+			ReviewedAt:         project.ReviewedAt,
 			Status:             status,
 			DefaultAgentRoleID: project.DefaultAgentRoleID,
 			Base: daomodel.Base{
@@ -182,13 +195,19 @@ func (s *MySQLProjectStore) Update(ctx context.Context, project *model.Project) 
 		Model(&daomodel.Project{}).
 		Where("public_id = ?", project.ID).
 		Updates(map[string]any{
-			"name":         project.Name,
-			"prompt":       project.Prompt,
-			"sandbox_id":   project.SandboxID,
-			"status":       project.State,
-			"workspace_id": project.WorkspaceID,
-			"user_id":      project.OwnerUserID,
-			"updated_at":   time.Now().UTC(),
+			"name":          project.Name,
+			"prompt":        project.Prompt,
+			"sandbox_id":    project.SandboxID,
+			"status":        project.State,
+			"review_status": project.ReviewStatus,
+			"review_note":   project.ReviewNote,
+			"reviewed_by":   project.ReviewedBy,
+			"reviewed_at":   project.ReviewedAt,
+			"workspace_id":  project.WorkspaceID,
+			"topic_id":      project.TopicID,
+			"template_id":   project.TemplateID,
+			"user_id":       project.OwnerUserID,
+			"updated_at":    time.Now().UTC(),
 		})
 	if result.Error != nil {
 		return fmt.Errorf("update project: %w", result.Error)
@@ -219,7 +238,13 @@ func toProject(row *daomodel.Project) *model.Project {
 		Name:               row.Name,
 		Prompt:             row.Prompt,
 		State:              row.Status,
+		ReviewStatus:       row.ReviewStatus,
+		ReviewNote:         row.ReviewNote,
+		ReviewedBy:         row.ReviewedBy,
+		ReviewedAt:         row.ReviewedAt,
 		WorkspaceID:        row.WorkspaceID,
+		TopicID:            row.TopicID,
+		TemplateID:         row.TemplateID,
 		OwnerUserID:        row.UserID,
 		SandboxID:          row.SandboxID,
 		DefaultAgentRoleID: row.DefaultAgentRoleID,

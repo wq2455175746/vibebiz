@@ -67,7 +67,11 @@ export function collectReferences(
       const key = `file:${file.path}`
       if (!seen.has(key)) {
         seen.add(key)
-        result.push({ kind: 'project_file', name: file.path.split('/').pop() ?? file.path, path: file.path })
+        result.push({
+          kind: 'project_file',
+          name: file.path.split('/').pop() ?? file.path,
+          path: file.path,
+        })
       }
     }
   }

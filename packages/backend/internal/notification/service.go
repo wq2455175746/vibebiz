@@ -67,12 +67,13 @@ func NewService(repo Repository, cache CacheStore, hub Broadcaster) *Service {
 }
 
 type CreateInput struct {
-	Title    string
-	Content  string
-	Type     model.NotificationType
-	Version  string
-	Link     string
-	ExpireAt time.Time
+	Title           string
+	Content         string
+	Type            model.NotificationType
+	Version         string
+	Link            string
+	ExpireAt        time.Time
+	RecipientUserID int64
 }
 
 type View struct {
@@ -259,7 +260,18 @@ func (s *Service) Published(ctx context.Context, userID int64) (PublishedResult,
 	if err != nil {
 		return PublishedResult{}, ErrCacheUnavailable
 	}
-	return PublishedResult{Notifications: dbItems, Unread: hasUnread(dbItems, lastRead)}, nil
+	visible := visibleForUser(dbItems, userID)
+	return PublishedResult{Notifications: visible, Unread: hasUnread(visible, lastRead)}, nil
+}
+
+func visibleForUser(items []Published, userID int64) []Published {
+	out := make([]Published, 0, len(items))
+	for _, item := range items {
+		if item.RecipientUserID == 0 || item.RecipientUserID == userID {
+			out = append(out, item)
+		}
+	}
+	return out
 }
 
 func (s *Service) MarkRead(ctx context.Context, userID int64, readAt time.Time) error {
@@ -353,9 +365,12 @@ func (s *Service) build(input CreateInput) (model.OpsNotification, error) {
 	if !input.ExpireAt.After(now) || input.ExpireAt.After(now.Add(maxRetention)) {
 		return model.OpsNotification{}, ErrInvalid
 	}
+	if input.RecipientUserID < 0 {
+		return model.OpsNotification{}, ErrInvalid
+	}
 	return model.OpsNotification{
 		Title: title, Content: content, Type: input.Type, Version: version,
-		Link: link, ExpireAt: input.ExpireAt,
+		Link: link, ExpireAt: input.ExpireAt, RecipientUserID: input.RecipientUserID,
 	}, nil
 }
 

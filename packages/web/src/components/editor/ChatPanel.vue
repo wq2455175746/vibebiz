@@ -71,9 +71,7 @@ let roleOpenSeq = 0
 let roleWriteQueue: Promise<void> = Promise.resolve()
 
 const candidates = computed(() => matchCommands(prompt.value, 'editor'))
-const menuOpen = computed(
-  () => candidates.value.length > 0 && !chat.busy && !slashDismissed.value,
-)
+const menuOpen = computed(() => candidates.value.length > 0 && !chat.busy && !slashDismissed.value)
 
 watch(candidates, () => {
   menuIndex.value = 0
@@ -478,10 +476,7 @@ function onDocumentMousedown(event: MouseEvent) {
     return
   }
   const target = event.target
-  if (
-    target instanceof Element &&
-    target.closest('.agent-role-menu, .chat-role-chip')
-  ) {
+  if (target instanceof Element && target.closest('.agent-role-menu, .chat-role-chip')) {
     return
   }
   roleOpen.value = false

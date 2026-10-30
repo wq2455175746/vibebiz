@@ -201,8 +201,8 @@ func TestGooseCanCollectMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("collect migrations: %v", err)
 	}
-	if len(migs) != 14 {
-		t.Fatalf("collected %d migrations, want 14", len(migs))
+	if len(migs) != 15 {
+		t.Fatalf("collected %d migrations, want 15", len(migs))
 	}
 	for i, mig := range migs {
 		want := int64(i + 1)

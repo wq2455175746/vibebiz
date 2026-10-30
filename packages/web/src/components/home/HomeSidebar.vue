@@ -167,7 +167,7 @@ async function logout() {
 
 const navigation = [
   { label: '首页', icon: 'pi pi-home', route: 'home', visible: true },
-  { label: '资源', icon: 'pi pi-book', route: '', visible: true },
+  { label: '资源', icon: 'pi pi-book', route: 'resources', visible: true },
   { label: '我的项目', icon: 'pi pi-folder', route: 'projects', visible: true },
   { label: '定时任务', icon: 'pi pi-clock', route: '', visible: true },
 ]
@@ -319,11 +319,7 @@ function navigate(name: string) {
           @click="notificationsOpen = true"
         >
           <i class="pi pi-bell" />
-          <span
-            v-if="notifications.unread"
-            class="sidebar-unread-dot"
-            aria-label="有未读通知"
-          />
+          <span v-if="notifications.unread" class="sidebar-unread-dot" aria-label="有未读通知" />
         </button>
         <button
           class="sidebar-account-trigger"

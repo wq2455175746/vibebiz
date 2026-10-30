@@ -10,9 +10,30 @@ import {
 } from './agentRoles'
 
 const roles = [
-  { id: 6, roleCode: 'team', roleNameEn: 'Team', roleNameZh: '团队', description: 'all', avatarUrl: '' },
-  { id: 1, roleCode: 'alex', roleNameEn: 'Alex', roleNameZh: '全栈工程师', description: 'code', avatarUrl: '' },
-  { id: 4, roleCode: 'emma', roleNameEn: 'Emma', roleNameZh: '产品经理', description: 'product', avatarUrl: '' },
+  {
+    id: 6,
+    roleCode: 'team',
+    roleNameEn: 'Team',
+    roleNameZh: '团队',
+    description: 'all',
+    avatarUrl: '',
+  },
+  {
+    id: 1,
+    roleCode: 'alex',
+    roleNameEn: 'Alex',
+    roleNameZh: '全栈工程师',
+    description: 'code',
+    avatarUrl: '',
+  },
+  {
+    id: 4,
+    roleCode: 'emma',
+    roleNameEn: 'Emma',
+    roleNameZh: '产品经理',
+    description: 'product',
+    avatarUrl: '',
+  },
 ]
 
 describe('agent role selection', () => {

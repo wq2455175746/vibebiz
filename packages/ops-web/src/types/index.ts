@@ -26,7 +26,70 @@ export interface AdminProject {
   name: string
   state: string
   owner: string
+  ownerUserId: number
+  workspaceId: number
+  coverUrl: string
+  reviewStatus: string
+  reviewNote: string
   createdAt: string
+}
+
+export interface ProjectFile {
+  path: string
+  type: string
+  size: number
+  mtime: number
+}
+
+export interface TopicNode {
+  id: number
+  code: string
+  name: string
+  description: string
+  promptTemplate: string
+  parentId?: number | null
+  sortOrder: number
+  status: number
+  children: TopicNode[]
+}
+
+export interface AdminTemplate {
+  id: number
+  templateCode: string
+  templateName: string
+  description: string
+  topicId: number
+  topicName: string
+  parentTopicId: number
+  parentTopicName: string
+  coverUrl: string
+  recommendScore: number
+  status: number
+}
+
+export interface TopicInput {
+  parentId: number | null
+  code: string
+  name: string
+  description: string
+  promptTemplate: string
+  sortOrder: number
+  status: number
+}
+
+export interface AdminTemplateInput {
+  templateName: string
+  description: string
+  topicId: number
+  recommendScore: number
+  status: number
+}
+
+export interface TemplateInput {
+  templateName: string
+  description: string
+  topicId: number
+  recommendScore: number
 }
 
 export interface AdminSandbox {

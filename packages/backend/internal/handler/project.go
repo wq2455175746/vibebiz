@@ -228,10 +228,15 @@ func (h *ProjectHandler) List(c echo.Context) error {
 		return response.OK(c, map[string]any{"projects": []*model.Project{}})
 	}
 	projects := h.Store.ListByWorkspaces(c.Request().Context(), []int64{session.CurrentWorkspaceID})
+	visible := make([]*model.Project, 0, len(projects))
 	for _, project := range projects {
+		if project.State == model.ProjectStateDisabled {
+			continue
+		}
 		h.attachCoverURL(c.Request().Context(), project)
+		visible = append(visible, project)
 	}
-	return response.OK(c, map[string]any{"projects": projects})
+	return response.OK(c, map[string]any{"projects": visible})
 }
 
 func (h *ProjectHandler) Get(c echo.Context) error {
@@ -246,7 +251,7 @@ func (h *ProjectHandler) Get(c echo.Context) error {
 		}
 		return response.Fail(c, http.StatusInternalServerError, 50002, "get project failed")
 	}
-	if !containsInt64(session.WorkspaceIDs, project.WorkspaceID) {
+	if !containsInt64(session.WorkspaceIDs, project.WorkspaceID) || project.State == model.ProjectStateDisabled {
 		return response.Fail(c, http.StatusNotFound, 40401, "project not found")
 	}
 	h.attachCoverURL(c.Request().Context(), project)

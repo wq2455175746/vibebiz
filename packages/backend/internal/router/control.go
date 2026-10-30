@@ -13,7 +13,7 @@ import (
 	"vibebiz/internal/store"
 )
 
-func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.ProjectStore, provisioner handler.ProjectInitializer, obs *observability.Provider, authn *auth.Authenticator, authHandler *handler.AuthHandler, settingsHandler *handler.SettingsHandler, storageHandler *handler.StorageHandler, metas auth.ProjectMetaStore, notifications *handler.NotificationHandler, registry *handler.SandboxRegistryHandler, models *handler.ModelHandler, roles *handler.RoleHandler, coverSigner handler.CoverURLSigner, coverExpiry time.Duration) {
+func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.ProjectStore, provisioner handler.ProjectInitializer, obs *observability.Provider, authn *auth.Authenticator, authHandler *handler.AuthHandler, settingsHandler *handler.SettingsHandler, storageHandler *handler.StorageHandler, metas auth.ProjectMetaStore, notifications *handler.NotificationHandler, registry *handler.SandboxRegistryHandler, models *handler.ModelHandler, roles *handler.RoleHandler, coverSigner handler.CoverURLSigner, coverExpiry time.Duration, adminSandbox handler.AdminSandbox, templates *handler.TemplateHandler) {
 	var roleStore handler.AgentRoleStore
 	if roles != nil {
 		roleStore = roles.Service
@@ -22,10 +22,22 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 	projectHandler.Covers = coverSigner
 	projectHandler.CoverExpiry = coverExpiry
 	adminHandler := handler.NewAdminHandler(repo, projects)
+	adminHandler.Sandbox = adminSandbox
+	adminHandler.Covers = coverSigner
+	adminHandler.CoverExpiry = coverExpiry
+	adminHandler.Metas = metas
+	if notifications != nil {
+		adminHandler.Notifications = notifications.Service
+	}
 
 	api := e.Group("/cp/api/v1")
 	if registry != nil {
 		api.POST("/internal/sandboxes/heartbeat", registry.Heartbeat)
+	}
+	if templates != nil {
+		api.GET("/templates", templates.List, authn.RequireUser)
+		api.GET("/templates/topics", templates.Topics, authn.RequireUser)
+		api.POST("/templates/:id/use", templates.Use, authn.RequireUser)
 	}
 	api.POST("/auth/login", authHandler.LoginUser)
 	api.GET("/auth/me", authHandler.MeUser)
@@ -78,6 +90,9 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 	adminProtected.GET("/users", adminHandler.Users)
 	adminProtected.PUT("/users/:id/status", adminHandler.UpdateUserStatus)
 	adminProtected.GET("/projects", adminHandler.Projects)
+	adminProtected.GET("/projects/:id/files", adminHandler.ProjectFiles)
+	adminProtected.GET("/projects/:id/live/*", adminHandler.ProjectLive)
+	adminProtected.PUT("/projects/:id/review", adminHandler.ReviewProject)
 	adminProtected.GET("/sandboxes", adminHandler.Sandboxes)
 	adminProtected.GET("/quotas", adminHandler.Quotas)
 	adminProtected.PUT("/quotas/:userId", adminHandler.UpdateQuota)
@@ -85,6 +100,16 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 	if models != nil {
 		adminProtected.GET("/models", models.List)
 		adminProtected.POST("/models", models.Create)
+	}
+	if templates != nil {
+		adminProtected.GET("/topics", templates.Topics)
+		adminProtected.POST("/topics", templates.CreateTopic)
+		adminProtected.PUT("/topics/:id", templates.UpdateTopic)
+		adminProtected.POST("/projects/:id/templates", templates.Create)
+		adminProtected.GET("/templates", templates.AdminList)
+		adminProtected.PUT("/templates/:id", templates.AdminUpdate)
+		adminProtected.DELETE("/templates/:id", templates.AdminDelete)
+		adminProtected.GET("/templates/:id/files", templates.AdminFiles)
 	}
 	if roles != nil {
 		adminProtected.GET("/roles", roles.List)

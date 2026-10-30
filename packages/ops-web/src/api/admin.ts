@@ -12,7 +12,13 @@ import type {
   Overview,
   PageQuery,
   PageResult,
+  AdminTemplate,
+  AdminTemplateInput,
+  ProjectFile,
   QuotaUpdateInput,
+  TemplateInput,
+  TopicInput,
+  TopicNode,
   RoleAvatarPresign,
   RoleInput,
   RoleUpdateInput,
@@ -37,6 +43,92 @@ export async function getUsers(query: PageQuery = {}): Promise<PageResult<AdminU
     params: pageParams(query),
   })
   return toPage(result, 'users')
+}
+
+export async function getProjectFiles(id: string): Promise<ProjectFile[]> {
+  const result = await request<{ files: ProjectFile[] }>({
+    method: 'get',
+    url: `/projects/${id}/files`,
+  })
+  return result.files ?? []
+}
+
+export function projectPreviewURL(id: string): string {
+  const base = import.meta.env.VITE_OPS_API_BASE || '/cp/api/v1/admin'
+  return `${base}/projects/${encodeURIComponent(id)}/live/`
+}
+
+export async function reviewProject(
+  id: string,
+  status: 'approved' | 'rejected',
+  note: string,
+): Promise<void> {
+  await request<{ id: string }>({
+    method: 'put',
+    url: `/projects/${id}/review`,
+    data: { status, note },
+  })
+}
+
+export async function getTemplateTopics(): Promise<TopicNode[]> {
+  const result = await request<{ topics: TopicNode[] }>({ method: 'get', url: '/topics' })
+  return result.topics ?? []
+}
+
+export async function getAdminTopics(): Promise<TopicNode[]> {
+  const result = await request<{ topics: TopicNode[] }>({
+    method: 'get',
+    url: '/topics',
+    params: { all: 1 },
+  })
+  return result.topics ?? []
+}
+
+export async function createTopic(input: TopicInput): Promise<TopicNode> {
+  return request<TopicNode>({ method: 'post', url: '/topics', data: input })
+}
+
+export async function updateTopic(id: number, input: TopicInput): Promise<TopicNode> {
+  return request<TopicNode>({ method: 'put', url: `/topics/${id}`, data: input })
+}
+
+export async function getAdminTemplates(query: PageQuery = {}): Promise<PageResult<AdminTemplate>> {
+  const result = await request<Record<string, unknown>>({
+    method: 'get',
+    url: '/templates',
+    params: pageParams(query),
+  })
+  return toPage<AdminTemplate>(result, 'templates')
+}
+
+export async function updateTemplate(
+  id: number,
+  input: AdminTemplateInput,
+): Promise<AdminTemplate> {
+  return request<AdminTemplate>({ method: 'put', url: `/templates/${id}`, data: input })
+}
+
+export async function deleteTemplate(id: number): Promise<void> {
+  await request<{ deleted: boolean }>({ method: 'delete', url: `/templates/${id}` })
+}
+
+export async function getTemplateFiles(id: number): Promise<ProjectFile[]> {
+  const result = await request<{ files: ProjectFile[] }>({
+    method: 'get',
+    url: `/templates/${id}/files`,
+  })
+  return result.files ?? []
+}
+
+export async function createTemplate(
+  projectId: string,
+  input: TemplateInput,
+): Promise<{ id: number }> {
+  return request<{ id: number }>({
+    method: 'post',
+    url: `/projects/${projectId}/templates`,
+    data: input,
+  })
 }
 
 export async function updateUserStatus(id: string, status: number): Promise<void> {

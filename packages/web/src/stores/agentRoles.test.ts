@@ -11,8 +11,22 @@ vi.mock('@/api/agentRoles', () => ({
 }))
 
 const roles: AgentRole[] = [
-  { id: 6, roleCode: 'team', roleNameEn: 'Team', roleNameZh: '团队', description: 'all', avatarUrl: '' },
-  { id: 1, roleCode: 'alex', roleNameEn: 'Alex', roleNameZh: '全栈工程师', description: 'code', avatarUrl: '' },
+  {
+    id: 6,
+    roleCode: 'team',
+    roleNameEn: 'Team',
+    roleNameZh: '团队',
+    description: 'all',
+    avatarUrl: '',
+  },
+  {
+    id: 1,
+    roleCode: 'alex',
+    roleNameEn: 'Alex',
+    roleNameZh: '全栈工程师',
+    description: 'code',
+    avatarUrl: '',
+  },
 ]
 
 describe('agentRoles store', () => {

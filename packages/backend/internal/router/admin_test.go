@@ -188,6 +188,38 @@ func TestAdminProjects(t *testing.T) {
 	}
 }
 
+func TestAdminRejectsProjectAndDisablesIt(t *testing.T) {
+	projects := store.NewMemoryProjectStore()
+	if err := projects.Create(context.Background(), &model.Project{
+		ID: "p1", Name: "bad", State: model.ProjectStateReady, WorkspaceID: 2, OwnerUserID: 7, CreatedAt: time.Now(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	e, _, authState := newCP(t, projects)
+
+	rec := serveWithAuthBody(e, http.MethodPut, "/cp/api/v1/admin/projects/p1/review", authState.opsCookie,
+		`{"status":"rejected","note":"违规内容"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	rec = serveWithAuth(e, http.MethodGet, "/cp/api/v1/admin/projects", authState.opsCookie)
+	var payload struct {
+		Projects []struct {
+			ID           string `json:"id"`
+			State        string `json:"state"`
+			ReviewStatus string `json:"reviewStatus"`
+			ReviewNote   string `json:"reviewNote"`
+		} `json:"projects"`
+	}
+	if err := json.Unmarshal(decodeEnvelope(t, rec.Body.Bytes()).Result, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if len(payload.Projects) != 1 || payload.Projects[0].State != model.ProjectStateDisabled ||
+		payload.Projects[0].ReviewStatus != model.ReviewStatusRejected || payload.Projects[0].ReviewNote != "违规内容" {
+		t.Fatalf("projects = %+v", payload.Projects)
+	}
+}
+
 func TestAdminRequiresOpsSession(t *testing.T) {
 	e, _, authState := newCP(t, store.NewMemoryProjectStore())
 

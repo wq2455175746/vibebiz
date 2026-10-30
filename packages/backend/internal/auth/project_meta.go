@@ -16,8 +16,9 @@ import (
 var ErrProjectMetaNotFound = errors.New("project metadata not found")
 
 type ProjectMeta struct {
-	WorkspaceID int64 `json:"workspaceId"`
-	OwnerUserID int64 `json:"ownerUserId"`
+	WorkspaceID int64  `json:"workspaceId"`
+	OwnerUserID int64  `json:"ownerUserId"`
+	Status      string `json:"status,omitempty"`
 }
 
 type ProjectMetaStore interface {
@@ -88,6 +89,9 @@ func RequireProjectAccess(metas ProjectMetaStore) echo.MiddlewareFunc {
 			}
 			if !containsWorkspace(session.WorkspaceIDs, meta.WorkspaceID) {
 				return response.Fail(c, http.StatusNotFound, 40401, "project not found")
+			}
+			if meta.Status == "disabled" {
+				return response.Fail(c, http.StatusForbidden, 40304, "project is disabled")
 			}
 			c.Set("auth.project_meta", meta)
 			return next(c)

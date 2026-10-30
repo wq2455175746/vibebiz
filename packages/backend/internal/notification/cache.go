@@ -16,14 +16,15 @@ import (
 var ErrIndexMissing = errors.New("notification index missing")
 
 type Published struct {
-	ID          int64                  `json:"id"`
-	Title       string                 `json:"title"`
-	Content     string                 `json:"content"`
-	Type        model.NotificationType `json:"type"`
-	Version     string                 `json:"version"`
-	Link        string                 `json:"link"`
-	PublishedAt time.Time              `json:"publishedAt"`
-	ExpireAt    time.Time              `json:"expireAt"`
+	ID              int64                  `json:"id"`
+	RecipientUserID int64                  `json:"-"`
+	Title           string                 `json:"title"`
+	Content         string                 `json:"content"`
+	Type            model.NotificationType `json:"type"`
+	Version         string                 `json:"version"`
+	Link            string                 `json:"link"`
+	PublishedAt     time.Time              `json:"publishedAt"`
+	ExpireAt        time.Time              `json:"expireAt"`
 }
 
 type Cache struct {
@@ -83,7 +84,8 @@ func publishedFromModel(item model.OpsNotification) Published {
 		publishedAt = *item.PublishedAt
 	}
 	return Published{
-		ID: item.ID, Title: item.Title, Content: item.Content, Type: item.Type,
+		ID: item.ID, RecipientUserID: item.RecipientUserID,
+		Title: item.Title, Content: item.Content, Type: item.Type,
 		Version: item.Version, Link: item.Link, PublishedAt: publishedAt, ExpireAt: item.ExpireAt,
 	}
 }

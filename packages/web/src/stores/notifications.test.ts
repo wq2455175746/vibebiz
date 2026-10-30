@@ -31,7 +31,10 @@ beforeEach(() => {
 
 describe('useNotificationsStore', () => {
   it('loads notifications and clears the error', async () => {
-    vi.mocked(notificationsApi.listNotifications).mockResolvedValue({ notifications: [notification], unread: true })
+    vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+      notifications: [notification],
+      unread: true,
+    })
     const store = useNotificationsStore()
 
     await store.load()
@@ -43,7 +46,9 @@ describe('useNotificationsStore', () => {
   })
 
   it('stores the error message when loading fails', async () => {
-    vi.mocked(notificationsApi.listNotifications).mockRejectedValue(new ApiError('加载失败', 500, 50001))
+    vi.mocked(notificationsApi.listNotifications).mockRejectedValue(
+      new ApiError('加载失败', 500, 50001),
+    )
     const store = useNotificationsStore()
 
     await store.load()
@@ -73,7 +78,10 @@ describe('useNotificationsStore', () => {
   })
 
   it('keeps cached items and no error when a silent reload fails', async () => {
-    vi.mocked(notificationsApi.listNotifications).mockResolvedValueOnce({ notifications: [notification], unread: true })
+    vi.mocked(notificationsApi.listNotifications).mockResolvedValueOnce({
+      notifications: [notification],
+      unread: true,
+    })
     const store = useNotificationsStore()
     await store.load()
 

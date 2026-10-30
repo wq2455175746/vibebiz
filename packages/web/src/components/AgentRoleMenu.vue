@@ -27,7 +27,9 @@ const emit = defineEmits<{
       @click="emit('toggle', role)"
     >
       <span class="agent-role-check">{{ selected.includes(role.id) ? '✓' : '' }}</span>
-      <span class="agent-role-name">{{ role.roleNameZh }} <small>{{ role.roleNameEn }}</small></span>
+      <span class="agent-role-name"
+        >{{ role.roleNameZh }} <small>{{ role.roleNameEn }}</small></span
+      >
       <small class="agent-role-desc">{{ role.description }}</small>
     </button>
   </div>

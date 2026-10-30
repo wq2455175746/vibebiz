@@ -5,7 +5,7 @@ import { navItems } from './navigation'
 import { childRoutes } from './routes'
 
 describe('ops navigation', () => {
-  it('exposes the ten admin modules', () => {
+  it('exposes the twelve admin modules', () => {
     expect(navItems.map((item) => item.path)).toEqual([
       '/',
       '/users',
@@ -13,6 +13,8 @@ describe('ops navigation', () => {
       '/sandboxes',
       '/models',
       '/roles',
+      '/topics',
+      '/templates',
       '/quotas',
       '/audit',
       '/notifications',
@@ -25,6 +27,8 @@ describe('ops navigation', () => {
       '沙箱节点',
       '模型管理',
       '角色管理',
+      '类别管理',
+      '模板管理',
       '配额',
       '审计日志',
       '消息通知',

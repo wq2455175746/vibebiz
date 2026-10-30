@@ -638,6 +638,37 @@ func TestServicePublishedTracksUnreadPerUser(t *testing.T) {
 	}
 }
 
+func TestServicePublishedFiltersRecipients(t *testing.T) {
+	repo := newFakeRepo()
+	cache := &fakeCache{}
+	svc := newTestServiceWith(repo, cache, &fakeHub{})
+	global := draftNotification(svc.Now())
+	global.Status = model.NotificationPublished
+	global.PublishedAt = &testNow
+	global = repo.add(global)
+	targeted := draftNotification(svc.Now())
+	targeted.Status = model.NotificationPublished
+	targeted.PublishedAt = &testNow
+	targeted.RecipientUserID = 7
+	targeted = repo.add(targeted)
+	cache.items = []Published{publishedFromModel(global), publishedFromModel(targeted)}
+
+	result, err := svc.Published(context.Background(), 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Notifications) != 2 {
+		t.Fatalf("recipient items = %+v", result.Notifications)
+	}
+	result, err = svc.Published(context.Background(), 8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Notifications) != 1 || result.Notifications[0].ID != global.ID {
+		t.Fatalf("other items = %+v", result.Notifications)
+	}
+}
+
 func TestServiceViewDerivesExpiredStatus(t *testing.T) {
 	repo := newFakeRepo()
 	cache := &fakeCache{}

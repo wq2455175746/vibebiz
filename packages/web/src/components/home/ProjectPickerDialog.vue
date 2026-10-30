@@ -32,7 +32,12 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 
 <template>
   <div class="dialog-backdrop" @click.self="emit('close')">
-    <section class="dialog-card project-picker" role="dialog" aria-modal="true" aria-label="选择项目">
+    <section
+      class="dialog-card project-picker"
+      role="dialog"
+      aria-modal="true"
+      aria-label="选择项目"
+    >
       <header class="dialog-head">
         <div>
           <p class="dialog-eyebrow">SELECT PROJECT</p>

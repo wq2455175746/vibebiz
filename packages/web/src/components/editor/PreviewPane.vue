@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
+import { useToast } from 'primevue/usetoast'
 import html2canvas from 'html2canvas'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
@@ -16,12 +17,14 @@ const frame = ref<HTMLIFrameElement | null>(null)
 const loading = ref(true)
 const consoleOpen = ref(false)
 const previewLogs = usePreviewLogStore()
+const toast = useToast()
 const projectStore = useProjectStore()
 const src = computed(() => buildPreviewUrl(props.projectId))
 let captureTimer: ReturnType<typeof setTimeout> | null = null
 const captureBusy = ref(false)
 let captureOnLoad = false
 let capturePending = false
+let reloadPending = false
 
 function reload(capture = false) {
   loading.value = true
@@ -60,7 +63,7 @@ function isBlankCanvas(context: CanvasRenderingContext2D, width: number, height:
   }
 }
 
-async function captureCover() {
+async function captureCover(manual = false) {
   const frameElement = frame.value
   const document = frameElement?.contentDocument
   if (!document?.body || captureBusy.value) {
@@ -131,6 +134,14 @@ async function captureCover() {
     const cover = await uploadProjectCover(props.projectId, image)
     projectStore.setCover(cover.coverUrl, cover.coverS3Path)
     previewLogs.append('info', '项目简介图已更新')
+    if (manual) {
+      toast.add({
+        severity: 'success',
+        summary: '截图成功',
+        detail: '项目简介图已更新',
+        life: 2500,
+      })
+    }
   } catch (error) {
     previewLogs.append('warn', `项目简介图生成失败：${(error as Error).message}`)
   } finally {
@@ -140,7 +151,7 @@ async function captureCover() {
 
 function captureNow() {
   captureOnLoad = false
-  void captureCover()
+  void captureCover(true)
 }
 
 function onFrameLoad() {
@@ -157,7 +168,15 @@ function onFrameLoad() {
 watch(
   () => props.active,
   (active) => {
-    if (active && capturePending) {
+    if (!active) {
+      return
+    }
+    if (reloadPending) {
+      reloadPending = false
+      reload(true)
+      return
+    }
+    if (capturePending) {
       scheduleCoverCapture()
     }
   },
@@ -196,7 +215,14 @@ function openInNewTab() {
 
 watch(
   () => props.refreshToken,
-  () => reload(true),
+  () => {
+    if (props.active) {
+      reload(true)
+      return
+    }
+    reloadPending = true
+    capturePending = true
+  },
 )
 
 watch(

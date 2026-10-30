@@ -1,6 +1,9 @@
 import hashlib
+import io
 import os
 import re
+import shutil
+import tarfile
 import tempfile
 from pathlib import Path
 
@@ -213,6 +216,48 @@ class Workspace:
             "dirCount": dir_count,
             "lastModifiedAt": last_modified_at,
         }
+
+    def archive(self, project_id: str) -> bytes:
+        project = self._existing_project(project_id)
+        buffer = io.BytesIO()
+        with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
+            for path in sorted(project.rglob("*")):
+                rel_parts = path.relative_to(project).parts
+                if any(part in IGNORED_PARTS for part in rel_parts) or path.is_dir():
+                    continue
+                archive.add(path, arcname=path.relative_to(project).as_posix(), recursive=False)
+        return buffer.getvalue()
+
+    def import_archive(self, project_id: str, data: bytes) -> None:
+        project = self._existing_project(project_id)
+        for child in project.iterdir():
+            if child.name in IGNORED_PARTS:
+                continue
+            if child.is_dir():
+                shutil.rmtree(child)
+            else:
+                child.unlink()
+        try:
+            with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as archive:
+                for member in archive.getmembers():
+                    if not member.isfile():
+                        continue
+                    rel = member.name.replace("\\", "/").lstrip("/")
+                    if not rel or rel.startswith("../") or "/../" in rel:
+                        raise WorkspaceError("invalid archive path")
+                    if any(part in IGNORED_PARTS for part in rel.split("/")):
+                        continue
+                    target = (project / rel).resolve()
+                    if not target.is_relative_to(project):
+                        raise WorkspaceError("invalid archive path")
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    source = archive.extractfile(member)
+                    if source is None:
+                        continue
+                    target.write_bytes(source.read())
+
+        except tarfile.TarError as exc:
+            raise WorkspaceError("invalid archive") from exc
 
     def read_file(self, project_id: str, rel_path: str) -> dict:
         path = self._resolve(project_id, rel_path)

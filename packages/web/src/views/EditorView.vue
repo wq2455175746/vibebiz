@@ -26,6 +26,7 @@ const logs = useLogStore()
 
 const id = computed(() => String(route.params.id))
 const activeTab = ref<'preview' | 'code' | 'console'>('preview')
+const previewReady = ref(false)
 const previewRevision = computed(() => chat.revision + files.revision)
 const headerRoles = computed(() =>
   (projectStore.current?.agentRoleIds ?? [])
@@ -128,6 +129,7 @@ function takeInitialPrompt(projectId: string) {
 async function load() {
   const projectId = id.value
   activeTab.value = 'preview'
+  previewReady.value = false
   stopBackgroundPolling()
   logs.clear()
   chat.reset()
@@ -150,11 +152,12 @@ async function load() {
   } catch {
     hasHistory = false
   }
-  const active = await chat.resume(projectId).catch(() => false)
+  const active = await chat.syncStatus(projectId).catch(() => false)
   await refreshProjectLogs(projectId)
   if (active) {
     startBackgroundPolling(projectId)
   }
+  previewReady.value = true
 
   const prompt = takeInitialPrompt(projectId)
   const references = takeInitialReferences(projectId)
@@ -242,6 +245,7 @@ onBeforeUnmount(() => {
 
         <div class="workbench-body">
           <PreviewPane
+            v-if="previewReady"
             v-show="activeTab === 'preview'"
             :project-id="id"
             :refresh-token="previewRevision"
