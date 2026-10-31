@@ -18,7 +18,7 @@ type DataSandbox interface {
 	handler.PreviewClient
 }
 
-func RegisterData(e *echo.Echo, sandbox DataSandbox, obs *observability.Provider, authn *auth.Authenticator, metas auth.ProjectMetaStore, resources *handler.ResourceHandler, roles handler.ProjectRoleResolver, covers *handler.CoverHandler, storageSyncer handler.StorageSyncer) {
+func RegisterData(e *echo.Echo, sandbox DataSandbox, obs *observability.Provider, authn *auth.Authenticator, metas auth.ProjectMetaStore, resources *handler.ResourceHandler, roles handler.ProjectRoleResolver, covers *handler.CoverHandler, storageSyncer handler.StorageSyncer, cloneHandler *handler.CloneHandler) {
 	files := handler.NewFileHandler(sandbox, obs)
 	chat := handler.NewChatHandler(sandbox, obs)
 	chat.Roles = roles
@@ -50,6 +50,13 @@ func RegisterData(e *echo.Echo, sandbox DataSandbox, obs *observability.Provider
 	projects.GET("/preview/*", preview.Serve)
 	if covers != nil {
 		projects.POST("/cover", covers.Upload)
+	}
+	if cloneHandler != nil {
+		projects.GET("/clone/assets", cloneHandler.ListAssets)
+		projects.POST("/clone/assets", cloneHandler.AddAsset)
+		projects.DELETE("/clone/assets/:resourceId", cloneHandler.DeleteAsset)
+		projects.PUT("/clone/assets/:resourceId/cover", cloneHandler.SetCover)
+		projects.POST("/clone/tests/run", cloneHandler.RunTests)
 	}
 
 	registerErrorHandler(e)

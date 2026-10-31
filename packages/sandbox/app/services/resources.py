@@ -14,8 +14,10 @@ RESOURCE_DIR = ".resources"
 MANIFEST_NAME = "manifest.json"
 MAX_RESOURCE_BYTES = 20 * 1024 * 1024
 MAX_PROJECT_RESOURCE_BYTES = 200 * 1024 * 1024
+MAX_CLONE_FILE_BYTES = 100 * 1024 * 1024
+MAX_CLONE_PROJECT_BYTES = 500 * 1024 * 1024
 RESOURCE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
-STORAGE_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}\.[A-Za-z0-9]{1,12}$")
+STORAGE_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}(\.[A-Za-z0-9]{1,16})?$")
 
 
 class ResourceStore:
@@ -73,8 +75,10 @@ class ResourceStore:
         original_name = str(meta.get("name", display_name)).strip()
         if not display_name or len(display_name) > 255 or not original_name:
             raise WorkspaceError("invalid resource name")
+        purpose = str(meta.get("purpose", "")).strip()
+        max_file_bytes, max_project_bytes = purpose_limits(purpose)
         size = len(body)
-        if size <= 0 or size > MAX_RESOURCE_BYTES:
+        if size <= 0 or size > max_file_bytes:
             raise TooLargeError("resource file is too large")
 
         async with self._lock(project_id):
@@ -86,7 +90,7 @@ class ResourceStore:
                     raise ConflictError("resource name already exists")
             total = sum(int(item.get("size", 0)) for item in files)
             previous = int(existing.get("size", 0)) if existing else 0
-            if total - previous + size > MAX_PROJECT_RESOURCE_BYTES:
+            if total - previous + size > max_project_bytes:
                 raise TooLargeError("project resource quota exceeded")
 
             root = self._root(project_id)
@@ -113,6 +117,7 @@ class ResourceStore:
                 "size": size,
                 "contentType": str(meta.get("contentType", "")),
                 "kind": str(meta.get("kind", "")),
+                "purpose": purpose,
                 "createdAt": (existing or {}).get("createdAt")
                 or datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             }
@@ -142,3 +147,11 @@ class ResourceStore:
             ]
             self._write_manifest(project_id, payload)
             return True
+
+
+def purpose_limits(purpose: str) -> tuple[int, int]:
+    if purpose == "clone_image":
+        return 10 * 1024 * 1024, MAX_CLONE_PROJECT_BYTES
+    if purpose in {"clone_unit_test", "clone_docs"}:
+        return MAX_CLONE_FILE_BYTES, MAX_CLONE_PROJECT_BYTES
+    return MAX_RESOURCE_BYTES, MAX_PROJECT_RESOURCE_BYTES

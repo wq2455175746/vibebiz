@@ -69,6 +69,22 @@ func (r *Router) WriteResource(ctx context.Context, projectID string, meta resou
 	return sandbox.WriteResource(ctx, projectID, meta, body, size)
 }
 
+func (r *Router) InitClone(ctx context.Context, projectID string, setup CloneSetup) error {
+	sandbox, err := r.client(ctx, projectID)
+	if err != nil {
+		return err
+	}
+	return sandbox.InitClone(ctx, projectID, setup)
+}
+
+func (r *Router) RunCloneTests(ctx context.Context, projectID string) (CloneTestResult, error) {
+	sandbox, err := r.client(ctx, projectID)
+	if err != nil {
+		return CloneTestResult{}, err
+	}
+	return sandbox.RunCloneTests(ctx, projectID)
+}
+
 func (r *Router) DeleteResource(ctx context.Context, projectID, resourceID string) error {
 	sandbox, err := r.client(ctx, projectID)
 	if err != nil {

@@ -127,3 +127,46 @@ func TestSandboxParseTask(t *testing.T) {
 		t.Fatalf("draft = %+v", draft)
 	}
 }
+
+func TestSandboxInitClone(t *testing.T) {
+	var received CloneSetup
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.Path != "/internal/projects/p1/clone" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&received); err != nil {
+			t.Fatal(err)
+		}
+		w.Write([]byte(`{"code":0,"message":"ok","result":{}}`))
+	}))
+	defer srv.Close()
+
+	setup := CloneSetup{
+		Name: "Acme", Description: "clone acme", SourceURL: "https://acme.example.com",
+		Assets: []CloneAssetMeta{{Role: "unit_test", Name: "tests.zip", StorageName: "r1.zip", ContentType: "application/zip", Kind: "document", Size: 10}},
+	}
+	if err := NewSandbox(srv.URL, nil).InitClone(context.Background(), "p1", setup); err != nil {
+		t.Fatalf("init clone: %v", err)
+	}
+	if received.Name != "Acme" || received.Assets[0].StorageName != "r1.zip" {
+		t.Fatalf("received = %+v", received)
+	}
+}
+
+func TestSandboxRunCloneTests(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/internal/projects/p1/clone/tests/run" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		w.Write([]byte(`{"code":0,"message":"ok","result":{"status":"passed","command":["python"],"exitCode":0,"output":"1 passed","durationMs":12,"reportPath":"docs/clone/test-report.md"}}`))
+	}))
+	defer srv.Close()
+
+	result, err := NewSandbox(srv.URL, nil).RunCloneTests(context.Background(), "p1")
+	if err != nil {
+		t.Fatalf("run tests: %v", err)
+	}
+	if result.Status != "passed" || result.ExitCode != 0 || result.ReportPath != "docs/clone/test-report.md" {
+		t.Fatalf("result = %+v", result)
+	}
+}

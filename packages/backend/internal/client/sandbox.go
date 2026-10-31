@@ -188,6 +188,7 @@ func (s *Sandbox) WriteResource(ctx context.Context, projectID string, meta reso
 	req.Header.Set("X-Resource-S3-Key", meta.S3Key)
 	req.Header.Set("X-Resource-Size", strconv.FormatInt(size, 10))
 	req.Header.Set("X-Resource-Kind", meta.Kind)
+	req.Header.Set("X-Resource-Purpose", meta.Purpose)
 
 	resp, err := s.http.Do(req)
 	if err != nil {
@@ -476,4 +477,48 @@ func (s *Sandbox) finishSpan(ctx context.Context, span trace.Span, operation, pr
 		return
 	}
 	s.obs.Log(ctx, slog.LevelInfo, "sandbox.call", attrs...)
+}
+
+type CloneAssetMeta struct {
+	Role        string `json:"role"`
+	Name        string `json:"name"`
+	StorageName string `json:"storageName"`
+	ContentType string `json:"contentType"`
+	Kind        string `json:"kind"`
+	Size        int64  `json:"size"`
+}
+
+type CloneSetup struct {
+	Name        string           `json:"name"`
+	Description string           `json:"description"`
+	SourceURL   string           `json:"sourceUrl"`
+	Assets      []CloneAssetMeta `json:"assets"`
+}
+
+type CloneTestResult struct {
+	Status     string   `json:"status"`
+	Command    []string `json:"command"`
+	ExitCode   int      `json:"exitCode"`
+	Output     string   `json:"output"`
+	DurationMs int64    `json:"durationMs"`
+	ReportPath string   `json:"reportPath"`
+}
+
+func (s *Sandbox) InitClone(ctx context.Context, id string, setup CloneSetup) error {
+	_, err := s.doJSON(ctx, "init_clone", id, http.MethodPut,
+		"/internal/projects/"+url.PathEscape(id)+"/clone", setup)
+	return err
+}
+
+func (s *Sandbox) RunCloneTests(ctx context.Context, id string) (CloneTestResult, error) {
+	raw, err := s.doJSON(ctx, "clone_tests_run", id, http.MethodPost,
+		"/internal/projects/"+url.PathEscape(id)+"/clone/tests/run", nil)
+	if err != nil {
+		return CloneTestResult{}, err
+	}
+	var result CloneTestResult
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return CloneTestResult{}, err
+	}
+	return result, nil
 }

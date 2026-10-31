@@ -31,6 +31,7 @@ async def write_resource(project_id: str, resource_id: str, request: Request) ->
         "contentType": request.headers.get("X-Resource-Content-Type", ""),
         "s3Key": request.headers.get("X-Resource-S3-Key", ""),
         "kind": request.headers.get("X-Resource-Kind", ""),
+        "purpose": request.headers.get("X-Resource-Purpose", ""),
     }
     body = await request.body()
     try:

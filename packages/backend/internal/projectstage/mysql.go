@@ -22,7 +22,14 @@ func NewMySQLStore(db *gorm.DB) *MySQLStore {
 }
 
 func (s *MySQLStore) CreateInitial(ctx context.Context, projectID string) error {
-	stages := InitialStages(projectID)
+	return s.CreateInitialForMode(ctx, projectID, model.ProjectModeEnterprise)
+}
+
+func (s *MySQLStore) CreateInitialForMode(ctx context.Context, projectID, mode string) error {
+	if mode == "" {
+		mode = model.ProjectModeEnterprise
+	}
+	stages := InitialStagesForMode(projectID, mode)
 	rows := make([]daomodel.ProjectStage, 0, len(stages))
 	for _, stage := range stages {
 		rows = append(rows, daomodel.ProjectStage{

@@ -15,6 +15,7 @@ import (
 	"vibebiz/internal/agentrole"
 	"vibebiz/internal/auth"
 	"vibebiz/internal/client"
+	"vibebiz/internal/clone"
 	"vibebiz/internal/config"
 	"vibebiz/internal/dao"
 	"vibebiz/internal/handler"
@@ -110,12 +111,17 @@ func main() {
 	resourceService := resource.NewService(dao.NewProjectResourceRepository(db), resourceS3, sandbox)
 	resourceService.Expiry = cfg.S3PresignExpiry()
 	resourceHandler := handler.NewResourceHandler(resourceService, obs)
+	cloneService := clone.NewService(nil, nil, nil, nil, nil, nil, resourceService, clone.NewMySQLStore(db))
+	cloneHandler := handler.NewCloneHandler(cloneService, obs)
+	cloneHandler.Tests = sandbox
 
 	projectStore, err := store.NewMySQLProjectStore(ctx, db)
 	if err != nil {
 		obs.Logger.Error("project store init failed", "error", err)
 		os.Exit(1)
 	}
+	cloneService.Projects = projectStore
+	cloneService.SandboxClone = sandbox
 	roleService := agentrole.NewService(agentrole.NewMySQLRepository(db), nil, 0)
 	roleResolver := role.NewResolver(projectStore, roleService)
 	storageSyncer := &storagesync.Syncer{
@@ -128,7 +134,7 @@ func main() {
 	coverHandler := handler.NewCoverHandler(projectStore, coverS3, cfg.S3PresignExpiry())
 
 	e := server.New(cfg, obs)
-	router.RegisterData(e, sandbox, obs, authn, metas, resourceHandler, roleResolver, coverHandler, storageSyncer)
+	router.RegisterData(e, sandbox, obs, authn, metas, resourceHandler, roleResolver, coverHandler, storageSyncer, cloneHandler)
 
 	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
 	go func() {

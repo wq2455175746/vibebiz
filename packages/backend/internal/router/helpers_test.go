@@ -231,7 +231,7 @@ func newCP(t *testing.T, projects store.ProjectStore) (*echo.Echo, *observabilit
 	obs := newProvider(t, "cp")
 	authState := newRouterAuth(t)
 	e := server.New(config.Config{Plane: "cp", ServiceName: "vibebiz-cp"}, obs)
-	RegisterControl(e, admin.NewMemoryRepository(), projects, staticProvisioner{id: 1}, obs, authState.authn, authState.handler, &handler.SettingsHandler{}, &handler.StorageHandler{}, authState.metas, newNotificationHandler(t), nil, newModelHandler(t), newRoleHandler(t), nil, 0, nil, nil, nil, nil, nil, nil, nil, nil)
+	RegisterControl(e, admin.NewMemoryRepository(), projects, staticProvisioner{id: 1}, obs, authState.authn, authState.handler, &handler.SettingsHandler{}, &handler.StorageHandler{}, authState.metas, newNotificationHandler(t), nil, newModelHandler(t), newRoleHandler(t), nil, 0, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	return e, obs, authState
 }
 
@@ -241,7 +241,7 @@ func newDP(t *testing.T, sandboxURL string) (*echo.Echo, *observability.Provider
 	authState := newRouterAuth(t)
 	authState.metas.items["p1"] = auth.ProjectMeta{WorkspaceID: 1, OwnerUserID: 7}
 	e := server.New(config.Config{Plane: "dp", ServiceName: "vibebiz-dp"}, obs)
-	RegisterData(e, client.NewRouter(singleResolver(sandboxURL), obs), obs, authState.authn, authState.metas, nil, nil, nil, nil)
+	RegisterData(e, client.NewRouter(singleResolver(sandboxURL), obs), obs, authState.authn, authState.metas, nil, nil, nil, nil, nil)
 	return e, obs, authState
 }
 

@@ -6,6 +6,7 @@ import { deleteStaging } from '@/api/resources'
 import { createProject, deleteProject, listProjects } from '@/api/projects'
 import { listTemplates, useTemplate as createFromTemplate } from '@/api/templates'
 import { fetchChatStatus } from '@/api/chat'
+import ClonePanel from '@/components/clone/ClonePanel.vue'
 import EnterpriseRoadmap from '@/components/enterprise/EnterpriseRoadmap.vue'
 import HomeDiscovery from '@/components/home/HomeDiscovery.vue'
 import HomeHero from '@/components/home/HomeHero.vue'
@@ -47,6 +48,7 @@ const isProjectsPage = computed(() => route.name === 'projects')
 const isResourcesPage = computed(() => route.name === 'resources')
 const isScheduledPage = computed(() => route.name === 'scheduled-tasks')
 const isEnterprisePage = computed(() => route.name === 'enterprise')
+const isClonesPage = computed(() => route.name === 'clones')
 const enterpriseProjects = computed(() =>
   projects.value.filter((project) => isEnterpriseProject(project)),
 )
@@ -324,6 +326,8 @@ onMounted(async () => {
           企业项目会强制使用团队角色，并按阶段锁定工作区。
         </p>
       </div>
+
+      <ClonePanel v-else-if="isClonesPage" />
 
       <ScheduledTasksPanel v-else-if="isScheduledPage" />
 

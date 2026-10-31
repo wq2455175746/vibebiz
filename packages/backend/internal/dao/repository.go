@@ -93,6 +93,8 @@ type Repositories struct {
 	ProjectTemplates         *Repository[model.ProjectTemplate]
 	Projects                 *Repository[model.Project]
 	ProjectStorages          *Repository[model.ProjectStorage]
+	ProjectCloneSources      *Repository[model.ProjectCloneSource]
+	ProjectCloneAssets       *Repository[model.ProjectCloneAsset]
 	ExternalResources        *Repository[model.ExternalResource]
 	ProjectExternalResources *Repository[model.ProjectExternalResource]
 	LLMModels                *Repository[model.LLMModel]
@@ -118,6 +120,8 @@ func NewRepositories(db *gorm.DB) *Repositories {
 		ProjectTemplates:         NewRepository[model.ProjectTemplate](db),
 		Projects:                 NewRepository[model.Project](db),
 		ProjectStorages:          NewRepository[model.ProjectStorage](db),
+		ProjectCloneSources:      NewRepository[model.ProjectCloneSource](db),
+		ProjectCloneAssets:       NewRepository[model.ProjectCloneAsset](db),
 		ExternalResources:        NewRepository[model.ExternalResource](db),
 		ProjectExternalResources: NewRepository[model.ProjectExternalResource](db),
 		LLMModels:                NewRepository[model.LLMModel](db),

@@ -22,6 +22,8 @@ func TestTableNames(t *testing.T) {
 		{&NotificationChannel{}, "notification_channel"},
 		{&FdeResource{}, "fde_resource"},
 		{&ProjectStorage{}, "project_storage"},
+		{&ProjectCloneSource{}, "project_clone_source"},
+		{&ProjectCloneAsset{}, "project_clone_asset"},
 		{&ExternalResource{}, "external_resource"},
 		{&ProjectExternalResource{}, "project_external_resource"},
 		{&LLMModel{}, "llm_model"},

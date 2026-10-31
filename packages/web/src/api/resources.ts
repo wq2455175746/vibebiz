@@ -7,6 +7,7 @@ export interface ResourcePresignInput {
   filename: string
   contentType: string
   size: number
+  purpose?: string
 }
 
 export interface ResourcePresign {

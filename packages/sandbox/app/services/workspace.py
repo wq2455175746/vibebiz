@@ -16,6 +16,7 @@ IGNORED_PARTS = {
     ".chathistory",
     ".resources",
     ".logs",
+    ".clone",
     "node_modules",
     "__pycache__",
     ".venv",

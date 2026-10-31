@@ -5,6 +5,7 @@ import "time"
 const (
 	ProjectModeStandard   = "standard"
 	ProjectModeEnterprise = "enterprise"
+	ProjectModeClone      = "clone"
 )
 
 const (

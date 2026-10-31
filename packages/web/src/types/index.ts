@@ -92,7 +92,7 @@ export interface PublishedProject {
 }
 
 export type ProjectStageStatus = 'locked' | 'active' | 'done' | 'placeholder'
-export type ProjectStageWorkspace = 'document' | 'development' | 'placeholder'
+export type ProjectStageWorkspace = 'document' | 'development' | 'test' | 'artifact' | 'placeholder'
 
 export interface ProjectStage {
   stageKey: string

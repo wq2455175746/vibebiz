@@ -10,10 +10,11 @@ from app.config import Settings, load_settings
 from app.errors import WorkspaceError
 from app.observability import configure_observability
 from app.response import envelope
-from app.routers import chat, files, logs, preview, projects, resources, skills, tasks
+from app.routers import chat, clone, files, logs, preview, projects, resources, skills, tasks
 from app.services.agent import build_agent
 from app.services.chat_history import ChatHistory
 from app.services.chat_turns import ChatTurnManager
+from app.services.clone import CloneService
 from app.services.project_logs import ProjectLogStore
 from app.services.registry import ActiveRequestCounter, ActiveRequestsMiddleware, run_heartbeat
 from app.services.resources import ResourceStore
@@ -51,6 +52,11 @@ def create_app(
         app.state.workspace, max_bytes=settings.chat_history_max_bytes
     )
     app.state.resources = ResourceStore(app.state.workspace)
+    app.state.clone = CloneService(
+        app.state.workspace,
+        timeout_seconds=settings.clone_test_timeout_seconds,
+        enabled=settings.clone_test_runner_enabled,
+    )
     app.state.project_logs = ProjectLogStore(settings.workspaces_dir)
     app.state.chat_turns = ChatTurnManager(
         app.state.agent,
@@ -67,6 +73,7 @@ def create_app(
     app.include_router(logs.router)
     app.include_router(skills.router)
     app.include_router(resources.router)
+    app.include_router(clone.router)
     app.include_router(preview.router)
     app.include_router(tasks.router)
 

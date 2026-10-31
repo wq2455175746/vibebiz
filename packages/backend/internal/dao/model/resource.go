@@ -48,6 +48,7 @@ type ProjectResource struct {
 	ContentType     string         `gorm:"column:content_type" json:"contentType"`
 	SizeBytes       int64          `gorm:"column:size_bytes" json:"sizeBytes"`
 	Kind            string         `gorm:"column:kind" json:"kind"`
+	Purpose         string         `gorm:"column:upload_purpose" json:"purpose"`
 	S3StagingKey    string         `gorm:"column:s3_staging_key" json:"s3StagingKey"`
 	S3Key           string         `gorm:"column:s3_key" json:"s3Key"`
 	Status          string         `gorm:"column:status" json:"status"`

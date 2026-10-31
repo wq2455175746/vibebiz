@@ -89,3 +89,42 @@ def test_storage_name_cannot_escape_resources(tmp_path):
     )
 
     assert response.status_code == 400
+
+
+def test_clone_docs_allows_large_file(tmp_path):
+    client = make_client(tmp_path)
+    init_project(client)
+    headers = resource_headers("res-clone", "spec.custom")
+    headers.update(
+        {
+            "X-Resource-Storage-Name": "res-clone.custom",
+            "X-Resource-Content-Type": "application/octet-stream",
+            "X-Resource-Purpose": "clone_docs",
+        }
+    )
+    body = b"x" * (25 * 1024 * 1024)
+    response = client.put(
+        "/internal/projects/p1/resources/res-clone", content=body, headers=headers
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["result"]["purpose"] == "clone_docs"
+
+
+def test_clone_image_rejects_over_ten_megabytes(tmp_path):
+    client = make_client(tmp_path)
+    init_project(client)
+    headers = resource_headers("res-image", "cover.png")
+    headers.update(
+        {
+            "X-Resource-Storage-Name": "res-image.png",
+            "X-Resource-Content-Type": "image/png",
+            "X-Resource-Kind": "image",
+            "X-Resource-Purpose": "clone_image",
+        }
+    )
+    response = client.put(
+        "/internal/projects/p1/resources/res-image",
+        content=b"x" * (10 * 1024 * 1024 + 1),
+        headers=headers,
+    )
+    assert response.status_code == 413

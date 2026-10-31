@@ -11,6 +11,8 @@ import (
 const (
 	WorkspaceDocument    = "document"
 	WorkspaceDevelopment = "development"
+	WorkspaceTest        = "test"
+	WorkspaceArtifact    = "artifact"
 	WorkspacePlaceholder = "placeholder"
 )
 
@@ -39,8 +41,27 @@ var Definitions = []Definition{
 	{Key: "delivery", Seq: 7, Title: "交付空间", Workspace: WorkspacePlaceholder},
 }
 
+var CloneDefinitions = []Definition{
+	{Key: "base_design", Seq: 1, Title: "基础设计", RoleCode: "bob", RoleName: "Bob · 系统架构师（目标分析）", ArtifactPath: "docs/clone/base-design.md", Workspace: WorkspaceDocument},
+	{Key: "architecture", Seq: 2, Title: "架构", RoleCode: "bob", RoleName: "Bob · 系统架构师（方案设计）", ArtifactPath: "docs/clone/architecture.md", Workspace: WorkspaceDocument},
+	{Key: "test", Seq: 3, Title: "测试", RoleCode: "qa", RoleName: "QA · 测试开发工程师", ArtifactPath: "docs/clone/test-plan.md", Workspace: WorkspaceTest},
+	{Key: "development", Seq: 4, Title: "全栈开发", RoleCode: "alex", RoleName: "Alex · 全栈工程师", ArtifactPath: "docs/clone/development.md", Workspace: WorkspaceDevelopment},
+	{Key: "artifacts", Seq: 5, Title: "制品空间", Workspace: WorkspaceArtifact},
+}
+
+func DefinitionsForMode(mode string) []Definition {
+	if mode == model.ProjectModeClone {
+		return CloneDefinitions
+	}
+	return Definitions
+}
+
 func DefinitionFor(key string) (Definition, bool) {
-	for _, definition := range Definitions {
+	return DefinitionForMode(model.ProjectModeEnterprise, key)
+}
+
+func DefinitionForMode(mode, key string) (Definition, bool) {
+	for _, definition := range DefinitionsForMode(mode) {
 		if definition.Key == key {
 			return definition, true
 		}
@@ -49,8 +70,13 @@ func DefinitionFor(key string) (Definition, bool) {
 }
 
 func InitialStages(projectID string) []model.ProjectStage {
-	stages := make([]model.ProjectStage, 0, len(Definitions))
-	for _, definition := range Definitions {
+	return InitialStagesForMode(projectID, model.ProjectModeEnterprise)
+}
+
+func InitialStagesForMode(projectID, mode string) []model.ProjectStage {
+	definitions := DefinitionsForMode(mode)
+	stages := make([]model.ProjectStage, 0, len(definitions))
+	for _, definition := range definitions {
 		status := model.ProjectStageLocked
 		switch {
 		case definition.Workspace == WorkspacePlaceholder:
@@ -68,6 +94,7 @@ func InitialStages(projectID string) []model.ProjectStage {
 
 type Store interface {
 	CreateInitial(ctx context.Context, projectID string) error
+	CreateInitialForMode(ctx context.Context, projectID, mode string) error
 	DeleteByProject(ctx context.Context, projectID string) error
 	List(ctx context.Context, projectID string) ([]model.ProjectStage, error)
 	Get(ctx context.Context, projectID, stageKey string) (*model.ProjectStage, error)

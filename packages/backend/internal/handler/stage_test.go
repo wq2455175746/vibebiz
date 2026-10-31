@@ -18,6 +18,7 @@ import (
 
 type fakeStageStore struct {
 	stages      map[string]model.ProjectStage
+	definitions []projectstage.Definition
 	startErr    error
 	completeErr error
 	nextKey     string
@@ -26,19 +27,24 @@ type fakeStageStore struct {
 }
 
 func newFakeStageStore() *fakeStageStore {
-	items := make(map[string]model.ProjectStage)
-	for _, stage := range projectstage.InitialStages("p1") {
-		items[stage.StageKey] = stage
-	}
-	return &fakeStageStore{stages: items}
+	return newFakeStageStoreForMode(model.ProjectModeEnterprise)
 }
 
-func (f *fakeStageStore) CreateInitial(context.Context, string) error   { return nil }
-func (f *fakeStageStore) DeleteByProject(context.Context, string) error { return nil }
+func newFakeStageStoreForMode(mode string) *fakeStageStore {
+	items := make(map[string]model.ProjectStage)
+	for _, stage := range projectstage.InitialStagesForMode("p1", mode) {
+		items[stage.StageKey] = stage
+	}
+	return &fakeStageStore{stages: items, definitions: projectstage.DefinitionsForMode(mode)}
+}
+
+func (f *fakeStageStore) CreateInitial(context.Context, string) error                { return nil }
+func (f *fakeStageStore) CreateInitialForMode(context.Context, string, string) error { return nil }
+func (f *fakeStageStore) DeleteByProject(context.Context, string) error              { return nil }
 
 func (f *fakeStageStore) List(_ context.Context, _ string) ([]model.ProjectStage, error) {
-	out := make([]model.ProjectStage, 0, len(projectstage.Definitions))
-	for _, definition := range projectstage.Definitions {
+	out := make([]model.ProjectStage, 0, len(f.definitions))
+	for _, definition := range f.definitions {
 		out = append(out, f.stages[definition.Key])
 	}
 	return out, nil
@@ -267,5 +273,57 @@ func TestCompleteStageMissingFileIsBadRequest(t *testing.T) {
 	e.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/cp/api/v1/projects/p1/stages/requirements/complete", nil))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func cloneStageProject() *model.Project {
+	return &model.Project{ID: "p1", WorkspaceID: 3, Mode: model.ProjectModeClone}
+}
+
+func TestListCloneStages(t *testing.T) {
+	_, e := newStageHandlerForTest(cloneStageProject(), newFakeStageStoreForMode(model.ProjectModeClone), &fakeStageSandbox{})
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/cp/api/v1/projects/p1/stages", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var env struct {
+		Result struct {
+			Mode   string `json:"mode"`
+			Stages []struct {
+				StageKey  string `json:"stageKey"`
+				Title     string `json:"title"`
+				Status    string `json:"status"`
+				Workspace string `json:"workspace"`
+			} `json:"stages"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatal(err)
+	}
+	if env.Result.Mode != model.ProjectModeClone || len(env.Result.Stages) != 5 {
+		t.Fatalf("result = %+v", env.Result)
+	}
+	if env.Result.Stages[0].StageKey != "base_design" || env.Result.Stages[2].Workspace != projectstage.WorkspaceTest {
+		t.Fatalf("stages = %+v", env.Result.Stages)
+	}
+}
+
+func TestCloneArtifactStageCompletesWithoutArtifactFile(t *testing.T) {
+	stages := newFakeStageStoreForMode(model.ProjectModeClone)
+	artifact := stages.stages["artifacts"]
+	artifact.Status = model.ProjectStageActive
+	now := time.Now().UTC()
+	artifact.StartedAt = &now
+	stages.stages["artifacts"] = artifact
+	_, e := newStageHandlerForTest(cloneStageProject(), stages, &fakeStageSandbox{})
+	req := httptest.NewRequest(http.MethodPost, "/cp/api/v1/projects/p1/stages/artifacts/complete", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if stages.stages["artifacts"].Status != model.ProjectStageDone {
+		t.Fatalf("artifact stage = %+v", stages.stages["artifacts"])
 	}
 }

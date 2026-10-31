@@ -89,6 +89,8 @@
 | GET | `/projects/:id` | 用户登录 + 工作区过滤；读取 MySQL `project` |
 | DELETE | `/projects/:id` | 用户登录 + 工作区过滤 |
 | GET | `/projects/:id/chat/history` | 用户登录 + 工作区过滤；`GET /internal/projects/{id}/chat/history` |
+| POST/GET | `/clones` | 创建 / 列表克隆项目（`mode=clone`） |
+| GET/DELETE | `/clones/:id` | 克隆详情 / 删除 |
 | POST | `/admin/auth/login` | 公开，ops 登录 |
 | GET | `/admin/auth/me` | ops Cookie |
 | POST | `/admin/auth/logout` | ops Cookie |
@@ -112,6 +114,10 @@
 | POST | `/projects/:id/chat/stop` | `POST /internal/projects/{id}/chat/stop` |
 | GET | `/projects/:id/chat/status` | `GET /internal/projects/{id}/chat/status` |
 | GET | `/projects/:id/preview/*` | `GET /internal/projects/{id}/preview/*` |
+| GET/POST | `/projects/:id/clone/assets` | 克隆附件列表 / 追加 |
+| DELETE | `/projects/:id/clone/assets/:resourceId` | 删除克隆附件 |
+| PUT | `/projects/:id/clone/assets/:resourceId/cover` | 设为主图 |
+| POST | `/projects/:id/clone/tests/run` | 触发 sandbox 单测执行并写 `docs/clone/test-report.md` |
 
 DP 不注册项目列表 / 创建 / 详情，也不注册任何 admin 路由。CP 不注册任何 `/dp/*` 路由。
 
@@ -179,6 +185,11 @@ data/workspaces/<projectId>/
 - 版本号：`sha256(content).hexdigest()[:12]`。
 - 二进制：前 8KB 含 NUL 即 `isBinary=true`，正文不返回。
 - 每轮 Agent 结束自动 `git commit`；commit sha 作为版本。
+
+- `project.mode`：`standard` / `enterprise` / `clone`。`enterprise` 使用 7 阶段；`clone` 使用 5 阶段（基础设计、架构、测试、全栈开发、制品空间），无交付空间。
+- 克隆阶段 `artifacts` 使用 `artifact` 工作区，全栈开发完成后解锁；`test` 使用 `test` 工作区。
+- `project_resource.upload_purpose` 区分默认资源与 `clone_image` / `clone_unit_test` / `clone_docs` 限额：图片 10MB，zip/文档 100MB，克隆项目总量 500MB。
+- sandbox 内部克隆接口：`PUT /internal/projects/{id}/clone` 同步 `.clone/source.json` 并解压单测；`POST /internal/projects/{id}/clone/tests/run` 执行受控测试并写报告。`.clone` 与 `.resources` 不进入文件树、预览和 git。
 
 ## 6. Agent 规则（M0 stub / M1 真实）
 

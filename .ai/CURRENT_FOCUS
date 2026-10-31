@@ -1,10 +1,10 @@
 {
   "service": "all",
-  "task_id": "m0-harness-scaffold",
-  "task_name": "M0 Harness + Auth / Workspace Settings",
+  "task_id": "clone-capability-e2e",
+  "task_name": "克隆能力 sandbox 打通 + 前端走 MySQL",
   "status": "completed",
-  "started_at": "2026-10-28",
-  "description": "在 M0 harness 与 MySQL/goose 基础上，加入 web/ops-web 本地账号登录、HttpOnly Cookie、Redis Session、CP/DP/admin 鉴权与工作区项目隔离；项目仍为内存存储，工作区成员关系登录时快照。",
+  "started_at": "2026-10-31",
+  "description": "sandbox 同步 .clone/source.json、解压并执行单测、写测试报告；web 克隆页与编辑器切换到 CP/DP + MySQL；完成真实创建/上传/阶段启动/单测执行验证。",
   "milestones": {
     "根目录与开发命令": "2026-10-28 - 根聚合 Makefile / 各 package Makefile+.env.example / docker-compose / scripts/dev.sh",
     "Go 网关骨架": "2026-10-28 - 项目、文件、SSE、预览代理 + httptest",
@@ -25,7 +25,10 @@
     "Go DAO 基础层": "2026-10-28 - internal/dao：GORM MySQL 连接 + 20 表 model + 泛型 Repository + sqlmock；未接 handler/业务逻辑",
     "Goose 迁移": "2026-10-28 - 4 个版本化 SQL + goose 执行器 + make db-create/db-migrate-*",
     "登录与工作区隔离": "2026-10-29 - web/ops 双登录 + Redis Session + CP/DP/admin 保护 + 工作区共享项目 + 默认账号 seed + 域名配置",
-    "设置与存储": "2026-10-29 - 设置页四模块 + 工作区切换 + S3 头像 + 磁盘统计 + 成员邀请"
+    "设置与存储": "2026-10-29 - 设置页四模块 + 工作区切换 + S3 头像 + 磁盘统计 + 成员邀请",
+    "克隆前端": "2026-10-31 - 菜单 / 空态 / 创建 Dialog / 附件 / 5 阶段编辑器 / localStorage / vitest 19 + store 6",
+    "克隆后端": "2026-10-31 - mode=clone / 5 阶段 / CP clones CRUD / DP assets / purpose limits / migration v23 / 单测通过",
+    "克隆端到端": "2026-10-31 - sandbox clone source/tests + 前端真实接口 + E2E 创建/附件/阶段启动/单测报告"
   },
   "completed_tasks": [
     "根目录：README / AGENTS / Makefile / docker-compose.yml / .gitignore / scripts/dev.sh；配置在 packages/*/.env.example",
@@ -54,9 +57,27 @@
     "工作区：Session CurrentWorkspaceID、首页切换、默认自有工作区、成员邀请",
     "S3：用户/工作区头像预签名 PUT/GET + HeadObject 校验；真实上传冒烟通过",
     "存储：sandbox stats + CP 聚合 + 10GB 配额 + 项目大小/文件数/时间",
-    "头像上传兼容：预签名直传失败时自动回退 CP 代理上传；真实 S3 fallback 冒烟通过"
+    "头像上传兼容：预签名直传失败时自动回退 CP 代理上传；真实 S3 fallback 冒烟通过",
+    "克隆前端：types/clone + utils/clone 纯函数与 19 项 vitest",
+    "克隆前端：Pinia cloneProjects store + localStorage 持久化与 6 项测试",
+    "克隆前端：ClonePanel / CloneCreateDialog / CloneAssetField / CloneAssetsDialog",
+    "克隆前端：CloneEditorView 5 阶段逐步开始/确认、测试运行、开发页签、制品构建 mock",
+    "克隆前端：侧栏入口 / 路由 / 详情列表 / 移动端样式 / Playwright 视觉检查",
+    "克隆后端：project.mode=clone + 5 阶段定义 + 阶段按 mode 查询/推进",
+    "克隆后端：project_clone_source/project_clone_asset 模型、MySQL store 与迁移 v23（已执行）",
+    "克隆后端：CP POST/GET /clones、GET/DELETE /clones/:id，含初始化、角色、Harness、资源采纳与回滚",
+    "克隆后端：DP clone assets 列表/追加/删除/设主图",
+    "克隆后端：resource upload_purpose 与 10MB/100MB/500MB 限额",
+    "克隆后端：go test ./...、go vet、make validate 全部通过",
+    "克隆 sandbox：.clone/source.json、单测 zip 安全解压、pytest/npm 受控执行、测试报告",
+    "克隆前端：CP/DP API、资源 purpose 上传、MySQL 列表/创建/详情/附件、真实阶段/聊天/预览/终端",
+    "克隆前端：测试阶段执行单测并读取报告，制品空间展示真实项目统计",
+    "克隆 E2E：真实账号创建项目、上传图片/zip/文档、sandbox 解压通过、pytest 通过、阶段启动成功",
+    "验证：pytest 100、go test/vet、web 199 tests/build/lint、make validate 全部通过"
   ],
   "next_tasks": [
+    "克隆制品空间：源码归档、镜像构建与版本说明",
+    "通用项目删除级联清理工作区、克隆附件与阶段记录",
     "接 CP ProjectStore 与 admin Repository 到 DAO；先不写业务 handler",
     "按 docs/superpowers/specs/2026-10-28-business-database-design.md 补迁移后的索引/种子校验",
     "首页细节：导航交互、真实模板卡片、工具连接区、移动端侧栏抽屉",
@@ -72,5 +93,5 @@
     "工作区成员角色管理 / 移除成员；邀请后 Session 自动刷新",
     "把 CP ProjectStore 与 admin Repository 接入 MySQL；项目归属迁移到 project 表"
   ],
-  "updated_at": "2026-10-29T01:41:24.529782"
+  "updated_at": "2026-10-31T22:40:51.037764"
 }

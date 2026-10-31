@@ -61,7 +61,7 @@ type stageMutationResponse struct {
 }
 
 func (h *StageHandler) List(c echo.Context) error {
-	project, ok := h.enterpriseProject(c)
+	project, ok := h.flowProject(c)
 	if !ok {
 		return nil
 	}
@@ -78,7 +78,7 @@ func (h *StageHandler) List(c echo.Context) error {
 		}
 	}
 	stages := make([]stageView, 0, len(projectstage.Definitions))
-	for _, definition := range projectstage.Definitions {
+	for _, definition := range projectstage.DefinitionsForMode(project.Mode) {
 		item, exists := byKey[definition.Key]
 		if !exists {
 			continue
@@ -89,11 +89,11 @@ func (h *StageHandler) List(c echo.Context) error {
 }
 
 func (h *StageHandler) Start(c echo.Context) error {
-	project, ok := h.enterpriseProject(c)
+	project, ok := h.flowProject(c)
 	if !ok {
 		return nil
 	}
-	definition, found := projectstage.DefinitionFor(c.Param("stageKey"))
+	definition, found := projectstage.DefinitionForMode(project.Mode, c.Param("stageKey"))
 	if !found {
 		return response.Fail(c, http.StatusNotFound, 40402, "stage not found")
 	}
@@ -127,11 +127,11 @@ func (h *StageHandler) Start(c echo.Context) error {
 }
 
 func (h *StageHandler) Complete(c echo.Context) error {
-	project, ok := h.enterpriseProject(c)
+	project, ok := h.flowProject(c)
 	if !ok {
 		return nil
 	}
-	definition, found := projectstage.DefinitionFor(c.Param("stageKey"))
+	definition, found := projectstage.DefinitionForMode(project.Mode, c.Param("stageKey"))
 	if !found {
 		return response.Fail(c, http.StatusNotFound, 40402, "stage not found")
 	}
@@ -146,23 +146,25 @@ func (h *StageHandler) Complete(c echo.Context) error {
 	if stage.StartedAt == nil {
 		return response.Fail(c, http.StatusConflict, 40902, "stage has not started")
 	}
-	status, err := h.Sandbox.ChatStatus(ctx, project.ID)
-	if err != nil {
-		return failFromSandbox(c, err, "read agent status failed")
-	}
-	if status.Active {
-		return response.Fail(c, http.StatusConflict, 40903, "agent is still running")
-	}
-	file, err := h.Sandbox.ReadFile(ctx, project.ID, definition.ArtifactPath)
-	if err != nil {
-		var apiErr *client.APIError
-		if errors.As(err, &apiErr) && apiErr.Status == http.StatusNotFound {
-			return response.Fail(c, http.StatusBadRequest, 40011, "stage artifact missing")
+	if definition.Workspace != projectstage.WorkspaceArtifact {
+		status, err := h.Sandbox.ChatStatus(ctx, project.ID)
+		if err != nil {
+			return failFromSandbox(c, err, "read agent status failed")
 		}
-		return failFromSandbox(c, err, "read stage artifact failed")
-	}
-	if strings.TrimSpace(file.Content) == "" {
-		return response.Fail(c, http.StatusBadRequest, 40011, "stage artifact is empty")
+		if status.Active {
+			return response.Fail(c, http.StatusConflict, 40903, "agent is still running")
+		}
+		file, err := h.Sandbox.ReadFile(ctx, project.ID, definition.ArtifactPath)
+		if err != nil {
+			var apiErr *client.APIError
+			if errors.As(err, &apiErr) && apiErr.Status == http.StatusNotFound {
+				return response.Fail(c, http.StatusBadRequest, 40011, "stage artifact missing")
+			}
+			return failFromSandbox(c, err, "read stage artifact failed")
+		}
+		if strings.TrimSpace(file.Content) == "" {
+			return response.Fail(c, http.StatusBadRequest, 40011, "stage artifact is empty")
+		}
 	}
 	now := h.now()
 	nextKey, err := h.Stages.Complete(ctx, project.ID, definition.Key, now)
@@ -176,7 +178,7 @@ func (h *StageHandler) Complete(c echo.Context) error {
 	stage.CompletedAt = &now
 	result := stageMutationResponse{Stage: viewStage(definition, *stage)}
 	if nextKey != "" {
-		if nextDefinition, exists := projectstage.DefinitionFor(nextKey); exists {
+		if nextDefinition, exists := projectstage.DefinitionForMode(project.Mode, nextKey); exists {
 			if nextStage, err := h.Stages.Get(ctx, project.ID, nextKey); err == nil {
 				view := viewStage(nextDefinition, *nextStage)
 				result.NextStage = &view
@@ -189,7 +191,7 @@ func (h *StageHandler) Complete(c echo.Context) error {
 	return response.OK(c, result)
 }
 
-func (h *StageHandler) enterpriseProject(c echo.Context) (*model.Project, bool) {
+func (h *StageHandler) flowProject(c echo.Context) (*model.Project, bool) {
 	session, ok := auth.SessionFrom(c)
 	if !ok {
 		_ = response.Fail(c, http.StatusUnauthorized, 40101, "unauthorized")
@@ -208,8 +210,8 @@ func (h *StageHandler) enterpriseProject(c echo.Context) (*model.Project, bool) 
 		_ = response.Fail(c, http.StatusNotFound, 40401, "project not found")
 		return nil, false
 	}
-	if project.Mode != model.ProjectModeEnterprise {
-		_ = response.Fail(c, http.StatusBadRequest, 40012, "not an enterprise project")
+	if project.Mode != model.ProjectModeEnterprise && project.Mode != model.ProjectModeClone {
+		_ = response.Fail(c, http.StatusBadRequest, 40012, "not a staged project")
 		return nil, false
 	}
 	return project, true

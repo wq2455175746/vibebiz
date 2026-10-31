@@ -19,6 +19,7 @@ import (
 	"vibebiz/internal/agentrole"
 	"vibebiz/internal/auth"
 	"vibebiz/internal/client"
+	"vibebiz/internal/clone"
 	"vibebiz/internal/config"
 	"vibebiz/internal/dao"
 	"vibebiz/internal/fderesource"
@@ -32,6 +33,7 @@ import (
 	"vibebiz/internal/projecttemplate"
 	"vibebiz/internal/publish"
 	"vibebiz/internal/requestcount"
+	"vibebiz/internal/resource"
 	"vibebiz/internal/router"
 	storages3 "vibebiz/internal/s3"
 	"vibebiz/internal/sandboxregistry"
@@ -128,6 +130,7 @@ func main() {
 		os.Exit(1)
 	}
 	stageStore := projectstage.NewMySQLStore(db)
+	cloneStore := clone.NewMySQLStore(db)
 	requestCounter := requestcount.NewCounter(redisClient, redisPrefix)
 	adminRepo := admin.NewMySQLRepository(db, requestCounter)
 	var modelCipher *secret.Cipher
@@ -152,6 +155,17 @@ func main() {
 		harnessImporter = harnesssvc.NewService(s3Presigner, sandboxRouter, cfg.EnterpriseHarnessS3Key)
 	}
 	registryHandler := handler.NewSandboxRegistryHandler(registryRepo, cfg.SandboxRegistryToken, obs)
+	var resourceS3 resource.S3
+	if s3Presigner != nil {
+		resourceS3 = s3Presigner
+	}
+	resourceService := resource.NewService(dao.NewProjectResourceRepository(db), resourceS3, sandboxRouter)
+	resourceService.Expiry = cfg.S3PresignExpiry()
+	cloneService := clone.NewService(projectStore, provisioner, stageStore, harnessImporter, metas, roleService, resourceService, cloneStore)
+	cloneService.SandboxClone = sandboxRouter
+	cloneService.Covers = avatarPresigner
+	cloneService.CoverExpiry = cfg.S3PresignExpiry()
+	cloneHandler := handler.NewCloneHandler(cloneService, obs)
 	storageHandler := &handler.StorageHandler{Projects: projectStore, Storage: storagesync.NewMySQLRepository(db), Account: accountService}
 
 	notificationRepo := dao.NewNotificationRepository(db)
@@ -260,7 +274,7 @@ func main() {
 	templateHandler := handler.NewTemplateHandler(templateService, projectStore, provisioner, sandboxRouter)
 	templateHandler.Metas = metas
 
-	router.RegisterControl(e, adminRepo, projectStore, provisioner, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler, registryHandler, modelHandler, roleHandler, avatarPresigner, cfg.S3PresignExpiry(), sandboxRouter, templateHandler, harnessImporter, stageStore, sandboxRouter, notificationChannelHandler, fdeResourceHandler, publishHandler)
+	router.RegisterControl(e, adminRepo, projectStore, provisioner, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler, registryHandler, modelHandler, roleHandler, avatarPresigner, cfg.S3PresignExpiry(), sandboxRouter, templateHandler, harnessImporter, stageStore, sandboxRouter, notificationChannelHandler, fdeResourceHandler, publishHandler, cloneHandler)
 	router.RegisterScheduledTasks(e, scheduledHandler, authn)
 	router.RegisterChatHistory(e, handler.NewChatHistoryHandler(sandboxRouter, projectStore), authn)
 

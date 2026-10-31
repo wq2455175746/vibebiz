@@ -28,6 +28,7 @@ type resourcePresignRequest struct {
 	Filename    string `json:"filename"`
 	ContentType string `json:"contentType"`
 	Size        int64  `json:"size"`
+	Purpose     string `json:"purpose"`
 }
 
 type resourceAdoptRequest struct {
@@ -44,7 +45,7 @@ func (h *ResourceHandler) Presign(c echo.Context) error {
 		return response.Fail(c, http.StatusBadRequest, 40001, "invalid request body")
 	}
 	result, err := h.Service.Presign(c.Request().Context(), session.CurrentWorkspaceID, session.UserID, resource.PresignInput{
-		Filename: req.Filename, ContentType: req.ContentType, Size: req.Size,
+		Filename: req.Filename, ContentType: req.ContentType, Size: req.Size, Purpose: req.Purpose,
 	})
 	if err != nil {
 		h.log(c, "resource.presign", "", err)
@@ -72,12 +73,12 @@ func (h *ResourceHandler) UploadStaging(c echo.Context) error {
 		return response.Fail(c, http.StatusUnauthorized, 40101, "unauthorized")
 	}
 	resourceID := c.Param("resourceId")
-	body, err := io.ReadAll(io.LimitReader(c.Request().Body, resource.MaxFileBytes+1))
+	body, err := io.ReadAll(io.LimitReader(c.Request().Body, resource.MaxUploadBytes+1))
 	if err != nil {
 		return response.Fail(c, http.StatusBadRequest, 40006, "invalid request body")
 	}
 	size := int64(len(body))
-	if size > resource.MaxFileBytes {
+	if size > resource.MaxUploadBytes {
 		return response.Fail(c, http.StatusRequestEntityTooLarge, 41301, "resource file is too large")
 	}
 	if err := h.Service.UploadStaging(c.Request().Context(), session.CurrentWorkspaceID, session.UserID, resourceID, bytes.NewReader(body), size, c.Request().Header.Get(echo.HeaderContentType)); err != nil {

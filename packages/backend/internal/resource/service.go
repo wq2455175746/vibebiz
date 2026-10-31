@@ -16,8 +16,16 @@ import (
 )
 
 const (
-	MaxFileBytes    int64 = 20 << 20
-	MaxProjectBytes int64 = 200 << 20
+	MaxFileBytes         int64 = 20 << 20
+	MaxProjectBytes      int64 = 200 << 20
+	MaxCloneFileBytes    int64 = 100 << 20
+	MaxCloneProjectBytes int64 = 500 << 20
+	MaxUploadBytes       int64 = MaxCloneFileBytes
+
+	PurposeDefault       = ""
+	PurposeCloneImage    = "clone_image"
+	PurposeCloneUnitTest = "clone_unit_test"
+	PurposeCloneDocs     = "clone_docs"
 )
 
 var (
@@ -66,6 +74,7 @@ type PresignInput struct {
 	Filename    string
 	ContentType string
 	Size        int64
+	Purpose     string
 }
 
 type PresignResult struct {
@@ -83,6 +92,7 @@ type ResourceMeta struct {
 	S3Key       string `json:"s3Key"`
 	Size        int64  `json:"size"`
 	Kind        string `json:"kind"`
+	Purpose     string `json:"purpose"`
 }
 
 type Item struct {
@@ -94,6 +104,7 @@ type Item struct {
 	ContentType string    `json:"contentType"`
 	Size        int64     `json:"size"`
 	Kind        string    `json:"kind"`
+	S3Key       string    `json:"-"`
 	CreatedAt   time.Time `json:"createdAt"`
 }
 
@@ -118,11 +129,16 @@ func (s *Service) Presign(ctx context.Context, workspaceID, userID int64, input 
 		return PresignResult{}, ErrInvalidFile
 	}
 	ext := strings.ToLower(filepath.Ext(original))
-	contentType, kind, err := validateFile(original, ext, input.ContentType)
+	purpose, ok := normalizePurpose(input.Purpose)
+	if !ok {
+		return PresignResult{}, ErrInvalidFile
+	}
+	maxFile, _ := purposeLimits(purpose)
+	contentType, kind, err := validateForPurpose(original, ext, input.ContentType, purpose)
 	if err != nil {
 		return PresignResult{}, err
 	}
-	if input.Size <= 0 || input.Size > MaxFileBytes {
+	if input.Size <= 0 || input.Size > maxFile {
 		return PresignResult{}, ErrTooLarge
 	}
 	resourceID := s.NewID()
@@ -142,6 +158,7 @@ func (s *Service) Presign(ctx context.Context, workspaceID, userID int64, input 
 		ContentType:  contentType,
 		SizeBytes:    input.Size,
 		Kind:         kind,
+		Purpose:      purpose,
 		S3StagingKey: key,
 		Status:       "staging",
 	}
@@ -166,14 +183,15 @@ func (s *Service) UploadStaging(ctx context.Context, workspaceID, userID int64, 
 	if item.WorkspaceID != workspaceID || item.UserID != userID || item.ProjectPublicID != nil || item.Status != "staging" {
 		return ErrNotFound
 	}
-	normalized, _, err := validateFile(item.OriginalName, filepath.Ext(item.OriginalName), contentType)
+	maxFile, _ := purposeLimits(item.Purpose)
+	normalized, _, err := validateForPurpose(item.OriginalName, filepath.Ext(item.OriginalName), contentType, item.Purpose)
 	if err != nil {
 		return err
 	}
 	if normalized != item.ContentType {
 		return ErrInvalidFile
 	}
-	if size <= 0 || size > MaxFileBytes || size != item.SizeBytes {
+	if size <= 0 || size > maxFile || size != item.SizeBytes {
 		return ErrTooLarge
 	}
 	return s.S3.Put(ctx, item.S3StagingKey, item.ContentType, size, body)
@@ -203,12 +221,13 @@ func (s *Service) Adopt(ctx context.Context, workspaceID, userID int64, projectI
 	if err != nil {
 		return Item{}, err
 	}
-	if size <= 0 || size > MaxFileBytes || size != item.SizeBytes {
+	maxFile, maxProject := purposeLimits(item.Purpose)
+	if size <= 0 || size > maxFile || size != item.SizeBytes {
 		s.fail(ctx, item)
 		_ = s.S3.Delete(ctx, item.S3StagingKey)
 		return Item{}, ErrTooLarge
 	}
-	normalized, kind, err := validateFile(item.OriginalName, filepath.Ext(item.OriginalName), contentType)
+	normalized, kind, err := validateForPurpose(item.OriginalName, filepath.Ext(item.OriginalName), contentType, item.Purpose)
 	if err != nil {
 		s.fail(ctx, item)
 		_ = s.S3.Delete(ctx, item.S3StagingKey)
@@ -230,7 +249,7 @@ func (s *Service) Adopt(ctx context.Context, workspaceID, userID int64, projectI
 	if err != nil {
 		return Item{}, err
 	}
-	if total+size > MaxProjectBytes {
+	if total+size > maxProject {
 		s.fail(ctx, item)
 		_ = s.S3.Delete(ctx, item.S3StagingKey)
 		return Item{}, ErrProjectFull
@@ -253,7 +272,7 @@ func (s *Service) Adopt(ctx context.Context, workspaceID, userID int64, projectI
 	item.S3Key = finalKey
 	meta := ResourceMeta{
 		ID: item.ResourceID, DisplayName: item.DisplayName, StorageName: item.StorageName,
-		ContentType: item.ContentType, S3Key: item.S3Key, Size: item.SizeBytes, Kind: item.Kind,
+		ContentType: item.ContentType, S3Key: item.S3Key, Size: item.SizeBytes, Kind: item.Kind, Purpose: item.Purpose,
 	}
 	if err := s.Sandbox.WriteResource(ctx, projectID, meta, body, size); err != nil {
 		s.fail(ctx, item)
@@ -330,7 +349,7 @@ func toItem(item model.ProjectResource) Item {
 	return Item{
 		ID: item.ResourceID, Name: item.OriginalName, DisplayName: item.DisplayName,
 		StorageName: item.StorageName, Path: ".resources/" + item.StorageName,
-		ContentType: item.ContentType, Size: item.SizeBytes, Kind: item.Kind, CreatedAt: item.CreatedAt,
+		ContentType: item.ContentType, Size: item.SizeBytes, Kind: item.Kind, S3Key: item.S3Key, CreatedAt: item.CreatedAt,
 	}
 }
 
@@ -352,6 +371,74 @@ func uniqueName(original string, existing []model.ProjectResource, selfID string
 			return candidate
 		}
 	}
+}
+
+func normalizePurpose(purpose string) (string, bool) {
+	switch purpose {
+	case PurposeDefault, PurposeCloneImage, PurposeCloneUnitTest, PurposeCloneDocs:
+		return purpose, true
+	default:
+		return "", false
+	}
+}
+
+func purposeLimits(purpose string) (int64, int64) {
+	switch purpose {
+	case PurposeCloneImage:
+		return 10 << 20, MaxCloneProjectBytes
+	case PurposeCloneUnitTest, PurposeCloneDocs:
+		return MaxCloneFileBytes, MaxCloneProjectBytes
+	default:
+		return MaxFileBytes, MaxProjectBytes
+	}
+}
+
+func validateForPurpose(name, ext, rawType, purpose string) (string, string, error) {
+	switch purpose {
+	case PurposeCloneImage:
+		contentType, kind, err := validateFile(name, ext, rawType)
+		if err != nil || kind != "image" {
+			return "", "", ErrInvalidFile
+		}
+		return contentType, kind, nil
+	case PurposeCloneUnitTest:
+		if ext != ".zip" {
+			return "", "", ErrInvalidFile
+		}
+		contentType := normalizeContentType(rawType)
+		if contentType == "" || contentType == "application/octet-stream" {
+			contentType = "application/zip"
+		}
+		if !zipMIME[contentType] {
+			return "", "", ErrInvalidFile
+		}
+		return contentType, "document", nil
+	case PurposeCloneDocs:
+		if strings.TrimSpace(name) == "" {
+			return "", "", ErrInvalidFile
+		}
+		contentType := normalizeContentType(rawType)
+		if contentType == "" || contentType == "application/octet-stream" {
+			contentType = mimeByExt[ext]
+		}
+		if contentType == "" {
+			contentType = "application/octet-stream"
+		}
+		return contentType, "document", nil
+	default:
+		return validateFile(name, ext, rawType)
+	}
+}
+
+func normalizeContentType(rawType string) string {
+	return strings.ToLower(strings.TrimSpace(strings.Split(rawType, ";")[0]))
+}
+
+var zipMIME = map[string]bool{
+	"application/zip":              true,
+	"application/x-zip-compressed": true,
+	"application/x-zip":            true,
+	"multipart/x-zip":              true,
 }
 
 func validateFile(name, ext, rawType string) (string, string, error) {

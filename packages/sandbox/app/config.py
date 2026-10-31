@@ -29,6 +29,8 @@ class Settings:
     registry_token: str = ""
     heartbeat_interval: float = 5.0
     max_concurrency: int = 8
+    clone_test_runner_enabled: bool = True
+    clone_test_timeout_seconds: int = 120
 
 
 def _seconds(name: str, default: float) -> float:
@@ -76,4 +78,7 @@ def load_settings() -> Settings:
         registry_token=os.getenv("SANDBOX_REGISTRY_TOKEN", "").strip(),
         heartbeat_interval=max(1.0, _seconds("SANDBOX_HEARTBEAT_INTERVAL", 5.0)),
         max_concurrency=max(1, int(os.getenv("SANDBOX_MAX_CONCURRENCY", "8"))),
+        clone_test_runner_enabled=os.getenv("CLONE_TEST_RUNNER_ENABLED", "true").strip().lower()
+        not in {"0", "false", "no", "off"},
+        clone_test_timeout_seconds=max(1, int(os.getenv("CLONE_TEST_TIMEOUT_SECONDS", "120"))),
     )
