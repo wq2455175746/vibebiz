@@ -13,6 +13,7 @@ import type {
   K8sConnection,
 } from '@/types/enterpriseSpace'
 import { loadConnections, saveConnections } from '@/utils/enterpriseConnections'
+import { randomId } from '@/utils/id'
 
 export const useEnterpriseConnectionsStore = defineStore('enterpriseConnections', () => {
   const connections = ref<EnterpriseConnection[]>(loadConnections())
@@ -44,7 +45,7 @@ export const useEnterpriseConnectionsStore = defineStore('enterpriseConnections'
     const now = new Date().toISOString()
     const connection = {
       ...input,
-      id: crypto.randomUUID(),
+      id: randomId(),
       createdAt: now,
       updatedAt: now,
     } as EnterpriseConnection

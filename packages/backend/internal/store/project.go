@@ -20,6 +20,7 @@ type ProjectStore interface {
 	Delete(ctx context.Context, id string) error
 	SetAgentRoles(ctx context.Context, id string, roleIDs []int64) error
 	SetCover(ctx context.Context, id, key string) error
+	SetPreviewPath(ctx context.Context, id, previewPath string) error
 }
 
 type MemoryProjectStore struct {
@@ -134,6 +135,17 @@ func (s *MemoryProjectStore) SetCover(_ context.Context, id, key string) error {
 	}
 	project.CoverS3Path = key
 	project.CoverURL = ""
+	return nil
+}
+
+func (s *MemoryProjectStore) SetPreviewPath(_ context.Context, id, previewPath string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	project, ok := s.items[id]
+	if !ok {
+		return ErrNotFound
+	}
+	project.PreviewPath = previewPath
 	return nil
 }
 

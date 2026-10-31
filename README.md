@@ -106,6 +106,25 @@ CP / DP → sandbox
 - 阶段必须人工确认推进；后端校验阶段顺序、是否已开始、Agent 是否空闲、产物是否存在且非空。
 - 企业项目创建时从 S3 读取 Harness zip，校验后转成 sandbox 支持的 tar.gz 导入。标准项目不导入 Harness。
 
+
+## 发布与分享
+
+编辑页的「发布」会把当前工作区复制到共享发布目录，并生成一个手机可访问的分享页：
+
+- CP 读取 `WORKSPACES_DIR/{projectId}`，复制到 `PUBLISH_DIR/{projectId}`。
+- 分享页入口是 `PUBLISH_DIR/{projectId}/index.html`，游戏文件位于 `game/`。
+- 公开地址为 `/p/{projectId}/`，不需要登录。
+- 本地开发可直接访问 `http://localhost:8080/p/{projectId}/`。
+- 同一 Wi-Fi 手机可访问 `http://电脑局域网IP:8080/p/{projectId}/`。
+- 本地 Docker 使用 `data/published`；线上 `deployment/docker/docker-compose.public.yml` 使用 `deployment/docker/published`。
+- 线上 `published` 服务默认映射 `8088:80`，需在安全组/防火墙放行 `8088`，或改用域名和 HTTPS 反向代理。
+- nginx 已作为 `published` 服务写入 `docker-compose.yml`，默认端口 `8088`。
+- 启动：`PUBLIC_BASE_URL=http://服务器IP:8088 docker compose up -d backend published`，确保 CP 返回正确公网链接。
+- nginx 示例配置见 `deployment/nginx/published.conf`。
+- CP 的 `/p/` 路由仅用于本地预览，并加了 sandbox CSP；生产必须把用户作品放在独立域名，避免与 CP 共享登录态。
+
+当前发布不落数据库：重复发布覆盖同一目录，不支持版本回滚、统计和撤回。
+
 ## 通知渠道
 
 通知渠道是**个人级配置**，从「设置 → 通知渠道」进入：
@@ -349,6 +368,7 @@ helm upgrade --install vibebiz deployment/helm/vibebiz -n vibebiz --create-names
 | GET / POST | `/projects` | 项目列表 / 创建项目（`mode=standard/enterprise`） |
 | GET / DELETE | `/projects/:id` | 项目详情 / 删除 |
 | PUT | `/projects/:id/agent-roles` | 更新项目角色；企业项目必须保留团队角色 |
+| PUT | `/projects/:id/entry` | 设置预览入口相对路径，空值恢复 `index.html` |
 | GET | `/projects/:id/stages` | 企业项目阶段列表 |
 | POST | `/projects/:id/stages/:stageKey/start` | 开始当前阶段 |
 | POST | `/projects/:id/stages/:stageKey/complete` | 确认当前阶段并推进 |
@@ -481,6 +501,7 @@ templates/     Go / Python / TypeScript / Vue / 文档模板
 
 - Agent 目前支持 `stub` 与 Claude Agent SDK；真实模型能力取决于 sandbox 配置。
 - 企业工程阶段 6/7 的执行状态仍在前端 localStorage；接后端任务、日志和真实云环境仍是后续版本。
+- 发布页为静态目录覆盖式发布，不保存发布记录、历史版本和访问统计。
 - 企业阶段只支持顺序推进，没有阶段回退、重跑或并行阶段。
 - 通知渠道当前只支持配置和测试发送，尚未接入系统通知自动投递、重试和投递记录。
 - Harness 导入失败会回滚项目记录和元数据；sandbox 工作区清理尚未接入。

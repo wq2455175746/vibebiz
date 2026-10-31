@@ -8,6 +8,7 @@ import { completeProjectStage, listProjectStages, startProjectStage } from '@/ap
 import ChatPanel from '@/components/editor/ChatPanel.vue'
 import CodePane from '@/components/editor/CodePane.vue'
 import EditorHeader from '@/components/editor/EditorHeader.vue'
+import PublishDialog from '@/components/editor/PublishDialog.vue'
 import LogConsole from '@/components/editor/LogConsole.vue'
 import PreviewPane from '@/components/editor/PreviewPane.vue'
 import ArtifactWorkspace from '@/components/enterprise/ArtifactWorkspace.vue'
@@ -62,6 +63,7 @@ const confirming = ref(false)
 const starting = ref(false)
 const confirmError = ref('')
 const stageLoadError = ref('')
+const publishOpen = ref(false)
 const previewRevision = computed(() => chat.revision + files.revision)
 const activeKey = computed(() => currentStageKey(stageStates.value))
 const activeState = computed(() => (activeKey.value ? stageStates.value[activeKey.value] : null))
@@ -446,10 +448,17 @@ onBeforeUnmount(() => {
       :roles="headerRoles"
       model-label="DeepSeek Flash"
       @back="goEnterpriseHome"
+      @publish="publishOpen = true"
     />
 
     <p v-if="projectStore.error" class="editor-error">{{ projectStore.error }}</p>
     <p v-if="stageLoadError" class="editor-error">{{ stageLoadError }}</p>
+    <PublishDialog
+      v-if="publishOpen"
+      :project-id="id"
+      :project-name="projectStore.current?.name || ''"
+      @close="publishOpen = false"
+    />
 
     <EnterpriseStageBar
       :states="stageStates"

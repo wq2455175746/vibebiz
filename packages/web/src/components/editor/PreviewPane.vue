@@ -5,10 +5,12 @@ import html2canvas from 'html2canvas'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import PreviewConsole from './PreviewConsole.vue'
-import { uploadProjectCover } from '@/api/projects'
+import { readFile } from '@/api/files'
+import { updateProjectPreviewPath, uploadProjectCover } from '@/api/projects'
 import { useProjectStore } from '@/stores/project'
 import { usePreviewLogStore } from '@/stores/previewLogs'
-import { PREVIEW_SANDBOX, buildPreviewUrl } from '@/utils/preview'
+import { renderMarkdown } from '@/utils/markdown'
+import { PREVIEW_SANDBOX, buildPreviewUrl, previewKind } from '@/utils/preview'
 
 const props = defineProps<{ projectId: string; refreshToken: number; active: boolean }>()
 
@@ -19,18 +21,88 @@ const consoleOpen = ref(false)
 const previewLogs = usePreviewLogStore()
 const toast = useToast()
 const projectStore = useProjectStore()
-const src = computed(() => buildPreviewUrl(props.projectId))
+const activePath = computed(() => projectStore.current?.previewPath ?? '')
+const kind = computed(() => previewKind(activePath.value || 'index.html'))
+const frameKind = computed(() => kind.value === 'html' || kind.value === 'pdf')
+const src = computed(() => buildPreviewUrl(props.projectId, activePath.value))
+const assetKey = ref(0)
+const assetSrc = computed(() => `${src.value}?v=${assetKey.value}`)
+const previewDraft = ref(activePath.value)
+const savingPreview = ref(false)
+const markdownHTML = ref('')
+const markdownLoading = ref(false)
+const markdownError = ref('')
+const kindLabel = computed(
+  () =>
+    ({
+      html: '静态预览',
+      pdf: 'PDF',
+      markdown: 'Markdown',
+      image: '图片',
+      ppt: 'PPT',
+      other: '文件',
+    })[kind.value],
+)
 let captureTimer: ReturnType<typeof setTimeout> | null = null
 const captureBusy = ref(false)
 let captureOnLoad = false
 let capturePending = false
 let reloadPending = false
 
+async function loadMarkdown() {
+  markdownLoading.value = true
+  markdownError.value = ''
+  try {
+    const file = await readFile(props.projectId, activePath.value || 'index.html')
+    markdownHTML.value = renderMarkdown(file.content)
+  } catch (error) {
+    markdownError.value = (error as Error).message
+    markdownHTML.value = ''
+  } finally {
+    markdownLoading.value = false
+  }
+}
+
 function reload(capture = false) {
-  loading.value = true
-  captureOnLoad = capture
   previewLogs.clear()
-  frameKey.value += 1
+  assetKey.value += 1
+  if (kind.value === 'markdown') {
+    captureOnLoad = false
+    loading.value = false
+    void loadMarkdown()
+    return
+  }
+  if (frameKind.value) {
+    loading.value = true
+    captureOnLoad = capture && kind.value === 'html'
+    frameKey.value += 1
+    return
+  }
+  captureOnLoad = false
+  loading.value = false
+}
+
+async function savePreviewPath() {
+  const next = previewDraft.value.trim()
+  if (savingPreview.value || next === activePath.value) {
+    return
+  }
+  savingPreview.value = true
+  try {
+    const saved = await updateProjectPreviewPath(props.projectId, next)
+    previewDraft.value = saved
+    projectStore.setPreviewPath(saved)
+  } catch (error) {
+    previewDraft.value = activePath.value
+    toast.add({
+      severity: 'error',
+      summary: '预览入口保存失败',
+      detail: (error as Error).message,
+      life: 3000,
+    })
+  } finally {
+    savingPreview.value = false
+  }
 }
 
 function scheduleCoverCapture() {
@@ -64,6 +136,9 @@ function isBlankCanvas(context: CanvasRenderingContext2D, width: number, height:
 }
 
 async function captureCover(manual = false) {
+  if (kind.value !== 'html') {
+    return
+  }
   const frameElement = frame.value
   const document = frameElement?.contentDocument
   if (!document?.body || captureBusy.value) {
@@ -199,6 +274,8 @@ function toggleConsole() {
 
 onMounted(() => {
   previewLogs.clear()
+  previewDraft.value = activePath.value
+  reload(false)
   window.addEventListener('message', onPreviewMessage)
 })
 
@@ -217,17 +294,25 @@ watch(
   () => props.refreshToken,
   () => {
     if (props.active) {
-      reload(true)
+      reload(kind.value === 'html')
       return
     }
     reloadPending = true
-    capturePending = true
+    capturePending = kind.value === 'html'
   },
 )
 
+watch(activePath, () => {
+  previewDraft.value = activePath.value
+  reload(false)
+})
+
 watch(
   () => props.projectId,
-  () => reload(false),
+  () => {
+    previewDraft.value = activePath.value
+    reload(false)
+  },
 )
 </script>
 
@@ -235,12 +320,22 @@ watch(
   <div class="preview-panel">
     <div class="preview-toolbar">
       <Button icon="pi pi-refresh" text rounded aria-label="刷新预览" @click="reload()" />
-      <span class="preview-address">
+      <label class="preview-address">
         <i class="pi pi-lock" />
-        {{ src }}
-      </span>
-      <span class="tag">静态预览</span>
+        <input
+          v-model="previewDraft"
+          type="text"
+          aria-label="预览入口文件"
+          placeholder="index.html"
+          spellcheck="false"
+          :disabled="savingPreview"
+          @keydown.enter.prevent="savePreviewPath"
+          @blur="savePreviewPath"
+        />
+      </label>
+      <span class="tag">{{ kindLabel }}</span>
       <Button
+        v-if="kind === 'html'"
         :icon="consoleOpen ? 'pi pi-chevron-down' : 'pi pi-server'"
         text
         rounded
@@ -248,6 +343,7 @@ watch(
         @click="toggleConsole"
       />
       <Button
+        v-if="kind === 'html'"
         icon="pi pi-camera"
         text
         rounded
@@ -264,11 +360,12 @@ watch(
       />
     </div>
     <div class="preview-stage">
-      <div v-if="loading" class="preview-loading">
+      <div v-if="frameKind && loading" class="preview-loading">
         <i class="pi pi-spin pi-spinner" />
         正在加载预览
       </div>
       <iframe
+        v-if="frameKind"
         ref="frame"
         :key="frameKey"
         :src="src"
@@ -277,6 +374,30 @@ watch(
         referrerpolicy="no-referrer"
         @load="onFrameLoad"
       />
+      <div v-else-if="kind === 'markdown'" class="preview-document">
+        <div v-if="markdownLoading" class="preview-document-state">
+          <i class="pi pi-spin pi-spinner" />
+          正在加载文档
+        </div>
+        <p v-else-if="markdownError" class="preview-document-state error-text">
+          {{ markdownError }}
+        </p>
+        <article v-else class="preview-markdown" v-html="markdownHTML" />
+      </div>
+      <div v-else-if="kind === 'image'" class="preview-media">
+        <img :src="assetSrc" :alt="activePath || '图片预览'" />
+      </div>
+      <div v-else-if="kind === 'ppt'" class="preview-placeholder">
+        <i class="pi pi-file" />
+        <strong>{{ activePath }}</strong>
+        <p>幻灯片预览即将支持</p>
+        <a :href="src" target="_blank" rel="noopener noreferrer">新窗口打开</a>
+      </div>
+      <div v-else class="preview-placeholder">
+        <i class="pi pi-file" />
+        <strong>{{ activePath }}</strong>
+        <p>暂不支持预览该文件类型</p>
+      </div>
     </div>
     <PreviewConsole v-if="consoleOpen" @close="consoleOpen = false" />
   </div>

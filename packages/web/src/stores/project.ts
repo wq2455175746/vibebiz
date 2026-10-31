@@ -15,6 +15,12 @@ export const useProjectStore = defineStore('project', () => {
     }
   }
 
+  function setPreviewPath(previewPath: string) {
+    if (current.value) {
+      current.value = { ...current.value, previewPath }
+    }
+  }
+
   async function load(id: string) {
     loading.value = true
     error.value = ''
@@ -28,5 +34,5 @@ export const useProjectStore = defineStore('project', () => {
     }
   }
 
-  return { current, loading, error, setCover, load }
+  return { current, loading, error, setCover, setPreviewPath, load }
 })

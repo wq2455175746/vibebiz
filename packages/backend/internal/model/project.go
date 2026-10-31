@@ -25,6 +25,7 @@ type Project struct {
 	Name               string     `json:"name"`
 	Prompt             string     `json:"prompt"`
 	Mode               string     `json:"mode"`
+	PreviewPath        string     `json:"previewPath"`
 	State              string     `json:"state"`
 	ReviewStatus       string     `json:"reviewStatus"`
 	ReviewNote         string     `json:"reviewNote"`

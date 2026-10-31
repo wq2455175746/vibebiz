@@ -34,6 +34,15 @@ export async function updateProjectAgentRoles(
   return result.agentRoleIds ?? []
 }
 
+export async function updateProjectPreviewPath(id: string, previewPath: string): Promise<string> {
+  const result = await request<{ previewPath: string }>(cpHttp, {
+    method: 'put',
+    url: `/projects/${encodeURIComponent(id)}/entry`,
+    data: { previewPath },
+  })
+  return result.previewPath ?? ''
+}
+
 export interface ProjectCover {
   coverS3Path: string
   coverUrl: string

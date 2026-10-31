@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"path"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -307,6 +308,60 @@ func (h *ProjectHandler) UpdateAgentRoles(c echo.Context) error {
 		return response.Fail(c, http.StatusInternalServerError, 50011, "update agent roles failed")
 	}
 	return response.OK(c, map[string]any{"agentRoleIds": roleIDs})
+}
+
+type updatePreviewPathRequest struct {
+	PreviewPath string `json:"previewPath"`
+}
+
+func normalizePreviewPath(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "." {
+		return "", nil
+	}
+	if len(raw) > 512 || strings.ContainsAny(raw, "\\\x00") {
+		return "", errors.New("invalid preview path")
+	}
+	if strings.HasPrefix(raw, "/") {
+		return "", errors.New("invalid preview path")
+	}
+	cleaned := path.Clean(raw)
+	if cleaned == ".." || strings.HasPrefix(cleaned, "../") || strings.HasPrefix(cleaned, "/") {
+		return "", errors.New("invalid preview path")
+	}
+	return cleaned, nil
+}
+
+func (h *ProjectHandler) UpdatePreviewPath(c echo.Context) error {
+	session, ok := auth.SessionFrom(c)
+	if !ok {
+		return response.Fail(c, http.StatusUnauthorized, 40101, "unauthorized")
+	}
+	project, err := h.Store.Get(c.Request().Context(), c.Param("id"))
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return response.Fail(c, http.StatusNotFound, 40401, "project not found")
+		}
+		return response.Fail(c, http.StatusInternalServerError, 50002, "get project failed")
+	}
+	if !containsInt64(session.WorkspaceIDs, project.WorkspaceID) || project.State == model.ProjectStateDisabled {
+		return response.Fail(c, http.StatusNotFound, 40401, "project not found")
+	}
+	var req updatePreviewPathRequest
+	if err := c.Bind(&req); err != nil {
+		return response.Fail(c, http.StatusBadRequest, 40001, "invalid body")
+	}
+	previewPath, err := normalizePreviewPath(req.PreviewPath)
+	if err != nil {
+		return response.Fail(c, http.StatusBadRequest, 40001, "invalid preview path")
+	}
+	if err := h.Store.SetPreviewPath(c.Request().Context(), project.ID, previewPath); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return response.Fail(c, http.StatusNotFound, 40401, "project not found")
+		}
+		return response.Fail(c, http.StatusInternalServerError, 50012, "update preview path failed")
+	}
+	return response.OK(c, map[string]any{"previewPath": previewPath})
 }
 
 func (h *ProjectHandler) List(c echo.Context) error {

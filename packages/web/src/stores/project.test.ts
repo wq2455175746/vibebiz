@@ -21,6 +21,7 @@ describe('project store cover', () => {
       id: 'p1',
       name: 'demo',
       prompt: '',
+      previewPath: '',
       state: 'ready',
       createdAt: '2026-10-30T00:00:00Z',
       updatedAt: '2026-10-30T00:00:00Z',

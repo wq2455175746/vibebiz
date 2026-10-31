@@ -8,6 +8,13 @@ services:
       - ./logs:/logs
     restart: "no"
 
+  publish-init:
+    image: alpine:3.20
+    command: ["sh", "-c", "mkdir -p /published && chmod 0777 /published"]
+    volumes:
+      - ./data/published:/published
+    restart: "no"
+
   sandbox:
     build:
       context: ./packages/sandbox
@@ -62,12 +69,19 @@ services:
       OTEL_EXPORTER_OTLP_PROTOCOL: ${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}
       OTEL_RESOURCE_ATTRIBUTES: ${OTEL_RESOURCE_ATTRIBUTES:-deployment.environment=local,service.namespace=vibebiz}
       OTEL_TRACES_SAMPLER: ${OTEL_TRACES_SAMPLER:-parentbased_always_on}
+      WORKSPACES_DIR: /data/workspaces
+      PUBLISH_DIR: /data/published
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
     volumes:
       - ./logs/backend:/app/logs
+      - workspaces:/data/workspaces:ro
+      - ./data/published:/data/published
     depends_on:
       sandbox:
         condition: service_started
       logs-init:
+        condition: service_completed_successfully
+      publish-init:
         condition: service_completed_successfully
     ports:
       - "127.0.0.1:8080:8080"
@@ -87,6 +101,19 @@ services:
         condition: service_healthy
     ports:
       - "127.0.0.1:5173:80"
+    restart: unless-stopped
+
+  published:
+    image: nginx:1.27-alpine
+    container_name: vibebiz-published
+    depends_on:
+      publish-init:
+        condition: service_completed_successfully
+    ports:
+      - "${PUBLISHED_HTTP_PORT:-8088}:80"
+    volumes:
+      - ./data/published:/usr/share/nginx/html:ro
+      - ./deployment/nginx/published.conf:/etc/nginx/conf.d/default.conf:ro
     restart: unless-stopped
 
   ops-web:

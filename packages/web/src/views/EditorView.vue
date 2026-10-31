@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import ChatPanel from '@/components/editor/ChatPanel.vue'
 import CodePane from '@/components/editor/CodePane.vue'
 import EditorHeader from '@/components/editor/EditorHeader.vue'
+import PublishDialog from '@/components/editor/PublishDialog.vue'
 import LogConsole from '@/components/editor/LogConsole.vue'
 import PreviewPane from '@/components/editor/PreviewPane.vue'
 import { useAgentRolesStore } from '@/stores/agentRoles'
@@ -29,6 +30,7 @@ const id = computed(() => String(route.params.id))
 const activeTab = ref<'preview' | 'code' | 'console'>('preview')
 const previewReady = ref(false)
 const shareNotice = ref('')
+const publishOpen = ref(false)
 const previewRevision = computed(() => chat.revision + files.revision)
 const headerRoles = computed(() =>
   (projectStore.current?.agentRoleIds ?? [])
@@ -227,9 +229,16 @@ onBeforeUnmount(() => {
       model-label="DeepSeek Flash"
       @back="goHome"
       @share="shareProject"
+      @publish="publishOpen = true"
     />
 
     <p v-if="shareNotice" class="editor-share-notice">{{ shareNotice }}</p>
+    <PublishDialog
+      v-if="publishOpen"
+      :project-id="id"
+      :project-name="projectStore.current?.name || ''"
+      @close="publishOpen = false"
+    />
     <p v-if="projectStore.error" class="editor-error">{{ projectStore.error }}</p>
 
     <div class="editor-body">

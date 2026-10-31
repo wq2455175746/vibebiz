@@ -656,3 +656,49 @@ func TestUpdateEnterpriseProjectAgentRolesRequiresTeam(t *testing.T) {
 		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestUpdateProjectPreviewPath(t *testing.T) {
+	cases := []struct {
+		name       string
+		body       string
+		wantStatus int
+		wantPath   string
+	}{
+		{name: "valid nested path", body: `{"previewPath":"dist/index.html"}`, wantStatus: http.StatusOK, wantPath: "dist/index.html"},
+		{name: "clear path", body: `{"previewPath":""}`, wantStatus: http.StatusOK, wantPath: ""},
+		{name: "parent traversal", body: `{"previewPath":"../secret.html"}`, wantStatus: http.StatusBadRequest},
+		{name: "absolute path", body: `{"previewPath":"/etc/passwd"}`, wantStatus: http.StatusBadRequest},
+		{name: "nested traversal", body: `{"previewPath":"docs/../../secret.html"}`, wantStatus: http.StatusBadRequest},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			projectStore := store.NewMemoryProjectStore()
+			project := &model.Project{ID: "p1", WorkspaceID: 3, Name: "demo", State: model.ProjectStateReady}
+			if err := projectStore.Create(context.Background(), project); err != nil {
+				t.Fatal(err)
+			}
+			h := newProjectHandlerForTest(projectStore, &fakeInitializer{}, newFakeMetaStore(), &fakeAgentRoles{})
+			e := echo.New()
+			routeWithSession(e, http.MethodPut, "/cp/api/v1/projects/:id/entry", h.UpdatePreviewPath, sessionForTest(3))
+
+			req := httptest.NewRequest(http.MethodPut, "/cp/api/v1/projects/p1/entry", strings.NewReader(tc.body))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+			}
+			if tc.wantStatus != http.StatusOK {
+				return
+			}
+			saved, err := projectStore.Get(context.Background(), "p1")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if saved.PreviewPath != tc.wantPath {
+				t.Fatalf("preview path = %q, want %q", saved.PreviewPath, tc.wantPath)
+			}
+		})
+	}
+}

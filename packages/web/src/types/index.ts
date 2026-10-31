@@ -71,6 +71,7 @@ export interface Project {
   mode?: 'standard' | 'enterprise'
   name: string
   prompt: string
+  previewPath: string
   state: string
   createdAt: string
   updatedAt: string

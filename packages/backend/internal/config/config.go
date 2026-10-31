@@ -48,6 +48,9 @@ type Config struct {
 	S3ForcePathStyle       bool
 	S3PresignExpiryMinutes int
 	EnterpriseHarnessS3Key string
+	WorkspacesDir          string
+	PublishDir             string
+	PublicBaseURL          string
 	ModelSecretKey         string
 	NotificationSecretKey  string
 
@@ -102,6 +105,9 @@ func Load(plane string) Config {
 		S3ForcePathStyle:       getBool("S3_FORCE_PATH_STYLE", getString("S3_ENDPOINT", "") != ""),
 		S3PresignExpiryMinutes: getInt("S3_PRESIGN_EXPIRY_MINUTES", 15),
 		EnterpriseHarnessS3Key: getString("ENTERPRISE_HARNESS_S3_KEY", "tmp/vibebiz_prod/vibebiz-harness.zip"),
+		WorkspacesDir:          getString("WORKSPACES_DIR", "../../data/workspaces"),
+		PublishDir:             getString("PUBLISH_DIR", "../../data/published"),
+		PublicBaseURL:          getString("PUBLIC_BASE_URL", ""),
 		ModelSecretKey:         getString("MODEL_SECRET_KEY", ""),
 		NotificationSecretKey:  getString("NOTIFICATION_SECRET_KEY", getString("MODEL_SECRET_KEY", "")),
 

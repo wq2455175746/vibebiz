@@ -14,7 +14,7 @@ import (
 	"vibebiz/internal/store"
 )
 
-func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.ProjectStore, provisioner handler.ProjectInitializer, obs *observability.Provider, authn *auth.Authenticator, authHandler *handler.AuthHandler, settingsHandler *handler.SettingsHandler, storageHandler *handler.StorageHandler, metas auth.ProjectMetaStore, notifications *handler.NotificationHandler, registry *handler.SandboxRegistryHandler, models *handler.ModelHandler, roles *handler.RoleHandler, coverSigner handler.CoverURLSigner, coverExpiry time.Duration, adminSandbox handler.AdminSandbox, templates *handler.TemplateHandler, harness handler.HarnessImporter, stageStore projectstage.Store, stageSandbox handler.StageSandbox, notificationChannels *handler.NotificationChannelHandler, fdeResources *handler.FdeResourceHandler) {
+func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.ProjectStore, provisioner handler.ProjectInitializer, obs *observability.Provider, authn *auth.Authenticator, authHandler *handler.AuthHandler, settingsHandler *handler.SettingsHandler, storageHandler *handler.StorageHandler, metas auth.ProjectMetaStore, notifications *handler.NotificationHandler, registry *handler.SandboxRegistryHandler, models *handler.ModelHandler, roles *handler.RoleHandler, coverSigner handler.CoverURLSigner, coverExpiry time.Duration, adminSandbox handler.AdminSandbox, templates *handler.TemplateHandler, harness handler.HarnessImporter, stageStore projectstage.Store, stageSandbox handler.StageSandbox, notificationChannels *handler.NotificationChannelHandler, fdeResources *handler.FdeResourceHandler, publishApp *handler.PublishHandler) {
 	var roleStore handler.AgentRoleStore
 	if roles != nil {
 		roleStore = roles.Service
@@ -84,6 +84,10 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 	if fdeResources != nil {
 		api.GET("/fde-resources", fdeResources.UserList, authn.RequireUser)
 	}
+	if publishApp != nil {
+		e.GET("/p/:slug", publishApp.Preview)
+		e.GET("/p/:slug/*", publishApp.Preview)
+	}
 
 	projectsAPI := api.Group("/projects", authn.RequireUser)
 	projectsAPI.GET("", projectHandler.List)
@@ -91,6 +95,10 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 	projectsAPI.GET("/:id", projectHandler.Get)
 	projectsAPI.DELETE("/:id", projectHandler.Delete)
 	projectsAPI.PUT("/:id/agent-roles", projectHandler.UpdateAgentRoles)
+	projectsAPI.PUT("/:id/entry", projectHandler.UpdatePreviewPath)
+	if publishApp != nil {
+		projectsAPI.POST("/:id/publish", publishApp.Publish)
+	}
 	if stageHandler != nil {
 		projectsAPI.GET("/:id/stages", stageHandler.List)
 		projectsAPI.POST("/:id/stages/:stageKey/start", stageHandler.Start)

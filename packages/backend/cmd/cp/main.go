@@ -30,6 +30,7 @@ import (
 	"vibebiz/internal/observability"
 	"vibebiz/internal/projectstage"
 	"vibebiz/internal/projecttemplate"
+	"vibebiz/internal/publish"
 	"vibebiz/internal/requestcount"
 	"vibebiz/internal/router"
 	storages3 "vibebiz/internal/s3"
@@ -191,6 +192,7 @@ func main() {
 	}
 	notificationChannelHandler := handler.NewNotificationChannelHandler(channelService)
 	fdeResourceHandler := handler.NewFdeResourceHandler(fderesource.NewService(fderesource.NewMySQLStore(db)))
+	publishHandler := handler.NewPublishHandler(publish.NewService(cfg.WorkspacesDir, cfg.PublishDir), projectStore, cfg.PublicBaseURL)
 
 	healthChecker := sandboxregistry.NewHealthChecker(registryRepo, cfg.SandboxHeartbeatTTL, cfg.SandboxHealthTimeout, obs)
 	asynqLogger := sandboxregistry.NewAsyncLogger(obs.Logger)
@@ -252,7 +254,7 @@ func main() {
 	templateHandler := handler.NewTemplateHandler(templateService, projectStore, provisioner, sandboxRouter)
 	templateHandler.Metas = metas
 
-	router.RegisterControl(e, adminRepo, projectStore, provisioner, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler, registryHandler, modelHandler, roleHandler, avatarPresigner, cfg.S3PresignExpiry(), sandboxRouter, templateHandler, harnessImporter, stageStore, sandboxRouter, notificationChannelHandler, fdeResourceHandler)
+	router.RegisterControl(e, adminRepo, projectStore, provisioner, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler, registryHandler, modelHandler, roleHandler, avatarPresigner, cfg.S3PresignExpiry(), sandboxRouter, templateHandler, harnessImporter, stageStore, sandboxRouter, notificationChannelHandler, fdeResourceHandler, publishHandler)
 	router.RegisterScheduledTasks(e, scheduledHandler, authn)
 	router.RegisterChatHistory(e, handler.NewChatHistoryHandler(sandboxRouter, projectStore), authn)
 

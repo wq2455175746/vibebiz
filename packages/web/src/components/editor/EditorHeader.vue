@@ -14,6 +14,7 @@ defineProps<{
 const emit = defineEmits<{
   (event: 'back'): void
   (event: 'share'): void
+  (event: 'publish'): void
 }>()
 </script>
 
@@ -36,7 +37,7 @@ const emit = defineEmits<{
 
     <div class="editor-actions">
       <Button label="分享" text @click="emit('share')" />
-      <Button label="发布" disabled />
+      <Button label="发布" @click="emit('publish')" />
     </div>
   </header>
 </template>

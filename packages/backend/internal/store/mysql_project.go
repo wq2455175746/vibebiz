@@ -55,6 +55,7 @@ func (s *MySQLProjectStore) Create(ctx context.Context, project *model.Project) 
 			Name:               project.Name,
 			Prompt:             project.Prompt,
 			Mode:               mode,
+			PreviewPath:        project.PreviewPath,
 			SandboxID:          project.SandboxID,
 			CoverS3Path:        project.CoverS3Path,
 			TopicID:            topicID,
@@ -102,6 +103,20 @@ func (s *MySQLProjectStore) SetCover(ctx context.Context, id, key string) error 
 		Update("cover_s3_path", key)
 	if result.Error != nil {
 		return fmt.Errorf("update project cover: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *MySQLProjectStore) SetPreviewPath(ctx context.Context, id, previewPath string) error {
+	result := s.db.WithContext(ctx).
+		Model(&daomodel.Project{}).
+		Where("public_id = ?", id).
+		Update("preview_path", previewPath)
+	if result.Error != nil {
+		return fmt.Errorf("update project preview path: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {
 		return ErrNotFound
@@ -202,6 +217,7 @@ func (s *MySQLProjectStore) Update(ctx context.Context, project *model.Project) 
 		Updates(map[string]any{
 			"name":          project.Name,
 			"prompt":        project.Prompt,
+			"preview_path":  project.PreviewPath,
 			"sandbox_id":    project.SandboxID,
 			"status":        project.State,
 			"review_status": project.ReviewStatus,
@@ -247,6 +263,7 @@ func toProject(row *daomodel.Project) *model.Project {
 		Name:               row.Name,
 		Prompt:             row.Prompt,
 		Mode:               mode,
+		PreviewPath:        row.PreviewPath,
 		State:              row.Status,
 		ReviewStatus:       row.ReviewStatus,
 		ReviewNote:         row.ReviewNote,

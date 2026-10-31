@@ -53,6 +53,7 @@ type Project struct {
 	Name               string     `gorm:"column:name" json:"name"`
 	Prompt             string     `gorm:"column:prompt" json:"prompt"`
 	Mode               string     `gorm:"column:mode" json:"mode"`
+	PreviewPath        string     `gorm:"column:preview_path" json:"previewPath"`
 	Description        string     `gorm:"column:description" json:"description"`
 	TopicID            int64      `gorm:"column:topic_id" json:"topicId"`
 	TemplateID         *int64     `gorm:"column:template_id" json:"templateId,omitempty"`
