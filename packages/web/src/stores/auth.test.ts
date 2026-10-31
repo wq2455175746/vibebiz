@@ -17,7 +17,7 @@ vi.mock('@/api/auth', () => ({
 const user: AuthUser = {
   id: 1,
   username: 'wanghg11',
-  email: '2455175746@qq.com',
+  email: 'wanghg11@example.com',
   avatarUrl: null,
   currentWorkspaceId: 1,
   workspaces: [

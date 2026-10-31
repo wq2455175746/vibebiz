@@ -6,7 +6,11 @@ export interface LoginDefaults {
 export const demoLoginEnabled = import.meta.env.VITE_DEMO_LOGIN !== 'false'
 
 export function loginDefaults(enabled: boolean): LoginDefaults {
-  return enabled
-    ? { identifier: 'wanghg11', password: '88888888' }
-    : { identifier: '', password: '' }
+  if (!enabled) {
+    return { identifier: '', password: '' }
+  }
+  return {
+    identifier: import.meta.env.VITE_DEMO_IDENTIFIER ?? '',
+    password: import.meta.env.VITE_DEMO_PASSWORD ?? '',
+  }
 }

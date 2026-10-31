@@ -217,16 +217,14 @@ make dev-ops-web
 
 ## 默认测试账号
 
-仅用于本地演示与测试：
+仅用于本地演示与测试。账号与密码通过环境变量注入，不在代码中硬编码：
 
-| 入口 | 账号 | 密码 |
-|---|---|---|
-| Web | `wanghg11` | `88888888` |
-| Web | `vistor` | `88888888` |
-| Ops Web | `admin` | `88888888` |
+| 入口 | 环境变量 |
+|---|---|
+| Web | `VITE_DEMO_IDENTIFIER` / `VITE_DEMO_PASSWORD` |
+| Ops Web | `VITE_DEMO_IDENTIFIER` / `VITE_DEMO_PASSWORD` |
 
-- web 登录页默认填入 `wanghg11 / 88888888`
-- ops-web 登录页默认填入 `admin / 88888888`
+- 在 `packages/web/.env` 与 `packages/ops-web/.env` 中设置上述变量后，登录页自动填入
 - 设置 `VITE_DEMO_LOGIN=false` 可关闭登录页预填
 - 生产环境必须删除默认账号或重置密码，并关闭演示登录
 

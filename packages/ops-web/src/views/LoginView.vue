@@ -67,7 +67,7 @@ async function submit(): Promise<void> {
           <InputText
             v-model="identifier"
             autocomplete="username"
-            placeholder="admin 或 admin_vibebiz@qq.com"
+            placeholder="请输入账号或邮箱"
             :disabled="auth.loading"
           />
         </label>

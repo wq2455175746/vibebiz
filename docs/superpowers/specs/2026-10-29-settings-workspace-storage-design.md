@@ -26,7 +26,7 @@
   {
     "id": 1,
     "username": "wanghg11",
-    "email": "2455175746@qq.com",
+    "email": "wanghg11@example.com",
     "avatarUrl": "https://...",
     "currentWorkspaceId": 1,
     "workspaces": [

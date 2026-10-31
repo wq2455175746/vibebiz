@@ -1,10 +1,22 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { loginDefaults } from './demoLogin'
 
+afterEach(() => {
+  vi.unstubAllEnvs()
+})
+
 describe('loginDefaults', () => {
-  it('prefills the local test account when enabled', () => {
-    expect(loginDefaults(true)).toEqual({ identifier: 'wanghg11', password: '88888888' })
+  it('prefills the account from environment variables when enabled', () => {
+    vi.stubEnv('VITE_DEMO_IDENTIFIER', 'demo-user')
+    vi.stubEnv('VITE_DEMO_PASSWORD', 'demo-pass')
+    expect(loginDefaults(true)).toEqual({ identifier: 'demo-user', password: 'demo-pass' })
+  })
+
+  it('does not hardcode credentials when environment variables are unset', () => {
+    vi.stubEnv('VITE_DEMO_IDENTIFIER', '')
+    vi.stubEnv('VITE_DEMO_PASSWORD', '')
+    expect(loginDefaults(true)).toEqual({ identifier: '', password: '' })
   })
 
   it('leaves the form empty when disabled', () => {

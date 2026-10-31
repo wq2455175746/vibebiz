@@ -3,6 +3,8 @@
 interface ImportMetaEnv {
   readonly VITE_OPS_API_BASE?: string
   readonly VITE_DEMO_LOGIN?: string
+  readonly VITE_DEMO_IDENTIFIER?: string
+  readonly VITE_DEMO_PASSWORD?: string
 }
 
 interface ImportMeta {

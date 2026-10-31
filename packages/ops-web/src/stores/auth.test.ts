@@ -21,7 +21,7 @@ const mockedLogout = vi.mocked(logoutApi)
 const admin: OpsUser = {
   id: 1,
   username: 'admin',
-  email: 'admin_vibebiz@qq.com',
+  email: 'admin@example.com',
   roleCode: 'super_admin',
 }
 

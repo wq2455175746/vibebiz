@@ -3,16 +3,16 @@
 -- +goose Up
 
 INSERT INTO `user` (`email`, `source`, `username`, `password_hash`, `nickname`, `status`, `email_verified_at`)
-SELECT '2455175746@qq.com', 'CUSTOM', 'wanghg11', '$2a$12$teiprG6aKjqzfY.rBMKCVOdCX9jtWzvOwdbrr0W5FyzqKIu9qcveq', 'wanghg11', 1, NOW() FROM DUAL
-WHERE NOT EXISTS (SELECT 1 FROM `user` WHERE `username` = 'wanghg11' OR `email` = '2455175746@qq.com');
+SELECT 'wanghg11@example.com', 'CUSTOM', 'wanghg11', '$2a$12$teiprG6aKjqzfY.rBMKCVOdCX9jtWzvOwdbrr0W5FyzqKIu9qcveq', 'wanghg11', 1, NOW() FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM `user` WHERE `username` = 'wanghg11' OR `email` = 'wanghg11@example.com');
 
 INSERT INTO `user` (`email`, `source`, `username`, `password_hash`, `nickname`, `status`, `email_verified_at`)
-SELECT 'vistor_vibebiz@qq.com', 'CUSTOM', 'vistor', '$2a$12$o6NLzqC2jK.GDPA/wq9jRen9T6sjqiHNa41f8TZBEBnjcMgAFcS7e', 'vistor', 1, NOW() FROM DUAL
-WHERE NOT EXISTS (SELECT 1 FROM `user` WHERE `username` = 'vistor' OR `email` = 'vistor_vibebiz@qq.com');
+SELECT 'vistor@example.com', 'CUSTOM', 'vistor', '$2a$12$o6NLzqC2jK.GDPA/wq9jRen9T6sjqiHNa41f8TZBEBnjcMgAFcS7e', 'vistor', 1, NOW() FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM `user` WHERE `username` = 'vistor' OR `email` = 'vistor@example.com');
 
 INSERT INTO `ops_user` (`username`, `email`, `password_hash`, `nickname`, `role_code`, `source`, `status`, `created_by`, `updated_by`)
-SELECT 'admin', 'admin_vibebiz@qq.com', '$2a$12$9nHY8OcLnd2RgzJB9Nt4R.S6IwqVnrI6Tkzkksla9Es1Vi046APVK', 'admin', 'super_admin', 'local', 1, 'seed', 'seed' FROM DUAL
-WHERE NOT EXISTS (SELECT 1 FROM `ops_user` WHERE `username` = 'admin' OR `email` = 'admin_vibebiz@qq.com');
+SELECT 'admin', 'admin@example.com', '$2a$12$9nHY8OcLnd2RgzJB9Nt4R.S6IwqVnrI6Tkzkksla9Es1Vi046APVK', 'admin', 'super_admin', 'local', 1, 'seed', 'seed' FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM `ops_user` WHERE `username` = 'admin' OR `email` = 'admin@example.com');
 
 INSERT INTO `workspace` (`owner_user_id`, `name`, `description`, `workspace_type`, `visibility`, `status`, `created_by`)
 SELECT u.id, CONCAT(u.username, ' 的个人工作区'), '默认个人工作区', 'personal', 'private', 1, 'seed'
@@ -66,6 +66,6 @@ DELETE q FROM `user_quota` q
 JOIN `user` u ON u.id = q.user_id
 WHERE u.username IN ('wanghg11', 'vistor');
 
-DELETE FROM `ops_user` WHERE `username` = 'admin' AND `email` = 'admin_vibebiz@qq.com';
+DELETE FROM `ops_user` WHERE `username` = 'admin' AND `email` = 'admin@example.com';
 
 DELETE FROM `user` WHERE `username` IN ('wanghg11', 'vistor');

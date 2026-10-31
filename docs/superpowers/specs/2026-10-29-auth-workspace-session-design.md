@@ -25,8 +25,8 @@
 
 | 决策 | 结果 |
 |---|---|
-| 默认用户 | `wanghg11` / `2455175746@qq.com`；`vistor` / `vistor_vibebiz@qq.com` |
-| 默认管理员 | `admin` / `admin_vibebiz@qq.com`，`role_code=super_admin` |
+| 默认用户 | `wanghg11` / `wanghg11@example.com`；`vistor` / `vistor@example.com` |
+| 默认管理员 | `admin` / `admin@example.com`，`role_code=super_admin` |
 | 默认密码 | 三个账号均为 `用户提供的本地默认密码`，只存 bcrypt hash |
 | 用户登录标识 | username 或 email |
 | 用户 Session TTL | 7 天 |
@@ -150,7 +150,7 @@ type Store interface {
 {
   "id": 1,
   "username": "wanghg11",
-  "email": "2455175746@qq.com",
+  "email": "wanghg11@example.com",
   "nickname": "",
   "workspaceIds": [1]
 }
@@ -170,7 +170,7 @@ type Store interface {
 {
   "id": 1,
   "username": "admin",
-  "email": "admin_vibebiz@qq.com",
+  "email": "admin@example.com",
   "roleCode": "super_admin"
 }
 ```
@@ -259,14 +259,14 @@ type Store interface {
 
 ### 7.1 用户
 
-- `wanghg11` / `2455175746@qq.com`
-- `vistor` / `vistor_vibebiz@qq.com`
+- `wanghg11` / `wanghg11@example.com`
+- `vistor` / `vistor@example.com`
 - `source=CUSTOM`、`status=1`、邮箱已验证。
 - 密码 hash 使用 bcrypt cost 12，禁止在 SQL 中写明文。
 
 ### 7.2 运营管理员
 
-- `admin` / `admin_vibebiz@qq.com`
+- `admin` / `admin@example.com`
 - `role_code=super_admin`、`source=local`、`status=1`
 - 密码 hash 使用 bcrypt cost 12。
 

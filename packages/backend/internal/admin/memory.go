@@ -17,8 +17,8 @@ func NewMemoryRepository() Repository {
 	created := time.Date(2026, 10, 28, 0, 0, 0, 0, time.UTC)
 	return &MemoryRepository{
 		users: []User{
-			{ID: "1", Name: "wanghg11", Email: "2455175746@qq.com", Plan: "free", Status: "active", CreatedAt: created},
-			{ID: "2", Name: "vistor", Email: "vistor_vibebiz@qq.com", Plan: "free", Status: "active", CreatedAt: created},
+			{ID: "1", Name: "wanghg11", Email: "wanghg11@example.com", Plan: "free", Status: "active", CreatedAt: created},
+			{ID: "2", Name: "vistor", Email: "vistor@example.com", Plan: "free", Status: "active", CreatedAt: created},
 		},
 		sandboxes: []Sandbox{
 			{ID: "sb-1", Name: "sandbox-a", Host: "127.0.0.1", Port: 8000, Status: "online", HealthStatus: "healthy", ActiveRequests: 2, MaxConcurrency: 8, LastHeartbeatAt: &created, LastHealthAt: &created},

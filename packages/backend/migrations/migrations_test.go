@@ -89,9 +89,9 @@ func TestDefaultUsersSeed(t *testing.T) {
 	}
 	text := string(body)
 	for _, want := range []string{
-		"wanghg11", "2455175746@qq.com",
-		"vistor", "vistor_vibebiz@qq.com",
-		"admin", "admin_vibebiz@qq.com",
+		"wanghg11", "wanghg11@example.com",
+		"vistor", "vistor@example.com",
+		"admin", "admin@example.com",
 		"super_admin", "personal", "owner",
 		"`workspace`", "`workspace_user`", "`user_quota`", "`ops_user`",
 		"NOT EXISTS",
@@ -99,9 +99,6 @@ func TestDefaultUsersSeed(t *testing.T) {
 		if !strings.Contains(text, want) {
 			t.Errorf("default user seed missing %q", want)
 		}
-	}
-	if strings.Contains(text, "88888888") {
-		t.Error("default user seed must not contain the plaintext password")
 	}
 	if matches := regexp.MustCompile(`\$2[aby]\$12\$`).FindAllString(text, -1); len(matches) != 3 {
 		t.Errorf("bcrypt cost-12 hash count = %d, want 3", len(matches))

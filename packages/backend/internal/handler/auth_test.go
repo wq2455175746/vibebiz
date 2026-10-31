@@ -100,7 +100,7 @@ func (f *authSessionStore) Delete(_ context.Context, realm auth.Realm, id string
 
 func newAuthHandlerForTest(t *testing.T, user *model.User, workspaces []int64, ops *model.OpsUser) (*AuthHandler, *authSessionStore) {
 	t.Helper()
-	hash, err := auth.HashPassword("88888888")
+	hash, err := auth.HashPassword("test-password")
 	if err != nil {
 		t.Fatalf("hash: %v", err)
 	}
@@ -203,7 +203,7 @@ func getWithCookie(e *echo.Echo, path string, cookie *http.Cookie) *httptest.Res
 func loginUser(t *testing.T, h *AuthHandler) (*http.Cookie, auth.Session) {
 	t.Helper()
 	e := authRouter(h)
-	rec := postLogin(e, "/cp/api/v1/auth/login", `{"identifier":"wanghg11","password":"88888888"}`, nil)
+	rec := postLogin(e, "/cp/api/v1/auth/login", `{"identifier":"wanghg11","password":"test-password"}`, nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("login status = %d, body = %s", rec.Code, rec.Body.String())
 	}
@@ -218,7 +218,7 @@ func TestLoginUserSuccess(t *testing.T) {
 	h, sessions := newAuthHandlerForTest(t, &model.User{Base: model.Base{ID: 1}, Username: "wanghg11", Email: "wang@example.com", Nickname: "Wang", Status: 1}, []int64{3}, nil)
 	e := authRouter(h)
 
-	rec := postLogin(e, "/cp/api/v1/auth/login", `{"identifier":"  wanghg11  ","password":"88888888"}`, nil)
+	rec := postLogin(e, "/cp/api/v1/auth/login", `{"identifier":"  wanghg11  ","password":"test-password"}`, nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
@@ -255,7 +255,7 @@ func TestLoginUserBadCredentials(t *testing.T) {
 
 func TestLoginUserDisabled(t *testing.T) {
 	h, _ := newAuthHandlerForTest(t, &model.User{Base: model.Base{ID: 1}, Username: "u", Email: "u@example.com", Status: 0}, []int64{1}, nil)
-	rec := postLogin(authRouter(h), "/cp/api/v1/auth/login", `{"identifier":"u","password":"88888888"}`, nil)
+	rec := postLogin(authRouter(h), "/cp/api/v1/auth/login", `{"identifier":"u","password":"test-password"}`, nil)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want 403", rec.Code)
 	}
@@ -266,7 +266,7 @@ func TestLoginUserDisabled(t *testing.T) {
 
 func TestLoginUserNoWorkspace(t *testing.T) {
 	h, _ := newAuthHandlerForTest(t, &model.User{Base: model.Base{ID: 1}, Username: "u", Email: "u@example.com", Status: 1}, nil, nil)
-	rec := postLogin(authRouter(h), "/cp/api/v1/auth/login", `{"identifier":"u","password":"88888888"}`, nil)
+	rec := postLogin(authRouter(h), "/cp/api/v1/auth/login", `{"identifier":"u","password":"test-password"}`, nil)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want 403", rec.Code)
 	}
@@ -277,7 +277,7 @@ func TestLoginUserNoWorkspace(t *testing.T) {
 
 func TestLoginUserInvalidBody(t *testing.T) {
 	h, _ := newAuthHandlerForTest(t, &model.User{Base: model.Base{ID: 1}, Username: "u", Status: 1}, []int64{1}, nil)
-	for _, body := range []string{`not json`, `{"identifier":"u"}`, `{"password":"88888888"}`} {
+	for _, body := range []string{`not json`, `{"identifier":"u"}`, `{"password":"test-password"}`} {
 		rec := postLogin(authRouter(h), "/cp/api/v1/auth/login", body, nil)
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("body %q status = %d, want 400", body, rec.Code)
@@ -387,7 +387,7 @@ func TestLoginOps(t *testing.T) {
 	h, _ := newAuthHandlerForTest(t, nil, nil, &model.OpsUser{Base: model.Base{ID: 9}, Username: "admin", Email: "admin@example.com", RoleCode: "super_admin", Status: 1})
 	e := authRouter(h)
 
-	rec := postLogin(e, "/cp/api/v1/admin/auth/login", `{"identifier":"admin","password":"88888888"}`, nil)
+	rec := postLogin(e, "/cp/api/v1/admin/auth/login", `{"identifier":"admin","password":"test-password"}`, nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
@@ -426,7 +426,7 @@ func TestCookieRealmsCannotCross(t *testing.T) {
 		t.Fatalf("user cookie on ops me status = %d, want 401", rec.Code)
 	}
 
-	rec := postLogin(e, "/cp/api/v1/admin/auth/login", `{"identifier":"admin","password":"88888888"}`, nil)
+	rec := postLogin(e, "/cp/api/v1/admin/auth/login", `{"identifier":"admin","password":"test-password"}`, nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("ops login status = %d", rec.Code)
 	}
@@ -440,7 +440,7 @@ func TestLogoutOps(t *testing.T) {
 	h, sessions := newAuthHandlerForTest(t, nil, nil, &model.OpsUser{Base: model.Base{ID: 9}, Username: "admin", Email: "admin@example.com", RoleCode: "super_admin", Status: 1})
 	e := authRouter(h)
 
-	rec := postLogin(e, "/cp/api/v1/admin/auth/login", `{"identifier":"admin","password":"88888888"}`, nil)
+	rec := postLogin(e, "/cp/api/v1/admin/auth/login", `{"identifier":"admin","password":"test-password"}`, nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("login status = %d", rec.Code)
 	}

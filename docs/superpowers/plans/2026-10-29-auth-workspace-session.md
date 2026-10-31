@@ -18,7 +18,7 @@
 - Do not use `AutoMigrate`; schema changes are goose SQL migrations.
 - Cookies: `vibebiz_user` / `vibebiz_ops`; HttpOnly; SameSite=Lax; Path=/; no Domain.
 - Session TTL: user 168h; ops 12h. Redis failure is fail-closed (503).
-- Default accounts: `wanghg11` / `2455175746@qq.com`, `vistor` / `vistor_vibebiz@qq.com`, `admin` / `admin_vibebiz@qq.com`; password `用户提供的本地默认密码` stored only as bcrypt hashes.
+- Default accounts: `wanghg11` / `wanghg11@example.com`, `vistor` / `vistor@example.com`, `admin` / `admin@example.com`; password `用户提供的本地默认密码` stored only as bcrypt hashes.
 - User projects are scoped by workspace membership; workspace members share projects. ops admin sees all projects.
 - API envelopes: `{code,message,result}`; unauthorized code `40101`, bad credentials `40102`, disabled `40301`, no workspace `40302`, project inaccessible `40401`, Redis unavailable `50301`.
 - Frontend colors only black/white/gray/blue; no `console.log`, `@ts-ignore`, bare TODO/FIXME.
