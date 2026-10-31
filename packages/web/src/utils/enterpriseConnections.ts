@@ -15,10 +15,17 @@ interface PersistedConnections {
 type ReadStorage = Pick<Storage, 'getItem'>
 type WriteStorage = Pick<Storage, 'setItem'>
 
+const connectionKinds = new Set(['code-repo', 'harbor', 'jenkins', 'k8s', 'cloud', 'argo'])
+
 function isConnection(value: unknown): value is EnterpriseConnection {
   if (!value || typeof value !== 'object') return false
   const item = value as Partial<EnterpriseConnection>
-  return typeof item.id === 'string' && typeof item.name === 'string' && typeof item.kind === 'string'
+  return (
+    typeof item.id === 'string' &&
+    typeof item.name === 'string' &&
+    typeof item.kind === 'string' &&
+    connectionKinds.has(item.kind)
+  )
 }
 
 export function loadConnections(storage: ReadStorage = localStorage): EnterpriseConnection[] {
@@ -58,8 +65,6 @@ export function connectionDescription(connection: EnterpriseConnection): string 
       return `${connection.username}@${connection.host}:${connection.port}`
     case 'argo':
       return connection.url
-    case 'fde':
-      return connection.contact
   }
 }
 

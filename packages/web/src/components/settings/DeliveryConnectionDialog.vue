@@ -28,16 +28,13 @@ const draft = reactive({
   username: '',
   secret: '',
   url: '',
-  contact: '',
-  note: '',
 })
 const error = reactive({ message: '' })
 
 const title = computed(() => {
   if (props.kind === 'k8s') return 'K8s 集群'
   if (props.kind === 'cloud') return '云主机'
-  if (props.kind === 'argo') return 'Argo'
-  return 'FDE'
+  return 'Argo'
 })
 
 const hasSavedSecret = computed(
@@ -63,8 +60,6 @@ watch(
     draft.username = item?.kind === 'cloud' || item?.kind === 'argo' ? item.username : ''
     draft.secret = ''
     draft.url = item?.kind === 'argo' ? item.url : ''
-    draft.contact = item?.kind === 'fde' ? item.contact : ''
-    draft.note = item?.kind === 'fde' ? item.note : ''
     error.message = ''
   },
   { immediate: true },
@@ -104,29 +99,16 @@ function submit() {
     })
     return
   }
-  if (props.kind === 'argo') {
-    if (!draft.url.trim()) {
-      error.message = '请填写 Argo 地址'
-      return
-    }
-    emit('save', {
-      kind: 'argo',
-      name: draft.name.trim(),
-      url: draft.url.trim(),
-      username: draft.username.trim(),
-      secret: draft.secret,
-    })
-    return
-  }
-  if (!draft.contact.trim()) {
-    error.message = '请填写 FDE 联系方式'
+  if (!draft.url.trim()) {
+    error.message = '请填写 Argo 地址'
     return
   }
   emit('save', {
-    kind: 'fde',
+    kind: 'argo',
     name: draft.name.trim(),
-    contact: draft.contact.trim(),
-    note: draft.note.trim(),
+    url: draft.url.trim(),
+    username: draft.username.trim(),
+    secret: draft.secret,
   })
 }
 </script>
@@ -193,7 +175,7 @@ function submit() {
         </label>
       </template>
 
-      <template v-else-if="kind === 'argo'">
+      <template v-else>
         <label class="connection-field">
           <span>Argo 地址</span>
           <InputText v-model="draft.url" placeholder="https://argo.example.com" />
@@ -210,17 +192,6 @@ function submit() {
             autocomplete="new-password"
             :placeholder="hasSavedSecret ? '留空保持已保存的凭据' : '请输入密码或 Token'"
           />
-        </label>
-      </template>
-
-      <template v-else>
-        <label class="connection-field">
-          <span>联系方式</span>
-          <InputText v-model="draft.contact" placeholder="邮箱、电话或 IM 账号" />
-        </label>
-        <label class="connection-field">
-          <span>备注</span>
-          <textarea v-model="draft.note" class="connection-textarea" rows="4" />
         </label>
       </template>
 

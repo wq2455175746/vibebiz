@@ -8,7 +8,6 @@ import type {
   CodeRepoConnection,
   DeliveryConnectionInput,
   EnterpriseConnection,
-  FdeConnection,
   HarborConnection,
   JenkinsConnection,
   K8sConnection,
@@ -35,9 +34,6 @@ export const useEnterpriseConnectionsStore = defineStore('enterpriseConnections'
   )
   const argoes = computed(() =>
     connections.value.filter((item): item is ArgoConnection => item.kind === 'argo'),
-  )
-  const fdes = computed(() =>
-    connections.value.filter((item): item is FdeConnection => item.kind === 'fde'),
   )
 
   function persist(): void {
@@ -87,7 +83,6 @@ export const useEnterpriseConnectionsStore = defineStore('enterpriseConnections'
     k8sClusters,
     cloudNodes,
     argoes,
-    fdes,
     create,
     update,
     remove,

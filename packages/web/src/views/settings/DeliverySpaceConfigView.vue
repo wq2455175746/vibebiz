@@ -20,14 +20,12 @@ const tabs: { key: DeliveryConnectionKind; label: string; empty: string }[] = [
   { key: 'k8s', label: 'K8s 集群', empty: '添加集群后，项目可部署到该集群。' },
   { key: 'cloud', label: '云主机', empty: '添加云主机节点，供项目直接部署。' },
   { key: 'argo', label: 'Argo', empty: '添加 Argo 地址，供项目触发 GitOps 交付。' },
-  { key: 'fde', label: 'FDE 人工', empty: '添加 FDE 人员，供人工交付选择。' },
 ]
 
 const items = computed<EnterpriseConnection[]>(() => {
   if (activeTab.value === 'k8s') return store.k8sClusters
   if (activeTab.value === 'cloud') return store.cloudNodes
-  if (activeTab.value === 'argo') return store.argoes
-  return store.fdes
+  return store.argoes
 })
 
 const activeLabel = computed(() => tabs.find((item) => item.key === activeTab.value)?.label ?? '')
@@ -63,7 +61,7 @@ function remove(item: EnterpriseConnection) {
     <header class="settings-head">
       <div>
         <h1>交付空间配置</h1>
-        <p>维护 K8s、云主机、Argo 和 FDE 人员，供企业项目阶段 7 使用。</p>
+        <p>维护 K8s、云主机和 Argo 连接，供企业项目阶段 7 使用。FDE 人员由运营在后台维护。</p>
       </div>
       <button class="config-add" type="button" @click="openCreate">
         <i class="pi pi-plus" />

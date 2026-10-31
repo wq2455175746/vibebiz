@@ -1,6 +1,7 @@
 export type CodeRepoProvider = 'github' | 'gitlab'
 export type ArtifactConnectionKind = 'code-repo' | 'harbor' | 'jenkins'
-export type DeliveryConnectionKind = 'k8s' | 'cloud' | 'argo' | 'fde'
+export type DeliveryConnectionKind = 'k8s' | 'cloud' | 'argo'
+export type DeliveryMethodKind = DeliveryConnectionKind | 'fde'
 export type ConnectionKind = ArtifactConnectionKind | DeliveryConnectionKind
 
 export interface ConnectionBase {
@@ -57,14 +58,8 @@ export interface ArgoConnection extends ConnectionBase {
   secret: string
 }
 
-export interface FdeConnection extends ConnectionBase {
-  kind: 'fde'
-  contact: string
-  note: string
-}
-
 export type ArtifactConnection = CodeRepoConnection | HarborConnection | JenkinsConnection
-export type DeliveryConnection = K8sConnection | CloudConnection | ArgoConnection | FdeConnection
+export type DeliveryConnection = K8sConnection | CloudConnection | ArgoConnection
 export type EnterpriseConnection = ArtifactConnection | DeliveryConnection
 
 export type ArtifactConnectionInput =
@@ -76,7 +71,6 @@ export type DeliveryConnectionInput =
   | Omit<K8sConnection, 'id' | 'createdAt' | 'updatedAt'>
   | Omit<CloudConnection, 'id' | 'createdAt' | 'updatedAt'>
   | Omit<ArgoConnection, 'id' | 'createdAt' | 'updatedAt'>
-  | Omit<FdeConnection, 'id' | 'createdAt' | 'updatedAt'>
 
 export type MockStepStatus = 'idle' | 'running' | 'success' | 'error'
 
@@ -110,11 +104,23 @@ export interface DeliveryFlowState {
   status: 'locked' | 'active' | 'done'
   startedAt: string | null
   completedAt: string | null
-  method: DeliveryConnectionKind | null
+  method: DeliveryMethodKind | null
   targetId: string
   namespace: string
   note: string
   execution: MockStepState
+}
+
+export interface FdeResource {
+  id: number
+  name: string
+  contact: string
+  skills: string[]
+  region: string
+  note: string
+  enabled: boolean
+  createdAt: string
+  updatedAt: string
 }
 
 export interface EnterpriseFlow {

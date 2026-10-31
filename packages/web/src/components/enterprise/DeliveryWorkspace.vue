@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { useEnterpriseConnectionsStore } from '@/stores/enterpriseConnections'
 import { useEnterpriseFlowStore } from '@/stores/enterpriseFlow'
+import { useFdeResourcesStore } from '@/stores/fdeResources'
 import type {
-  DeliveryConnectionKind,
   DeliveryFlowState,
+  DeliveryMethodKind,
   MockStepStatus,
 } from '@/types/enterpriseSpace'
 import { createEmptyStep, deliveryReady } from '@/utils/enterpriseFlow'
@@ -21,11 +22,12 @@ const emit = defineEmits<{
 }>()
 
 const connections = useEnterpriseConnectionsStore()
+const fdeResources = useFdeResourcesStore()
 const flows = useEnterpriseFlowStore()
 const error = ref('')
 let timer: ReturnType<typeof setTimeout> | null = null
 
-const methods: { key: DeliveryConnectionKind; title: string; description: string }[] = [
+const methods: { key: DeliveryMethodKind; title: string; description: string }[] = [
   { key: 'k8s', title: 'K8s 集群', description: '部署到已注册的 Kubernetes 集群。' },
   { key: 'cloud', title: '云主机', description: '部署到已注册的云主机节点。' },
   { key: 'argo', title: 'Argo', description: '触发 Argo GitOps 交付。' },
@@ -46,14 +48,17 @@ function statusText(status: MockStepStatus): string {
   return '待执行'
 }
 
-function targets(kind: DeliveryConnectionKind) {
+function targets(kind: DeliveryMethodKind) {
   if (kind === 'k8s') return connections.k8sClusters
   if (kind === 'cloud') return connections.cloudNodes
   if (kind === 'argo') return connections.argoes
-  return connections.fdes
+  return fdeResources.items
 }
 
 const activeTargets = computed(() => (props.flow.method ? targets(props.flow.method) : []))
+const selectedTarget = computed(() =>
+  activeTargets.value.find((item) => String(item.id) === props.flow.targetId),
+)
 
 function inputValue(event: Event): string {
   return (event.target as HTMLInputElement).value
@@ -66,7 +71,7 @@ function updateDeliveryField(field: 'namespace' | 'note', value: string): void {
   flows.patchDelivery(props.projectId, patch)
 }
 
-function selectMethod(kind: DeliveryConnectionKind) {
+function selectMethod(kind: DeliveryMethodKind) {
   if (props.flow.execution.status === 'success' || props.flow.status === 'done') return
   flows.patchDelivery(props.projectId, {
     method: kind,
@@ -90,6 +95,10 @@ function selectTarget(event: Event) {
 function execute() {
   if (!props.flow.method || !props.flow.targetId) {
     error.value = '请选择交付方式和目标'
+    return
+  }
+  if (!selectedTarget.value) {
+    error.value = props.flow.method === 'fde' ? '所选 FDE 已停用，请重新选择' : '所选配置已失效，请重新选择'
     return
   }
   if (running.value) return
@@ -128,6 +137,12 @@ function confirm() {
   error.value = ''
   emit('confirmed')
 }
+
+onMounted(() => {
+  if (fdeResources.items.length === 0) {
+    void fdeResources.load()
+  }
+})
 
 onBeforeUnmount(() => {
   if (timer) {
@@ -170,7 +185,7 @@ onBeforeUnmount(() => {
       >
         <strong>{{ method.title }}</strong>
         <span>{{ method.description }}</span>
-        <small>{{ targets(method.key).length }} 个可用配置</small>
+        <small>{{ targets(method.key).length }} {{ method.key === 'fde' ? '位可用人员' : '个可用配置' }}</small>
       </button>
     </div>
 
@@ -190,7 +205,7 @@ onBeforeUnmount(() => {
             @change="selectTarget"
           >
             <option value="">选择目标</option>
-            <option v-for="item in activeTargets" :key="item.id" :value="item.id">
+            <option v-for="item in activeTargets" :key="item.id" :value="String(item.id)">
               {{ item.name }}
             </option>
           </select>
@@ -231,14 +246,22 @@ onBeforeUnmount(() => {
         </button>
 
         <p v-if="!activeTargets.length" class="pipeline-hint">
-          请先在设置中配置{{ selectedLabel }}。<RouterLink to="/settings/delivery-space">去配置</RouterLink>
+          <template v-if="flow.method === 'fde'">
+            运营尚未配置可用的 FDE 人员，请联系运营。
+          </template>
+          <template v-else>
+            请先在设置中配置{{ selectedLabel }}。<RouterLink to="/settings/delivery-space">去配置</RouterLink>
+          </template>
+        </p>
+        <p v-if="fdeResources.error && flow.method === 'fde'" class="pipeline-hint">
+          {{ fdeResources.error }}
         </p>
       </div>
     </section>
 
     <section v-if="ready" class="pipeline-result">
       <h2>交付完成</h2>
-      <p>方式：{{ selectedLabel }} · 目标：{{ flow.targetId }}</p>
+      <p>方式：{{ selectedLabel }} · 目标：{{ selectedTarget?.name ?? flow.targetId }}</p>
       <p v-if="flow.namespace">命名空间：{{ flow.namespace }}</p>
       <p v-if="flow.note">备注：{{ flow.note }}</p>
     </section>
