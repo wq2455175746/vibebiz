@@ -2,7 +2,7 @@
 import Button from 'primevue/button'
 import { useToast } from 'primevue/usetoast'
 import html2canvas from 'html2canvas'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import PreviewConsole from './PreviewConsole.vue'
 import { readFile } from '@/api/files'
@@ -43,6 +43,7 @@ const kindLabel = computed(
       other: '文件',
     })[kind.value],
 )
+const PptxPreview = defineAsyncComponent(() => import('./PptxPreview.vue'))
 let captureTimer: ReturnType<typeof setTimeout> | null = null
 const captureBusy = ref(false)
 let captureOnLoad = false
@@ -387,12 +388,7 @@ watch(
       <div v-else-if="kind === 'image'" class="preview-media">
         <img :src="assetSrc" :alt="activePath || '图片预览'" />
       </div>
-      <div v-else-if="kind === 'ppt'" class="preview-placeholder">
-        <i class="pi pi-file" />
-        <strong>{{ activePath }}</strong>
-        <p>幻灯片预览即将支持</p>
-        <a :href="src" target="_blank" rel="noopener noreferrer">新窗口打开</a>
-      </div>
+      <PptxPreview v-else-if="kind === 'ppt'" :key="assetKey" :src="src" />
       <div v-else class="preview-placeholder">
         <i class="pi pi-file" />
         <strong>{{ activePath }}</strong>
