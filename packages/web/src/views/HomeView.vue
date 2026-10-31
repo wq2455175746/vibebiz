@@ -20,6 +20,7 @@ import { useNotificationsStore } from '@/stores/notifications'
 import { useResourceStore } from '@/stores/resources'
 import {
   DEFAULT_ENTERPRISE_PROMPT,
+  isEnterpriseProject,
   markEnterpriseProject,
   resolveEditorPath,
 } from '@/utils/enterprise'
@@ -46,6 +47,9 @@ const isProjectsPage = computed(() => route.name === 'projects')
 const isResourcesPage = computed(() => route.name === 'resources')
 const isScheduledPage = computed(() => route.name === 'scheduled-tasks')
 const isEnterprisePage = computed(() => route.name === 'enterprise')
+const enterpriseProjects = computed(() =>
+  projects.value.filter((project) => isEnterpriseProject(project)),
+)
 let wasEnterprise = false
 let homeDraft = ''
 let enterpriseDraft = ''
@@ -305,6 +309,14 @@ onMounted(async () => {
           :creating="creating"
           :error="error"
           @submit="create"
+        />
+        <HomeDiscovery
+          :projects="enterpriseProjects"
+          :show-templates="false"
+          project-tab-label="企业项目"
+          empty-text="暂无企业项目"
+          @open-project="openProject"
+          @delete-project="removeProject"
         />
         <EnterpriseRoadmap />
         <p class="enterprise-home-note">

@@ -11,8 +11,18 @@ const props = withDefaults(
     templatesLoading?: boolean
     templatesError?: string
     limit?: number
+    showTemplates?: boolean
+    projectTabLabel?: string
+    emptyText?: string
   }>(),
-  { templates: () => [], templatesLoading: false, templatesError: '' },
+  {
+    templates: () => [],
+    templatesLoading: false,
+    templatesError: '',
+    showTemplates: true,
+    projectTabLabel: '我的项目',
+    emptyText: '暂无项目',
+  },
 )
 
 const emit = defineEmits<{
@@ -32,10 +42,15 @@ const visibleTemplates = computed(() =>
   props.limit ? props.templates.slice(0, props.limit) : props.templates,
 )
 
-const tabs: { key: DiscoveryTab; label: string }[] = [
-  { key: 'projects', label: '我的项目' },
-  { key: 'templates', label: '模板' },
-]
+const tabs = computed<{ key: DiscoveryTab; label: string }[]>(() => {
+  const items: { key: DiscoveryTab; label: string }[] = [
+    { key: 'projects', label: props.projectTabLabel },
+  ]
+  if (props.showTemplates) {
+    items.push({ key: 'templates', label: '模板' })
+  }
+  return items
+})
 </script>
 
 <template>
@@ -65,7 +80,7 @@ const tabs: { key: DiscoveryTab; label: string }[] = [
     </div>
 
     <template v-if="activeTab === 'projects'">
-      <p v-if="visibleProjects.length === 0" class="discovery-empty">暂无项目</p>
+      <p v-if="visibleProjects.length === 0" class="discovery-empty">{{ emptyText }}</p>
       <div v-else class="project-grid">
         <ProjectCard
           v-for="project in visibleProjects"

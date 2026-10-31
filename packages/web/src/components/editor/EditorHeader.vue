@@ -4,12 +4,16 @@ import Button from 'primevue/button'
 import { roleDisplayLabel } from '@/utils/agentRoles'
 import type { AgentRole } from '@/types'
 
-defineProps<{
-  projectName: string
-  projectState: string
-  modelLabel: string
-  roles: AgentRole[]
-}>()
+withDefaults(
+  defineProps<{
+    projectName: string
+    projectState: string
+    modelLabel: string
+    roles: AgentRole[]
+    showActions?: boolean
+  }>(),
+  { showActions: true },
+)
 
 const emit = defineEmits<{
   (event: 'back'): void
@@ -35,7 +39,7 @@ const emit = defineEmits<{
       <span class="model-chip"><i class="pi pi-sparkles" /> {{ modelLabel }}</span>
     </div>
 
-    <div class="editor-actions">
+    <div v-if="showActions" class="editor-actions">
       <Button label="分享" text @click="emit('share')" />
       <Button label="发布" @click="emit('publish')" />
     </div>

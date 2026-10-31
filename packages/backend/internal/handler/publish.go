@@ -4,10 +4,12 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
 
 	"vibebiz/internal/auth"
+	"vibebiz/internal/model"
 	"vibebiz/internal/publish"
 	"vibebiz/internal/response"
 	"vibebiz/internal/store"
@@ -33,6 +35,16 @@ type publishResponse struct {
 	URL         string `json:"url"`
 	Slug        string `json:"slug"`
 	PublishedAt string `json:"publishedAt"`
+}
+
+type publishedProjectResponse struct {
+	ProjectID   string   `json:"projectId"`
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Tags        []string `json:"tags"`
+	CoverURL    string   `json:"coverUrl,omitempty"`
+	PublishedAt string   `json:"publishedAt"`
+	URL         string   `json:"url"`
 }
 
 func (h *PublishHandler) Publish(c echo.Context) error {
@@ -70,6 +82,74 @@ func (h *PublishHandler) Publish(c echo.Context) error {
 	})
 }
 
+func (h *PublishHandler) ListPublished(c echo.Context) error {
+	session, ok := auth.SessionFrom(c)
+	if !ok {
+		return response.Fail(c, http.StatusUnauthorized, 40101, "unauthorized")
+	}
+	items, err := h.Service.List(c.Request().Context())
+	if err != nil {
+		return response.Fail(c, http.StatusInternalServerError, 50011, "list published projects failed")
+	}
+	allowed := make(map[string]*model.Project)
+	for _, project := range h.Projects.ListByWorkspaces(c.Request().Context(), session.WorkspaceIDs) {
+		allowed[project.ID] = project
+	}
+	out := make([]publishedProjectResponse, 0, len(items))
+	for _, item := range items {
+		project, exists := allowed[item.ProjectID]
+		if !exists {
+			continue
+		}
+		name := item.Title
+		if name == "" {
+			name = project.Name
+		}
+		tags := item.Tags
+		if tags == nil {
+			tags = []string{}
+		}
+		out = append(out, publishedProjectResponse{
+			ProjectID:   item.ProjectID,
+			Name:        name,
+			Description: item.Description,
+			Tags:        tags,
+			CoverURL:    project.CoverURL,
+			PublishedAt: item.PublishedAt.UTC().Format(time.RFC3339),
+			URL:         h.publicBase(c) + "/p/" + item.ProjectID + "/",
+		})
+	}
+	return response.OK(c, map[string]any{"projects": out})
+}
+
+func (h *PublishHandler) DeletePublished(c echo.Context) error {
+	session, ok := auth.SessionFrom(c)
+	if !ok {
+		return response.Fail(c, http.StatusUnauthorized, 40101, "unauthorized")
+	}
+	project, err := h.Projects.Get(c.Request().Context(), c.Param("id"))
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return response.Fail(c, http.StatusNotFound, 40401, "project not found")
+		}
+		return response.Fail(c, http.StatusInternalServerError, 50002, "get project failed")
+	}
+	if !containsInt64(session.WorkspaceIDs, project.WorkspaceID) {
+		return response.Fail(c, http.StatusNotFound, 40401, "project not found")
+	}
+	if err := h.Service.Delete(c.Request().Context(), project.ID); err != nil {
+		switch {
+		case errors.Is(err, publish.ErrNotFound):
+			return response.Fail(c, http.StatusNotFound, 40408, "published project not found")
+		case errors.Is(err, publish.ErrInvalid):
+			return response.Fail(c, http.StatusBadRequest, 40015, "invalid published project")
+		default:
+			return response.Fail(c, http.StatusInternalServerError, 50012, "delete published project failed")
+		}
+	}
+	return response.OK(c, map[string]string{"id": project.ID})
+}
+
 func (h *PublishHandler) Preview(c echo.Context) error {
 	path, err := h.Service.FilePath(c.Param("slug"), c.Param("*"))
 	if err != nil {
@@ -77,6 +157,7 @@ func (h *PublishHandler) Preview(c echo.Context) error {
 	}
 	c.Response().Header().Set("Cache-Control", "no-cache")
 	c.Response().Header().Set("X-Content-Type-Options", "nosniff")
+	c.Response().Header().Set("Access-Control-Allow-Origin", "*")
 	c.Response().Header().Set(
 		"Content-Security-Policy",
 		"sandbox allow-scripts allow-forms allow-modals allow-popups allow-downloads",

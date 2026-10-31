@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
@@ -39,6 +40,15 @@ type Input struct {
 
 type Result struct {
 	Slug        string    `json:"slug"`
+	Entry       string    `json:"entry"`
+	PublishedAt time.Time `json:"publishedAt"`
+}
+
+type Published struct {
+	ProjectID   string    `json:"projectId"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	Tags        []string  `json:"tags"`
 	Entry       string    `json:"entry"`
 	PublishedAt time.Time `json:"publishedAt"`
 }
@@ -130,6 +140,110 @@ func (s *Service) Publish(ctx context.Context, projectID string, input Input) (R
 	}
 	committed = true
 	return Result{Slug: projectID, Entry: entry, PublishedAt: now}, nil
+}
+
+func (s *Service) List(ctx context.Context) ([]Published, error) {
+	entries, err := os.ReadDir(s.PublishDir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return []Published{}, nil
+		}
+		return nil, fmt.Errorf("read publish dir: %w", err)
+	}
+	items := make([]Published, 0, len(entries))
+	for _, entry := range entries {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(s.PublishDir, entry.Name(), "publish.json"))
+		if err != nil {
+			continue
+		}
+		var item Published
+		if err := json.Unmarshal(data, &item); err != nil {
+			continue
+		}
+		if item.ProjectID == "" {
+			item.ProjectID = entry.Name()
+		}
+		if !slugPattern.MatchString(item.ProjectID) || item.ProjectID != entry.Name() || item.Title == "" {
+			continue
+		}
+		items = append(items, item)
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].PublishedAt.Equal(items[j].PublishedAt) {
+			return items[i].ProjectID < items[j].ProjectID
+		}
+		return items[i].PublishedAt.After(items[j].PublishedAt)
+	})
+	return items, nil
+}
+
+func (s *Service) RefreshSharePages(ctx context.Context) error {
+	items, err := s.List(ctx)
+	if err != nil {
+		return err
+	}
+	for _, item := range items {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		entry := item.Entry
+		if entry == "" {
+			entry, err = publishEntry(filepath.Join(s.PublishDir, item.ProjectID, "game"))
+			if err != nil {
+				continue
+			}
+		}
+		tmp, err := os.MkdirTemp(s.PublishDir, ".share-refresh-")
+		if err != nil {
+			return fmt.Errorf("create share refresh dir: %w", err)
+		}
+		data := shareData{
+			Title: item.Title, Description: item.Description, Tags: item.Tags,
+			GameURL: "game/" + entry,
+		}
+		if err := writeSharePage(tmp, data); err != nil {
+			_ = os.RemoveAll(tmp)
+			return err
+		}
+		if err := os.Rename(filepath.Join(tmp, "index.html"), filepath.Join(s.PublishDir, item.ProjectID, "index.html")); err != nil {
+			_ = os.RemoveAll(tmp)
+			return fmt.Errorf("replace share page: %w", err)
+		}
+		if err := os.RemoveAll(tmp); err != nil {
+			return fmt.Errorf("clean share refresh dir: %w", err)
+		}
+	}
+	return nil
+}
+
+func (s *Service) Delete(ctx context.Context, projectID string) error {
+	if !slugPattern.MatchString(projectID) {
+		return ErrInvalid
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	target := filepath.Join(s.PublishDir, projectID)
+	info, err := os.Stat(target)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return ErrNotFound
+		}
+		return fmt.Errorf("stat published app: %w", err)
+	}
+	if !info.IsDir() {
+		return ErrNotFound
+	}
+	if err := os.RemoveAll(target); err != nil {
+		return fmt.Errorf("delete published app: %w", err)
+	}
+	return nil
 }
 
 func (s *Service) FilePath(slug, urlPath string) (string, error) {

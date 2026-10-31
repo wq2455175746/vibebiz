@@ -192,7 +192,11 @@ func main() {
 	}
 	notificationChannelHandler := handler.NewNotificationChannelHandler(channelService)
 	fdeResourceHandler := handler.NewFdeResourceHandler(fderesource.NewService(fderesource.NewMySQLStore(db)))
-	publishHandler := handler.NewPublishHandler(publish.NewService(cfg.WorkspacesDir, cfg.PublishDir), projectStore, cfg.PublicBaseURL)
+	publishService := publish.NewService(cfg.WorkspacesDir, cfg.PublishDir)
+	if err := publishService.RefreshSharePages(ctx); err != nil {
+		obs.Logger.Warn("refresh published share pages failed", "error", err)
+	}
+	publishHandler := handler.NewPublishHandler(publishService, projectStore, cfg.PublicBaseURL)
 
 	healthChecker := sandboxregistry.NewHealthChecker(registryRepo, cfg.SandboxHeartbeatTTL, cfg.SandboxHealthTimeout, obs)
 	asynqLogger := sandboxregistry.NewAsyncLogger(obs.Logger)

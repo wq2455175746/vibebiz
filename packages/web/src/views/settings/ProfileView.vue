@@ -3,6 +3,7 @@ import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import { computed, onMounted, ref } from 'vue'
 
+import { deletePublishedProject, listPublishedProjects } from '@/api/publish'
 import {
   confirmAvatar,
   getProfile,
@@ -11,9 +12,12 @@ import {
   uploadAvatar,
   type PresignInput,
 } from '@/api/settings'
+import ProjectCard from '@/components/home/ProjectCard.vue'
 import AvatarUploader from '@/components/settings/AvatarUploader.vue'
 import { useAuthStore } from '@/stores/auth'
-import type { Presign } from '@/types'
+import type { Presign, PublishedProject } from '@/types'
+import { publishedToProject } from '@/utils/publish'
+import '@/styles/home.css'
 
 const auth = useAuthStore()
 const loading = ref(true)
@@ -25,6 +29,12 @@ const editError = ref('')
 const notice = ref('')
 
 const user = computed(() => auth.user)
+const published = ref<PublishedProject[]>([])
+const publishedLoading = ref(true)
+const publishedError = ref('')
+const publishedCards = computed(() =>
+  published.value.map((item) => ({ item, project: publishedToProject(item) })),
+)
 
 function startEdit() {
   draft.value = user.value?.username ?? ''
@@ -73,7 +83,39 @@ function onAvatarUploaded() {
   notice.value = '头像已更新'
 }
 
+function openPublished(item: PublishedProject) {
+  window.open(item.url, '_blank', 'noopener,noreferrer')
+}
+
+async function removePublished(item: PublishedProject) {
+  if (
+    !window.confirm(`确定删除「${item.name}」的发布吗？删除后分享链接会失效，项目文件不会删除。`)
+  ) {
+    return
+  }
+  publishedError.value = ''
+  try {
+    await deletePublishedProject(item.projectId)
+    published.value = published.value.filter((entry) => entry.projectId !== item.projectId)
+  } catch (err) {
+    publishedError.value = err instanceof Error ? err.message : '删除发布失败'
+  }
+}
+
+async function loadPublished() {
+  publishedLoading.value = true
+  publishedError.value = ''
+  try {
+    published.value = await listPublishedProjects()
+  } catch (err) {
+    publishedError.value = err instanceof Error ? err.message : '发布项目加载失败'
+  } finally {
+    publishedLoading.value = false
+  }
+}
+
 onMounted(async () => {
+  void loadPublished()
   try {
     auth.applyUser(await getProfile())
   } catch (err) {
@@ -154,5 +196,31 @@ onMounted(async () => {
 
       <p v-if="notice" class="settings-notice settings-row-notice" role="status">{{ notice }}</p>
     </div>
+
+    <section class="settings-published">
+      <header class="settings-published-head">
+        <div>
+          <h2>我发布的项目</h2>
+          <p>重新发布会更新同一个分享链接。</p>
+        </div>
+        <span v-if="!publishedLoading && !publishedError">{{ published.length }} 个</span>
+      </header>
+      <p v-if="publishedLoading" class="settings-state">加载中…</p>
+      <p v-else-if="publishedError" class="settings-error" role="alert">{{ publishedError }}</p>
+      <p v-else-if="published.length === 0" class="settings-state">
+        还没有发布项目。在编辑器中点击「发布」后会显示在这里。
+      </p>
+      <div v-else class="project-grid">
+        <ProjectCard
+          v-for="entry in publishedCards"
+          :key="entry.item.projectId"
+          :project="entry.project"
+          :share-url="entry.item.url"
+          delete-label="删除发布"
+          @open="openPublished(entry.item)"
+          @delete="removePublished(entry.item)"
+        />
+      </div>
+    </section>
   </section>
 </template>

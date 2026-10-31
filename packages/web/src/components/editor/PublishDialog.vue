@@ -107,7 +107,7 @@ function openURL() {
 
       <template v-else>
         <p class="publish-note">
-          发布后会生成一张作品卡片，手机打开链接可以直接体验。请先确认项目中的
+          发布后会生成一张作品卡片，手机打开链接可以直接体验。再次发布会覆盖更新同一分享链接。请先确认项目中的
           <code>index.html</code> 或 <code>app.html</code> 是最新版本。
         </p>
         <label class="publish-field">

@@ -1,12 +1,17 @@
 <script setup lang="ts">
 import Popover from 'primevue/popover'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 import type { Project } from '@/types'
 import { resolveEditorPath } from '@/utils/enterprise'
 import { formatDate } from '@/utils/storage'
 
-const props = defineProps<{ project: Project }>()
+const props = defineProps<{
+  project: Project
+  shareUrl?: string
+  hideDelete?: boolean
+  deleteLabel?: string
+}>()
 
 const emit = defineEmits<{
   (event: 'open', id: string): void
@@ -15,6 +20,9 @@ const emit = defineEmits<{
 
 const menu = ref<InstanceType<typeof Popover> | null>(null)
 const coverFailed = ref(false)
+const link = computed(
+  () => props.shareUrl || `${window.location.origin}${resolveEditorPath(props.project)}`,
+)
 
 function toggleMenu(event: Event) {
   menu.value?.toggle(event)
@@ -28,9 +36,7 @@ function openProject() {
 async function copyLink() {
   menu.value?.hide()
   try {
-    await navigator.clipboard?.writeText(
-      `${window.location.origin}${resolveEditorPath(props.project)}`,
-    )
+    await navigator.clipboard?.writeText(link.value)
   } catch {
     return
   }
@@ -74,15 +80,15 @@ function requestDelete() {
       <div class="project-menu">
         <button type="button" @click="openProject">
           <i class="pi pi-external-link" />
-          打开项目
+          {{ shareUrl ? '打开分享页' : '打开项目' }}
         </button>
         <button type="button" @click="copyLink">
           <i class="pi pi-link" />
-          复制链接
+          {{ shareUrl ? '复制分享链接' : '复制链接' }}
         </button>
-        <button class="danger" type="button" @click="requestDelete">
+        <button v-if="!hideDelete" class="danger" type="button" @click="requestDelete">
           <i class="pi pi-trash" />
-          删除
+          {{ deleteLabel || '删除' }}
         </button>
       </div>
     </Popover>

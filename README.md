@@ -122,6 +122,10 @@ CP / DP → sandbox
 - 启动：`PUBLIC_BASE_URL=http://服务器IP:8088 docker compose up -d backend published`，确保 CP 返回正确公网链接。
 - nginx 示例配置见 `deployment/nginx/published.conf`。
 - CP 的 `/p/` 路由仅用于本地预览，并加了 sandbox CSP；生产必须把用户作品放在独立域名，避免与 CP 共享登录态。
+- 「系统设置 → 个人信息」会列出当前用户所有工作区的已发布项目，点击卡片打开分享页。
+- 个人页可删除发布：只删除 `PUBLISH_DIR/{projectId}`，不删除项目工作区。
+- 同一项目再次发布直接覆盖更新，分享链接不变。
+- CP 启动时会自动刷新已有发布页的分享模板，修复样式无需逐个重新发布。
 
 当前发布不落数据库：重复发布覆盖同一目录，不支持版本回滚、统计和撤回。
 

@@ -53,6 +53,9 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 
 	meAPI := api.Group("/me", authn.RequireUser)
 	meAPI.GET("/profile", settingsHandler.GetProfile)
+	if publishApp != nil {
+		meAPI.GET("/published-projects", publishApp.ListPublished)
+	}
 	meAPI.PUT("/profile", settingsHandler.UpdateProfile)
 	meAPI.POST("/avatar/presign", settingsHandler.PresignAvatar)
 	meAPI.PUT("/avatar", settingsHandler.ConfirmAvatar)
@@ -98,6 +101,7 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 	projectsAPI.PUT("/:id/entry", projectHandler.UpdatePreviewPath)
 	if publishApp != nil {
 		projectsAPI.POST("/:id/publish", publishApp.Publish)
+		projectsAPI.DELETE("/:id/publish", publishApp.DeletePublished)
 	}
 	if stageHandler != nil {
 		projectsAPI.GET("/:id/stages", stageHandler.List)

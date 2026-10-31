@@ -81,6 +81,16 @@ export interface Project {
   coverUrl?: string | null
 }
 
+export interface PublishedProject {
+  projectId: string
+  name: string
+  description: string
+  tags: string[]
+  coverUrl: string | null
+  publishedAt: string
+  url: string
+}
+
 export type ProjectStageStatus = 'locked' | 'active' | 'done' | 'placeholder'
 export type ProjectStageWorkspace = 'document' | 'development' | 'placeholder'
 
