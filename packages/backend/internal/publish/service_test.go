@@ -63,6 +63,11 @@ func TestPublishCopiesWorkspaceAndGeneratesSharePage(t *testing.T) {
 	if strings.Contains(text, "do not publish") {
 		t.Fatal("docs leaked into share page")
 	}
+	if info, err := os.Stat(filepath.Join(published, projectID)); err != nil {
+		t.Fatal(err)
+	} else if info.Mode().Perm() != 0o755 {
+		t.Fatalf("published dir mode = %o, want 755", info.Mode().Perm())
+	}
 	if _, err := os.Stat(filepath.Join(published, projectID, "game", "assets", "game.js")); err != nil {
 		t.Fatal(err)
 	}
@@ -221,6 +226,9 @@ func TestRefreshSharePagesRewritesExistingIndexes(t *testing.T) {
 	if err := os.WriteFile(sharePath, []byte("old share page"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.Chmod(filepath.Join(published, projectID), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	if err := service.RefreshSharePages(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -230,6 +238,11 @@ func TestRefreshSharePagesRewritesExistingIndexes(t *testing.T) {
 	}
 	if !strings.Contains(string(text), "刷新后的标题") || strings.Contains(string(text), "old share page") {
 		t.Fatalf("share page not refreshed: %s", text)
+	}
+	if info, err := os.Stat(filepath.Join(published, projectID)); err != nil {
+		t.Fatal(err)
+	} else if info.Mode().Perm() != 0o755 {
+		t.Fatalf("refreshed dir mode = %o, want 755", info.Mode().Perm())
 	}
 }
 

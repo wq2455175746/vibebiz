@@ -99,6 +99,10 @@ func (s *Service) Publish(ctx context.Context, projectID string, input Input) (R
 	if err != nil {
 		return Result{}, fmt.Errorf("create staging dir: %w", err)
 	}
+	if err := os.Chmod(staging, 0o755); err != nil {
+		_ = os.RemoveAll(staging)
+		return Result{}, fmt.Errorf("set staging dir permissions: %w", err)
+	}
 	committed := false
 	defer func() {
 		if !committed {
@@ -198,6 +202,9 @@ func (s *Service) RefreshSharePages(ctx context.Context) error {
 			if err != nil {
 				continue
 			}
+		}
+		if err := os.Chmod(filepath.Join(s.PublishDir, item.ProjectID), 0o755); err != nil {
+			return fmt.Errorf("fix published dir permissions: %w", err)
 		}
 		tmp, err := os.MkdirTemp(s.PublishDir, ".share-refresh-")
 		if err != nil {
