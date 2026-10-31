@@ -117,9 +117,9 @@ CP / DP → sandbox
 - 本地开发可直接访问 `http://localhost:8080/p/{projectId}/`。
 - 同一 Wi-Fi 手机可访问 `http://电脑局域网IP:8080/p/{projectId}/`。
 - 本地 Docker 使用 `data/published`；线上 `deployment/docker/docker-compose.public.yml` 使用 `deployment/docker/published`。
-- 线上 `published` 服务默认映射 `8088:80`，需在安全组/防火墙放行 `8088`，或改用域名和 HTTPS 反向代理。
+- 线上 `published` 服务端口由 `PUBLISHED_HTTP_PORT` 控制，默认 `8088`；需在安全组/防火墙放行该端口，或改用域名和 HTTPS 反向代理。
 - nginx 已作为 `published` 服务写入 `docker-compose.yml`，默认端口 `8088`。
-- 启动：`PUBLIC_BASE_URL=http://服务器IP:8088 docker compose up -d backend published`，确保 CP 返回正确公网链接。
+- 启动：`PUBLIC_BASE_URL=http://服务器IP:PUBLISHED_HTTP_PORT docker compose up -d backend published`，确保 CP 返回正确公网链接。
 - nginx 示例配置见 `deployment/nginx/published.conf`。
 - CP 的 `/p/` 路由仅用于本地预览，并加了 sandbox CSP；生产必须把用户作品放在独立域名，避免与 CP 共享登录态。
 - 「系统设置 → 个人信息」会列出当前用户所有工作区的已发布项目，点击卡片打开分享页。
