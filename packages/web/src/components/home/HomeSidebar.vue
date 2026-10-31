@@ -310,11 +310,11 @@ function navigate(name: string) {
       <div class="sidebar-tools">
         <a
           class="sidebar-icon-btn"
-          href="https://help.atoms.dev/zh"
+          href="https://github.com/wq2455175746/vibebiz"
           target="_blank"
           rel="noopener noreferrer"
-          aria-label="帮助"
-          title="帮助"
+          aria-label="GitHub 仓库"
+          title="GitHub 仓库"
         >
           <i class="pi pi-question-circle" />
         </a>

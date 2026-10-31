@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -19,6 +20,8 @@ type PublishHandler struct {
 	Service       *publish.Service
 	Projects      store.ProjectStore
 	PublicBaseURL string
+	Covers        CoverURLSigner
+	CoverExpiry   time.Duration
 }
 
 func NewPublishHandler(service *publish.Service, projects store.ProjectStore, publicBaseURL string) *PublishHandler {
@@ -114,12 +117,30 @@ func (h *PublishHandler) ListPublished(c echo.Context) error {
 			Name:        name,
 			Description: item.Description,
 			Tags:        tags,
-			CoverURL:    project.CoverURL,
+			CoverURL:    h.coverURL(c.Request().Context(), project),
 			PublishedAt: item.PublishedAt.UTC().Format(time.RFC3339),
 			URL:         h.publicBase(c) + "/p/" + item.ProjectID + "/",
 		})
 	}
 	return response.OK(c, map[string]any{"projects": out})
+}
+
+func (h *PublishHandler) coverURL(ctx context.Context, project *model.Project) string {
+	if project == nil {
+		return ""
+	}
+	if project.CoverS3Path == "" || h.Covers == nil {
+		return project.CoverURL
+	}
+	expiry := h.CoverExpiry
+	if expiry <= 0 {
+		expiry = 15 * time.Minute
+	}
+	signed, err := h.Covers.PresignGet(ctx, project.CoverS3Path, expiry)
+	if err != nil {
+		return project.CoverURL
+	}
+	return signed
 }
 
 func (h *PublishHandler) DeletePublished(c echo.Context) error {

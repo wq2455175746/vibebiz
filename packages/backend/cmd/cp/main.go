@@ -197,6 +197,8 @@ func main() {
 		obs.Logger.Warn("refresh published share pages failed", "error", err)
 	}
 	publishHandler := handler.NewPublishHandler(publishService, projectStore, cfg.PublicBaseURL)
+	publishHandler.Covers = avatarPresigner
+	publishHandler.CoverExpiry = cfg.S3PresignExpiry()
 
 	healthChecker := sandboxregistry.NewHealthChecker(registryRepo, cfg.SandboxHeartbeatTTL, cfg.SandboxHealthTimeout, obs)
 	asynqLogger := sandboxregistry.NewAsyncLogger(obs.Logger)

@@ -172,6 +172,55 @@ func TestListPublishedFiltersWorkspaceAndBuildsShareURL(t *testing.T) {
 	}
 }
 
+func TestListPublishedSignsCoverURL(t *testing.T) {
+	root := t.TempDir()
+	workspaces := filepath.Join(root, "workspaces")
+	published := filepath.Join(root, "published")
+	source := filepath.Join(workspaces, "p1")
+	if err := os.MkdirAll(source, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "index.html"), []byte("<h1>game</h1>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	service := publish.NewService(workspaces, published)
+	if _, err := service.Publish(context.Background(), "p1", publish.Input{Title: "我的分享页"}); err != nil {
+		t.Fatal(err)
+	}
+	projects := store.NewMemoryProjectStore()
+	if err := projects.Create(context.Background(), &model.Project{
+		ID: "p1", Name: "Demo", WorkspaceID: 3, CoverS3Path: "projects/p1/cover.png",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	h := NewPublishHandler(service, projects, "")
+	h.Covers = fakeCoverURLSigner{}
+	e := echo.New()
+	routeWithSession(e, http.MethodGet, "/cp/api/v1/me/published-projects", h.ListPublished, sessionForTest(3))
+
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/cp/api/v1/me/published-projects", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var got struct {
+		Result struct {
+			Projects []struct {
+				CoverURL string `json:"coverUrl"`
+			} `json:"projects"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Result.Projects) != 1 {
+		t.Fatalf("projects = %+v", got.Result.Projects)
+	}
+	if got.Result.Projects[0].CoverURL != "https://s3.example/projects/p1/cover.png" {
+		t.Fatalf("coverUrl = %q", got.Result.Projects[0].CoverURL)
+	}
+}
+
 func TestDeletePublishedRemovesSharePageAndRejectsForeignWorkspace(t *testing.T) {
 	root := t.TempDir()
 	workspaces := filepath.Join(root, "workspaces")
