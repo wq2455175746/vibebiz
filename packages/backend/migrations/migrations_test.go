@@ -44,7 +44,7 @@ func TestInitialSchemaCoversAllBusinessTables(t *testing.T) {
 		"external_resource", "project_external_resource", "llm_model", "agent_role",
 		"sandbox_instance", "project_resource",
 		"scheduled_task", "chat_conversation", "chat_message", "chat_memory",
-		"rag_knowledge_base", "project_rag",
+		"rag_knowledge_base", "project_rag", "fde_resource",
 	}
 	var all strings.Builder
 	entries, err := fs.ReadDir(FS, ".")
@@ -195,14 +195,31 @@ func TestSandboxRegistryMigration(t *testing.T) {
 	}
 }
 
+func TestFdeResourceMigration(t *testing.T) {
+	body, err := fs.ReadFile(FS, "00021_fde_resource.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	for _, want := range []string{
+		"CREATE TABLE `fde_resource`", "name", "contact", "skills", "region", "note",
+		"enabled", "idx_fde_resource_enabled", "DROP TABLE IF EXISTS `fde_resource`",
+		"-- +goose Up", "-- +goose Down",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("fde resource migration missing %q", want)
+		}
+	}
+}
+
 func TestGooseCanCollectMigrations(t *testing.T) {
 	goose.SetBaseFS(FS)
 	migs, err := goose.CollectMigrations(".", 0, int64(^uint(0)>>1))
 	if err != nil {
 		t.Fatalf("collect migrations: %v", err)
 	}
-	if len(migs) != 19 {
-		t.Fatalf("collected %d migrations, want 19", len(migs))
+	if len(migs) != 21 {
+		t.Fatalf("collected %d migrations, want 21", len(migs))
 	}
 	for i, mig := range migs {
 		want := int64(i + 1)
@@ -348,6 +365,19 @@ func TestNotificationChannelMigration(t *testing.T) {
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("notification channel migration missing %q", want)
+		}
+	}
+}
+
+func TestScheduledTaskTopicMigration(t *testing.T) {
+	body, err := fs.ReadFile(FS, "00020_scheduled_task_topic.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	for _, want := range []string{"'scheduled'", "'定时任务'", "prompt_template", "-- +goose Up", "-- +goose Down"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("scheduled task topic migration missing %q", want)
 		}
 	}
 }

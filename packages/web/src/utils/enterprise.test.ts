@@ -10,6 +10,7 @@ import {
   stageStatesFromProject,
   markEnterpriseProject,
   resolveEditorPath,
+  stageArtifactReady,
 } from './enterprise'
 
 function memoryStorage(initial: Record<string, string> = {}) {
@@ -68,6 +69,21 @@ describe('enterprise stages', () => {
     expect(states.requirements.status).toBe('done')
     expect(states.architecture.status).toBe('active')
     expect(states.test_plan.status).toBe('locked')
+  })
+
+  it('only accepts the loaded artifact of the active stage', () => {
+    const development = ENTERPRISE_STAGES[4]
+    expect(stageArtifactReady(development, 'docs/test-plan.md', 'old content')).toBe(false)
+    expect(stageArtifactReady(development, 'docs/development.md', '')).toBe(false)
+    expect(stageArtifactReady(development, 'docs/development.md', 'done')).toBe(true)
+    expect(stageArtifactReady(null, 'docs/development.md', 'done')).toBe(false)
+  })
+
+  it('marks artifact and delivery as dedicated workspaces', () => {
+    expect(ENTERPRISE_STAGES.find((item) => item.key === 'artifacts')?.workspace).toBe('artifact')
+    expect(ENTERPRISE_STAGES.find((item) => item.key === 'delivery')?.workspace).toBe('delivery')
+    expect(buildStagePrompt(ENTERPRISE_STAGES[5])).toBe('')
+    expect(buildStagePrompt(ENTERPRISE_STAGES[6])).toBe('')
   })
 
   it('builds requirement and later stage prompts with role and artifact', () => {

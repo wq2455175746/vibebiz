@@ -205,3 +205,15 @@ func TestLoadNotificationChannelConfig(t *testing.T) {
 		t.Fatalf("smtp config = %+v", cfg)
 	}
 }
+
+func TestScheduledTaskDefaults(t *testing.T) {
+	t.Setenv("SCHEDULED_DISPATCH_INTERVAL", "")
+	t.Setenv("SCHEDULED_RUN_TIMEOUT", "")
+	cfg := Load("cp")
+	if cfg.ScheduledDispatchInterval != 30*time.Second {
+		t.Fatalf("dispatch interval = %s", cfg.ScheduledDispatchInterval)
+	}
+	if cfg.ScheduledRunTimeout != 15*time.Minute {
+		t.Fatalf("run timeout = %s", cfg.ScheduledRunTimeout)
+	}
+}

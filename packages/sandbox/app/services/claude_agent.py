@@ -28,6 +28,7 @@ def build_options(
     session_id: str | None = None,
     agent_roles: list[dict[str, Any]] | None = None,
     team_mode: bool = False,
+    system_prompt_text: str = "",
 ) -> ClaudeAgentOptions:
     env: dict[str, str] = {}
     if settings.anthropic_base_url:
@@ -53,12 +54,13 @@ def build_options(
 
     role_prompt = build_role_prompt(agent_roles or [], team_mode)
     agent_defs = build_agent_definitions(agent_roles or [], team_mode)
+    prompt_parts = [part for part in (role_prompt, system_prompt_text) if part]
     system_prompt = None
-    if role_prompt:
+    if prompt_parts:
         system_prompt = {
             "type": "preset",
             "preset": "claude_code",
-            "append": role_prompt,
+            "append": "\n\n".join(prompt_parts),
         }
     allowed_tools = list(ALLOWED_TOOLS)
     if agent_defs:
@@ -101,6 +103,8 @@ class ClaudeAgent:
         session_id: str | None = None,
         agent_roles: list[dict[str, Any]] | None = None,
         team_mode: bool = False,
+        system_prompt: str = "",
+        context: str = "",
     ) -> AsyncIterator[dict]:
         tracer = get_tracer()
         with tracer.start_as_current_span("agent.run") as span:
@@ -119,7 +123,14 @@ class ClaudeAgent:
             status = "error"
             try:
                 async for event in self._run(
-                    project_id, message, workspace, session_id, agent_roles, team_mode
+                    project_id,
+                    message,
+                    workspace,
+                    session_id,
+                    agent_roles,
+                    team_mode,
+                    system_prompt,
+                    context,
                 ):
                     yield event
                 status = "success"
@@ -156,13 +167,22 @@ class ClaudeAgent:
         session_id: str | None = None,
         agent_roles: list[dict[str, Any]] | None = None,
         team_mode: bool = False,
+        system_prompt: str = "",
+        context: str = "",
     ) -> AsyncIterator[dict]:
         project_dir = workspace.project_dir(project_id)
         session = session_id or self._sessions.get(project_id)
         produced = False
         try:
             async for event in self._stream(
-                project_id, message, project_dir, session, agent_roles, team_mode
+                project_id,
+                message,
+                project_dir,
+                session,
+                agent_roles,
+                team_mode,
+                system_prompt,
+                context,
             ):
                 if event["payload"]["type"] != "system":
                     produced = True
@@ -171,7 +191,14 @@ class ClaudeAgent:
             if session and not produced and _missing_session(exc):
                 self._sessions.pop(project_id, None)
                 async for event in self._stream(
-                    project_id, message, project_dir, None, agent_roles, team_mode
+                    project_id,
+                    message,
+                    project_dir,
+                    None,
+                    agent_roles,
+                    team_mode,
+                    system_prompt,
+                    context,
                 ):
                     yield event
                 return
@@ -185,8 +212,14 @@ class ClaudeAgent:
         session: str | None,
         agent_roles: list[dict[str, Any]] | None,
         team_mode: bool,
+        system_prompt: str,
+        context: str,
     ) -> AsyncIterator[dict]:
-        options = build_options(self.settings, project_dir, session, agent_roles, team_mode)
+        if context:
+            message = f"最近对话上下文：\n{context}\n\n当前任务：\n{message}"
+        options = build_options(
+            self.settings, project_dir, session, agent_roles, team_mode, system_prompt
+        )
         async for sdk_message in query(prompt=message, options=options):
             if isinstance(sdk_message, ResultMessage) and sdk_message.session_id:
                 self._sessions[project_id] = sdk_message.session_id

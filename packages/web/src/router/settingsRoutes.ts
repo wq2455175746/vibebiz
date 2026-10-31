@@ -24,6 +24,20 @@ export const settingsMenu: SettingsMenuItem[] = [
     group: '账户',
   },
   {
+    label: '制品空间配置',
+    icon: 'pi pi-box',
+    to: '/settings/artifact-space',
+    name: 'settings-artifact-space',
+    group: '企业工程',
+  },
+  {
+    label: '交付空间配置',
+    icon: 'pi pi-send',
+    to: '/settings/delivery-space',
+    name: 'settings-delivery-space',
+    group: '企业工程',
+  },
+  {
     label: '磁盘空间',
     icon: 'pi pi-database',
     to: '/settings/storage',
@@ -62,6 +76,16 @@ export const settingsRoute: RouteRecordRaw = {
       path: 'notification-channels',
       name: 'settings-notification-channels',
       component: () => import('@/views/settings/NotificationChannelsView.vue'),
+    },
+    {
+      path: 'artifact-space',
+      name: 'settings-artifact-space',
+      component: () => import('@/views/settings/ArtifactSpaceConfigView.vue'),
+    },
+    {
+      path: 'delivery-space',
+      name: 'settings-delivery-space',
+      component: () => import('@/views/settings/DeliverySpaceConfigView.vue'),
     },
     {
       path: 'storage',

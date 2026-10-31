@@ -27,6 +27,7 @@
 | 主题 | 决策 |
 |---|---|
 | 任务存储 | 复用现有 `scheduled_task` |
+| 首次执行 | 任务创建成功后立即入队执行一次 |
 | 项目粒度 | 每个任务一个固定项目，创建任务时立即创建 |
 | 任务主题 | 全局唯一顶层主题 `scheduled`（定时任务） |
 | 创建方式 | AI 自然语言解析 + 手动表单 |
@@ -111,7 +112,7 @@ ON DUPLICATE KEY UPDATE
 
 创建任务时：
 
-1. 用现有 `ProjectInitializer` 在 sandbox 初始化项目。
+1. 用现有 `ProjectInitializer` 在 sandbox 初始化项目，保留现有 starter 文件，确保首次预览不为空。
 2. 创建 `project` 行：
    - `name`：任务名称
    - `topic_id`：`scheduled` 主题 ID
@@ -237,6 +238,7 @@ asynq worker 处理 `scheduled_task:run`：
 
 ### 5.5 暂停、恢复、编辑、删除
 
+- 创建成功后立即入队一次 `scheduled_task:run`，不等待下一次 cron。
 - 暂停：`enabled=0`，`next_run_at=NULL`。
 - 恢复：`enabled=1`，按当前时间计算新的 `next_run_at`。
 - 编辑：更新名称/提示词/cron/时区；重新计算 `next_run_at`；项目不变。

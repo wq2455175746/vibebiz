@@ -34,6 +34,8 @@ class RecordingAgent:
         session_id=None,
         agent_roles=None,
         team_mode=False,
+        system_prompt="",
+        context="",
     ):
         self.calls.append(
             {

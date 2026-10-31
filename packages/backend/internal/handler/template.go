@@ -45,6 +45,7 @@ func (h *TemplateHandler) List(c echo.Context) error {
 	pageSize, _ := strconv.Atoi(c.QueryParam("pageSize"))
 	result, err := h.Service.List(c.Request().Context(), projecttemplate.Query{
 		Keyword: c.QueryParam("keyword"), ParentTopicID: parentID, TopicID: topicID, Page: page, PageSize: pageSize,
+		Sort: c.QueryParam("sort"),
 	})
 	if err != nil {
 		return templateError(c, err)

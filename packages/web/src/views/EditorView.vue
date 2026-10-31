@@ -43,6 +43,7 @@ const tabMeta = computed(() => {
 })
 let statusTimer: ReturnType<typeof setInterval> | null = null
 let backgroundProjectId: string | null = null
+let backgroundWasActive = false
 
 async function shareProject() {
   const url = new URL(buildPreviewUrl(id.value), window.location.origin).toString()
@@ -66,6 +67,7 @@ function stopStatusPolling() {
 
 function stopBackgroundPolling() {
   backgroundProjectId = null
+  backgroundWasActive = false
   stopStatusPolling()
 }
 
@@ -81,30 +83,36 @@ async function pollBackground(projectId: string) {
   if (backgroundProjectId !== projectId) {
     return
   }
-  await refreshProjectLogs(projectId)
-  if (backgroundProjectId !== projectId) {
-    return
-  }
 
   let active = false
   try {
-    active = await chat.resume(projectId)
+    active = await chat.syncStatus(projectId)
   } catch {
     return
   }
-  if (backgroundProjectId !== projectId || active) {
+  if (backgroundProjectId !== projectId) {
+    return
+  }
+  if (active) {
+    backgroundWasActive = true
+    return
+  }
+  if (!backgroundWasActive) {
     return
   }
 
-  backgroundProjectId = null
-  stopStatusPolling()
+  backgroundWasActive = false
+  await chat.loadHistory(projectId).catch(() => false)
+  if (backgroundProjectId !== projectId) {
+    return
+  }
   await refreshProjectLogs(projectId)
 }
 
 function startBackgroundPolling(projectId: string) {
   backgroundProjectId = projectId
   stopStatusPolling()
-  statusTimer = setInterval(() => void pollBackground(projectId), 2500)
+  statusTimer = setInterval(() => void pollBackground(projectId), 5000)
 }
 
 function promptKey(projectId: string) {
@@ -167,11 +175,9 @@ async function load() {
   } catch {
     hasHistory = false
   }
-  const active = await chat.syncStatus(projectId).catch(() => false)
+  backgroundWasActive = await chat.syncStatus(projectId).catch(() => false)
   await refreshProjectLogs(projectId)
-  if (active) {
-    startBackgroundPolling(projectId)
-  }
+  startBackgroundPolling(projectId)
   previewReady.value = true
 
   const prompt = takeInitialPrompt(projectId)

@@ -28,6 +28,9 @@ const activeTab = ref<DiscoveryTab>('projects')
 const visibleProjects = computed(() =>
   props.limit ? props.projects.slice(0, props.limit) : props.projects,
 )
+const visibleTemplates = computed(() =>
+  props.limit ? props.templates.slice(0, props.limit) : props.templates,
+)
 
 const tabs: { key: DiscoveryTab; label: string }[] = [
   { key: 'projects', label: '我的项目' },
@@ -79,7 +82,7 @@ const tabs: { key: DiscoveryTab; label: string }[] = [
       <p v-else-if="templatesLoading" class="discovery-empty">加载中...</p>
       <p v-else-if="templates.length === 0" class="discovery-empty">暂无模板</p>
       <div v-else class="project-grid">
-        <article v-for="template in templates" :key="template.id" class="template-card">
+        <article v-for="template in visibleTemplates" :key="template.id" class="template-card">
           <span class="template-cover" :class="{ empty: !template.coverUrl }">
             <img v-if="template.coverUrl" :src="template.coverUrl" alt="" />
             <i v-else class="pi pi-image" />

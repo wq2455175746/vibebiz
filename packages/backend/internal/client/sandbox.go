@@ -72,6 +72,16 @@ type ChatStatus struct {
 	TurnID string `json:"turnId"`
 }
 
+type TaskDraft struct {
+	Name           string `json:"name"`
+	Description    string `json:"description"`
+	ScheduleType   string `json:"scheduleType"`
+	Time           string `json:"time"`
+	Weekdays       []int  `json:"weekdays"`
+	CronExpression string `json:"cronExpression"`
+	Timezone       string `json:"timezone"`
+}
+
 type ChatLog struct {
 	TS      string `json:"ts"`
 	Level   string `json:"level"`
@@ -300,6 +310,18 @@ func (s *Sandbox) ChatLogs(ctx context.Context, id string, limit int) ([]ChatLog
 		return nil, err
 	}
 	return payload.Logs, nil
+}
+
+func (s *Sandbox) ParseTask(ctx context.Context, prompt string) (TaskDraft, error) {
+	raw, err := s.doJSON(ctx, "parse_task", "scheduled-parse", http.MethodPost, "/internal/tasks/parse", map[string]string{"prompt": prompt})
+	if err != nil {
+		return TaskDraft{}, err
+	}
+	var draft TaskDraft
+	if err := json.Unmarshal(raw, &draft); err != nil {
+		return TaskDraft{}, err
+	}
+	return draft, nil
 }
 
 func (s *Sandbox) ChatStatus(ctx context.Context, id string) (ChatStatus, error) {

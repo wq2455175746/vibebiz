@@ -15,6 +15,7 @@
 - 复用现有 `scheduled_task` 表；不新增 `scheduled_task_run` 表。
 - `scheduled_task.task_type` 固定为 `agent`。
 - 每个任务创建一个固定项目，创建任务时立即创建；后续触发不新建项目。
+- 任务创建成功后立即入队执行一次。
 - 所有任务项目主题指向 `project_topic.topic_code='scheduled'`。
 - 调度不使用 per-task asynq Scheduler entry，不做 leader 选举。
 - dispatcher 为 `@every 30s` + `asynq.Unique(25s)`；运行任务加 `asynq.Unique(50s)` 和 Redis 执行锁。
@@ -30,7 +31,7 @@
 ### Task 1: 主题种子与配置
 
 **Files:**
-- Create: `packages/backend/migrations/00019_scheduled_task_topic.sql`
+- Create: `packages/backend/migrations/00020_scheduled_task_topic.sql`
 - Modify: `packages/backend/internal/config/config.go`
 - Test: `packages/backend/internal/config/config_test.go`
 
@@ -3030,7 +3031,7 @@ go run ./cmd/migrate up
 go run ./cmd/migrate version
 ```
 
-Expected: version 至少 19。
+Expected: version 至少 20。
 
 - [ ] **Step 3: 手动验证 AI 创建**
 

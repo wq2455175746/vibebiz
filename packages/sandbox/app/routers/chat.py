@@ -38,6 +38,8 @@ class ChatRequest(BaseModel):
     references: list[ChatReference] = []
     agentRoles: list[AgentRoleInput] = []
     teamMode: bool = False
+    systemPrompt: str = ""
+    context: str = ""
 
 
 def _count(project_id: str, status: str) -> None:
@@ -73,6 +75,8 @@ async def chat(project_id: str, body: ChatRequest, request: Request) -> Streamin
             references,
             [item.model_dump() for item in body.agentRoles],
             body.teamMode,
+            system_prompt=body.systemPrompt,
+            context=body.context,
         )
     except TurnInProgress:
         _count(project_id, "409")

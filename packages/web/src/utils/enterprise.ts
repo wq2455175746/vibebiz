@@ -10,7 +10,12 @@ export type EnterpriseStageKey =
   | 'delivery'
 
 export type EnterpriseStageStatus = 'locked' | 'active' | 'done' | 'placeholder'
-export type EnterpriseStageWorkspace = 'document' | 'development' | 'placeholder'
+export type EnterpriseStageWorkspace =
+  | 'document'
+  | 'development'
+  | 'artifact'
+  | 'delivery'
+  | 'placeholder'
 
 export interface EnterpriseStageDefinition {
   key: EnterpriseStageKey
@@ -84,18 +89,18 @@ export const ENTERPRISE_STAGES: EnterpriseStageDefinition[] = [
     seq: 6,
     title: '制品空间',
     roleCode: '',
-    roleLabel: '暂未开放',
+    roleLabel: '制品流水线',
     artifactPath: '',
-    workspace: 'placeholder',
+    workspace: 'artifact',
   },
   {
     key: 'delivery',
     seq: 7,
     title: '交付空间',
     roleCode: '',
-    roleLabel: '暂未开放',
+    roleLabel: '交付流水线',
     artifactPath: '',
-    workspace: 'placeholder',
+    workspace: 'delivery',
   },
 ]
 
@@ -122,7 +127,7 @@ export function createInitialStageState(): EnterpriseStageStateMap {
       status:
         stage.key === 'requirements'
           ? 'active'
-          : stage.workspace === 'placeholder'
+          : stage.key === 'artifacts' || stage.key === 'delivery'
             ? 'placeholder'
             : 'locked',
       startedAt: null,
@@ -153,7 +158,7 @@ export function stageStatesFromProject(stages: ProjectStage[]): EnterpriseStageS
 }
 
 export function buildStagePrompt(stage: EnterpriseStageDefinition, requirement = ''): string {
-  if (stage.workspace === 'placeholder') {
+  if (stage.workspace !== 'document' && stage.workspace !== 'development') {
     return ''
   }
   const lines = [
@@ -170,6 +175,14 @@ export function buildStagePrompt(stage: EnterpriseStageDefinition, requirement =
   }
   lines.push('', '完成后等待用户确认，不要自行进入下一阶段。')
   return lines.join('\n')
+}
+
+export function stageArtifactReady(
+  stage: EnterpriseStageDefinition | null,
+  loadedPath: string,
+  content: string,
+): boolean {
+  return Boolean(stage?.artifactPath) && loadedPath === stage?.artifactPath && Boolean(content.trim())
 }
 
 export function markEnterpriseProject(

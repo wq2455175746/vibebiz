@@ -15,6 +15,7 @@ export async function listTemplates(
     keyword?: string
     parentTopicId?: number
     topicId?: number
+    sort?: 'latest'
   } = {},
 ): Promise<TemplatePage> {
   return request<TemplatePage>(cpHttp, { method: 'get', url: '/templates', params })

@@ -10,12 +10,15 @@ import CodePane from '@/components/editor/CodePane.vue'
 import EditorHeader from '@/components/editor/EditorHeader.vue'
 import LogConsole from '@/components/editor/LogConsole.vue'
 import PreviewPane from '@/components/editor/PreviewPane.vue'
+import ArtifactWorkspace from '@/components/enterprise/ArtifactWorkspace.vue'
+import DeliveryWorkspace from '@/components/enterprise/DeliveryWorkspace.vue'
 import DocumentWorkspace from '@/components/enterprise/DocumentWorkspace.vue'
 import EnterpriseStageBar from '@/components/enterprise/EnterpriseStageBar.vue'
 import PlaceholderWorkspace from '@/components/enterprise/PlaceholderWorkspace.vue'
 import StageWorkspaceHeader from '@/components/enterprise/StageWorkspaceHeader.vue'
 import { useAgentRolesStore } from '@/stores/agentRoles'
 import { useChatStore } from '@/stores/chat'
+import { useEnterpriseFlowStore } from '@/stores/enterpriseFlow'
 import { useFileStore } from '@/stores/files'
 import { useLogStore } from '@/stores/logs'
 import { useProjectStore } from '@/stores/project'
@@ -25,11 +28,13 @@ import {
   createInitialStageState,
   currentStageKey,
   markEnterpriseProject,
+  stageArtifactReady,
   stageDefinition,
   stageStatesFromProject,
   type EnterpriseStageKey,
   type EnterpriseStageStateMap,
 } from '@/utils/enterprise'
+import { mergeEnterpriseStageStates } from '@/utils/enterpriseFlow'
 import { shouldSendInitialPrompt, takeInitialAppend } from '@/utils/initialPrompt'
 import '@/styles/editor.css'
 import '@/styles/enterprise.css'
@@ -41,13 +46,16 @@ const agentRoles = useAgentRolesStore()
 const files = useFileStore()
 const chat = useChatStore()
 const logs = useLogStore()
+const flows = useEnterpriseFlowStore()
 
 const id = computed(() => String(route.params.id))
 const activeTab = ref<'preview' | 'code' | 'console'>('preview')
 const previewReady = ref(false)
 const stageStates = ref<EnterpriseStageStateMap>(createInitialStageState())
+const serverStageStates = ref<EnterpriseStageStateMap>(createInitialStageState())
 const viewingKey = ref<EnterpriseStageKey | null>(null)
 const artifact = ref<FileContent | null>(null)
+const loadedArtifactPath = ref('')
 const artifactLoading = ref(false)
 const artifactError = ref('')
 const confirming = ref(false)
@@ -59,17 +67,30 @@ const activeKey = computed(() => currentStageKey(stageStates.value))
 const activeState = computed(() => (activeKey.value ? stageStates.value[activeKey.value] : null))
 const activeStarted = computed(() => Boolean(activeState.value?.startedAt))
 const displayedKey = computed<EnterpriseStageKey>(
-  () => viewingKey.value ?? activeKey.value ?? 'artifacts',
+  () =>
+    viewingKey.value ??
+    activeKey.value ??
+    (stageStates.value.delivery.status === 'done' ? 'delivery' : 'artifacts'),
 )
 const displayedStage = computed(() => stageDefinition(displayedKey.value))
 const activeStage = computed(() => (activeKey.value ? stageDefinition(activeKey.value) : null))
+const currentFlow = computed(() => flows.get(id.value))
 const isHistory = computed(() =>
   Boolean(activeKey.value && viewingKey.value && viewingKey.value !== activeKey.value),
 )
+const chatReadOnly = computed(
+  () =>
+    isHistory.value ||
+    displayedStage.value.workspace === 'artifact' ||
+    displayedStage.value.workspace === 'delivery',
+)
 const canComplete = computed(
   () =>
-    Boolean(activeStage.value?.artifactPath) &&
-    Boolean(artifact.value?.content.trim()) &&
+    stageArtifactReady(
+      activeStage.value,
+      loadedArtifactPath.value,
+      artifact.value?.content ?? '',
+    ) &&
     activeStarted.value &&
     !chat.busy &&
     !confirming.value,
@@ -173,12 +194,14 @@ async function loadArtifact() {
   const stage = displayedStage.value
   artifactError.value = ''
   artifact.value = null
+  loadedArtifactPath.value = ''
   if (!stage.artifactPath) {
     return
   }
   artifactLoading.value = true
   try {
     artifact.value = await readFile(id.value, stage.artifactPath)
+    loadedArtifactPath.value = stage.artifactPath
   } catch (err) {
     if (!(err instanceof ApiError && err.status === 404)) {
       artifactError.value = (err as Error).message
@@ -188,19 +211,36 @@ async function loadArtifact() {
   }
 }
 
+function syncStageOverlay(): void {
+  const flow = currentFlow.value
+  stageStates.value = flow
+    ? mergeEnterpriseStageStates(serverStageStates.value, flow)
+    : serverStageStates.value
+}
+
+function ensureArtifactFlow(): void {
+  if (stageStates.value.development.status === 'done') {
+    flows.ensureArtifact(id.value)
+    syncStageOverlay()
+  }
+}
+
 async function loadStages(projectId: string) {
   try {
     const result = await listProjectStages(projectId)
-    stageStates.value = stageStatesFromProject(result.stages)
+    serverStageStates.value = stageStatesFromProject(result.stages)
+    stageStates.value = serverStageStates.value
+    ensureArtifactFlow()
     stageLoadError.value = ''
   } catch (err) {
     stageLoadError.value = (err as Error).message || '阶段状态加载失败'
-    stageStates.value = createInitialStageState()
+    serverStageStates.value = createInitialStageState()
+    stageStates.value = serverStageStates.value
   }
 }
 
 function applyStageMutation(result: StageMutation) {
-  const next = { ...stageStates.value }
+  const next = { ...serverStageStates.value }
   for (const stage of [result.stage, result.nextStage]) {
     if (!stage || !(stage.stageKey in next)) {
       continue
@@ -212,6 +252,7 @@ function applyStageMutation(result: StageMutation) {
       completedAt: stage.completedAt ?? null,
     }
   }
+  serverStageStates.value = next
   stageStates.value = next
 }
 
@@ -240,10 +281,34 @@ async function startStage(
 }
 
 function startCurrentStage() {
-  if (!activeKey.value) {
+  if (
+    !activeStage.value ||
+    activeStage.value.workspace === 'artifact' ||
+    activeStage.value.workspace === 'delivery'
+  ) {
     return
   }
-  void startStage(activeKey.value, projectStore.current?.prompt ?? '')
+  void startStage(activeStage.value.key, projectStore.current?.prompt ?? '')
+}
+
+function confirmArtifactStage(): void {
+  if (!flows.confirmArtifact(id.value)) {
+    confirmError.value = '请先完成代码上传、Jenkins 构建和 Harbor 推送'
+    return
+  }
+  viewingKey.value = null
+  confirmError.value = ''
+  syncStageOverlay()
+}
+
+function confirmDeliveryStage(): void {
+  if (!flows.confirmDelivery(id.value)) {
+    confirmError.value = '请先完成所选交付方式'
+    return
+  }
+  viewingKey.value = null
+  confirmError.value = ''
+  syncStageOverlay()
 }
 
 async function load() {
@@ -306,11 +371,18 @@ async function completeCurrentStage() {
   if (!key || !stage || chat.busy || confirming.value) {
     return
   }
+  if (!canComplete.value) {
+    confirmError.value = `等待 ${stage.roleLabel} 写入 ${stage.artifactPath}`
+    return
+  }
   confirming.value = true
   confirmError.value = ''
   try {
     const result = await completeProjectStage(id.value, key)
     applyStageMutation(result)
+    if (key === 'development') {
+      ensureArtifactFlow()
+    }
     viewingKey.value = null
     activeTab.value = 'preview'
     if (result.nextStage) {
@@ -387,10 +459,22 @@ onBeforeUnmount(() => {
     />
 
     <div class="editor-body">
-      <ChatPanel :project-id="id" :readonly="isHistory" required-role-code="team" />
+      <ChatPanel :project-id="id" :readonly="chatReadOnly" required-role-code="team" />
 
       <main class="editor-workbench enterprise-workbench">
-        <template v-if="displayedStage.workspace !== 'placeholder'">
+        <ArtifactWorkspace
+          v-if="displayedStage.workspace === 'artifact' && currentFlow"
+          :project-id="id"
+          :flow="currentFlow.artifact"
+          @confirmed="confirmArtifactStage"
+        />
+        <DeliveryWorkspace
+          v-else-if="displayedStage.workspace === 'delivery' && currentFlow"
+          :project-id="id"
+          :flow="currentFlow.delivery"
+          @confirmed="confirmDeliveryStage"
+        />
+        <template v-else-if="displayedStage.workspace !== 'placeholder'">
           <StageWorkspaceHeader
             :stage="displayedStage"
             :read-only="isHistory"

@@ -23,6 +23,8 @@ class Agent(Protocol):
         session_id: str | None = None,
         agent_roles: list[dict] | None = None,
         team_mode: bool = False,
+        system_prompt: str = "",
+        context: str = "",
     ) -> AsyncIterator[dict]: ...
 
 
@@ -50,6 +52,8 @@ class StubAgent:
         session_id: str | None = None,
         agent_roles: list[dict] | None = None,
         team_mode: bool = False,
+        system_prompt: str = "",
+        context: str = "",
     ) -> AsyncIterator[dict]:
         tracer = get_tracer()
         with tracer.start_as_current_span("agent.run") as span:
@@ -62,7 +66,14 @@ class StubAgent:
             status = "error"
             try:
                 async for event in self._run(
-                    project_id, message, workspace, session_id, agent_roles, team_mode
+                    project_id,
+                    message,
+                    workspace,
+                    session_id,
+                    agent_roles,
+                    team_mode,
+                    system_prompt,
+                    context,
                 ):
                     yield event
                 status = "success"
@@ -95,9 +106,15 @@ class StubAgent:
         session_id: str | None = None,
         agent_roles: list[dict] | None = None,
         team_mode: bool = False,
+        system_prompt: str = "",
+        context: str = "",
     ) -> AsyncIterator[dict]:
         session = session_id or str(uuid.uuid4())
         prompt = message.strip()
+        if context:
+            prompt = f"最近对话上下文：\n{context}\n\n当前任务：\n{prompt}"
+        if system_prompt:
+            prompt = f"{system_prompt}\n\n{prompt}"
         role_text = build_role_prompt(agent_roles or [], team_mode)
         if role_text:
             prompt = f"{role_text}\n\n用户请求：\n{prompt}"

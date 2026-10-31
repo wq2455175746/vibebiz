@@ -26,12 +26,14 @@ type Config struct {
 	RedisPassword string
 	RedisDB       int
 
-	SandboxRegistryToken  string
-	SandboxHeartbeatTTL   time.Duration
-	SandboxHealthInterval time.Duration
-	SandboxHealthTimeout  time.Duration
-	AsynqRedisDB          int
-	AsynqConcurrency      int
+	SandboxRegistryToken      string
+	SandboxHeartbeatTTL       time.Duration
+	SandboxHealthInterval     time.Duration
+	SandboxHealthTimeout      time.Duration
+	AsynqRedisDB              int
+	AsynqConcurrency          int
+	ScheduledDispatchInterval time.Duration
+	ScheduledRunTimeout       time.Duration
 
 	CookieSecure   bool
 	SessionUserTTL time.Duration
@@ -78,12 +80,14 @@ func Load(plane string) Config {
 		RedisPassword: getString("REDIS_PASSWORD", ""),
 		RedisDB:       getInt("REDIS_DB", 0),
 
-		SandboxRegistryToken:  getString("SANDBOX_REGISTRY_TOKEN", ""),
-		SandboxHeartbeatTTL:   getDuration("SANDBOX_HEARTBEAT_TTL", 15*time.Second),
-		SandboxHealthInterval: getDuration("SANDBOX_HEALTH_INTERVAL", 10*time.Second),
-		SandboxHealthTimeout:  getDuration("SANDBOX_HEALTH_TIMEOUT", 2*time.Second),
-		AsynqRedisDB:          getInt("ASYNQ_REDIS_DB", 1),
-		AsynqConcurrency:      getInt("ASYNQ_CONCURRENCY", 4),
+		SandboxRegistryToken:      getString("SANDBOX_REGISTRY_TOKEN", ""),
+		SandboxHeartbeatTTL:       getDuration("SANDBOX_HEARTBEAT_TTL", 15*time.Second),
+		SandboxHealthInterval:     getDuration("SANDBOX_HEALTH_INTERVAL", 10*time.Second),
+		SandboxHealthTimeout:      getDuration("SANDBOX_HEALTH_TIMEOUT", 2*time.Second),
+		AsynqRedisDB:              getInt("ASYNQ_REDIS_DB", 1),
+		AsynqConcurrency:          getInt("ASYNQ_CONCURRENCY", 4),
+		ScheduledDispatchInterval: getDuration("SCHEDULED_DISPATCH_INTERVAL", 30*time.Second),
+		ScheduledRunTimeout:       getDuration("SCHEDULED_RUN_TIMEOUT", 15*time.Minute),
 
 		CookieSecure:   getBool("COOKIE_SECURE", false),
 		SessionUserTTL: getDuration("SESSION_USER_TTL", 168*time.Hour),

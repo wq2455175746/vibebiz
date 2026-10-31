@@ -92,6 +92,28 @@ export interface TemplateInput {
   recommendScore: number
 }
 
+
+export interface AdminFdeResource {
+  id: number
+  name: string
+  contact: string
+  skills: string[]
+  region: string
+  note: string
+  enabled: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface FdeResourceInput {
+  name: string
+  contact: string
+  skills: string[]
+  region: string
+  note: string
+  enabled: boolean
+}
+
 export interface AdminSandbox {
   id: string
   name: string
@@ -263,4 +285,20 @@ export interface RoleAvatarPresign {
   uploadUrl: string
   key: string
   headers: Record<string, string>
+}
+
+export interface AdminScheduledTask {
+  id: number
+  userId: number
+  username: string
+  name: string
+  projectId: string
+  cronExpression: string
+  timezone: string
+  enabled: boolean
+  lastStatus: string
+  lastError: string
+  lastRunAt?: string
+  nextRunAt?: string
+  runCount: number
 }

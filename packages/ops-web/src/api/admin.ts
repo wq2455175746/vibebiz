@@ -2,12 +2,15 @@ import { request } from './client'
 import { toEntity, toList, toPage } from './normalize'
 import type {
   AdminAgentRole,
+  AdminFdeResource,
   AdminLLMModel,
   AdminProject,
   AdminQuota,
+  AdminScheduledTask,
   AdminSandbox,
   AdminUser,
   AuditEvent,
+  FdeResourceInput,
   ModelInput,
   Overview,
   PageQuery,
@@ -148,6 +151,33 @@ export async function getProjects(query: PageQuery = {}): Promise<PageResult<Adm
   return toPage(result, 'projects')
 }
 
+export async function getFdeResources(): Promise<AdminFdeResource[]> {
+  const result = await request<{ resources: AdminFdeResource[] }>({
+    method: 'get',
+    url: '/fde-resources',
+  })
+  return result.resources ?? []
+}
+
+export function createFdeResource(input: FdeResourceInput): Promise<AdminFdeResource> {
+  return request<AdminFdeResource>({
+    method: 'post',
+    url: '/fde-resources',
+    data: input,
+  })
+}
+
+export function updateFdeResource(
+  id: number,
+  input: FdeResourceInput,
+): Promise<AdminFdeResource> {
+  return request<AdminFdeResource>({
+    method: 'put',
+    url: `/fde-resources/${id}`,
+    data: input,
+  })
+}
+
 export async function getSandboxes(query: PageQuery = {}): Promise<PageResult<AdminSandbox>> {
   const result = await request<AdminSandbox[] | Record<string, unknown>>({
     method: 'get',
@@ -231,4 +261,27 @@ export async function uploadRoleAvatar(file: File): Promise<string> {
     headers: { 'Content-Type': file.type },
   })
   return result.key
+}
+
+export async function getAdminScheduledTasks(
+  query: PageQuery = {},
+): Promise<PageResult<AdminScheduledTask>> {
+  const result = await request<Record<string, unknown>>({
+    method: 'get',
+    url: '/scheduled-tasks',
+    params: pageParams(query),
+  })
+  return toPage<AdminScheduledTask>(result, 'items')
+}
+
+export function pauseAdminScheduledTask(id: number): Promise<AdminScheduledTask> {
+  return request<AdminScheduledTask>({ method: 'post', url: `/scheduled-tasks/${id}/pause` })
+}
+
+export function resumeAdminScheduledTask(id: number): Promise<AdminScheduledTask> {
+  return request<AdminScheduledTask>({ method: 'post', url: `/scheduled-tasks/${id}/resume` })
+}
+
+export function stopAdminScheduledTask(id: number): Promise<AdminScheduledTask> {
+  return request<AdminScheduledTask>({ method: 'post', url: `/scheduled-tasks/${id}/stop` })
 }

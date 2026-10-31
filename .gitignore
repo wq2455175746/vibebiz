@@ -35,3 +35,5 @@ packages/backend/coverage.out
 deployment/helm/vibebiz/charts/
 deployment/helm/vibebiz/Chart.lock
 deployment/helm/vibebiz/tmpcharts/
+
+deployment/docker/workspaces/

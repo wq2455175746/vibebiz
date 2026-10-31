@@ -13,6 +13,7 @@ import HomeSidebar from '@/components/home/HomeSidebar.vue'
 import ProjectCard from '@/components/home/ProjectCard.vue'
 import TemplateCard from '@/components/home/TemplateCard.vue'
 import ProjectPickerDialog from '@/components/home/ProjectPickerDialog.vue'
+import ScheduledTasksPanel from '@/components/scheduled/ScheduledTasksPanel.vue'
 import { useNotificationSocket } from '@/composables/useNotificationSocket'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
@@ -43,6 +44,7 @@ const pickerOpen = ref(false)
 const sidebarCollapsed = ref(localStorage.getItem('vibebiz:sidebar-collapsed') === '1')
 const isProjectsPage = computed(() => route.name === 'projects')
 const isResourcesPage = computed(() => route.name === 'resources')
+const isScheduledPage = computed(() => route.name === 'scheduled-tasks')
 const isEnterprisePage = computed(() => route.name === 'enterprise')
 let wasEnterprise = false
 let homeDraft = ''
@@ -194,7 +196,7 @@ async function loadTemplates() {
   templatesLoading.value = true
   templatesError.value = ''
   try {
-    const result = await listTemplates({ page: 1, pageSize: 12 })
+    const result = await listTemplates({ page: 1, pageSize: 12, sort: 'latest' })
     templates.value = result.templates
   } catch (err) {
     templatesError.value = err instanceof Error ? err.message : '加载模板失败'
@@ -248,7 +250,7 @@ onMounted(async () => {
 <template>
   <div class="home-shell" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
     <HomeSidebar
-      :recent-projects="projects.slice(0, 4)"
+      :recent-projects="projects.slice(0, 10)"
       :collapsed="sidebarCollapsed"
       @toggle-collapse="toggleSidebar"
       @workspace-changed="loadProjects"
@@ -310,6 +312,8 @@ onMounted(async () => {
           企业项目会强制使用团队角色，并按阶段锁定工作区。
         </p>
       </div>
+
+      <ScheduledTasksPanel v-else-if="isScheduledPage" />
 
       <div v-else class="home-main-inner">
         <HomeHero

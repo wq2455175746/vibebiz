@@ -825,6 +825,10 @@
   gap: 16px;
 }
 
+.home-discovery .project-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .project-card {
   position: relative;
   min-width: 0;

@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -99,6 +100,7 @@ type Query struct {
 	TopicID       int64
 	Page          int
 	PageSize      int
+	Sort          string
 }
 
 type Template struct {
@@ -200,6 +202,14 @@ func (s *Service) List(ctx context.Context, query Query) (Page, error) {
 	items, err := s.Repo.List(ctx)
 	if err != nil {
 		return Page{}, err
+	}
+	if query.Sort == "latest" {
+		sort.SliceStable(items, func(i, j int) bool {
+			if items[i].CreatedAt.Equal(items[j].CreatedAt) {
+				return items[i].ID > items[j].ID
+			}
+			return items[i].CreatedAt.After(items[j].CreatedAt)
+		})
 	}
 	topics, err := s.Repo.Topics(ctx)
 	if err != nil {

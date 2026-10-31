@@ -16,6 +16,7 @@ const router = createRouter({
     { path: '/enterprise', name: 'enterprise', component: HomeView },
     { path: '/projects', name: 'projects', component: HomeView },
     { path: '/resources', name: 'resources', component: HomeView },
+    { path: '/scheduled-tasks', name: 'scheduled-tasks', component: HomeView },
     { path: '/enterprise/editor/:id', name: 'enterprise-editor', component: EnterpriseEditorView },
     settingsRoute,
     { path: '/editor/:id', name: 'editor', component: EditorView },

@@ -14,7 +14,7 @@ import (
 	"vibebiz/internal/store"
 )
 
-func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.ProjectStore, provisioner handler.ProjectInitializer, obs *observability.Provider, authn *auth.Authenticator, authHandler *handler.AuthHandler, settingsHandler *handler.SettingsHandler, storageHandler *handler.StorageHandler, metas auth.ProjectMetaStore, notifications *handler.NotificationHandler, registry *handler.SandboxRegistryHandler, models *handler.ModelHandler, roles *handler.RoleHandler, coverSigner handler.CoverURLSigner, coverExpiry time.Duration, adminSandbox handler.AdminSandbox, templates *handler.TemplateHandler, harness handler.HarnessImporter, stageStore projectstage.Store, stageSandbox handler.StageSandbox, notificationChannels *handler.NotificationChannelHandler) {
+func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.ProjectStore, provisioner handler.ProjectInitializer, obs *observability.Provider, authn *auth.Authenticator, authHandler *handler.AuthHandler, settingsHandler *handler.SettingsHandler, storageHandler *handler.StorageHandler, metas auth.ProjectMetaStore, notifications *handler.NotificationHandler, registry *handler.SandboxRegistryHandler, models *handler.ModelHandler, roles *handler.RoleHandler, coverSigner handler.CoverURLSigner, coverExpiry time.Duration, adminSandbox handler.AdminSandbox, templates *handler.TemplateHandler, harness handler.HarnessImporter, stageStore projectstage.Store, stageSandbox handler.StageSandbox, notificationChannels *handler.NotificationChannelHandler, fdeResources *handler.FdeResourceHandler) {
 	var roleStore handler.AgentRoleStore
 	if roles != nil {
 		roleStore = roles.Service
@@ -81,6 +81,9 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 	if roles != nil {
 		api.GET("/agent-roles", roles.PublicList, authn.RequireUser)
 	}
+	if fdeResources != nil {
+		api.GET("/fde-resources", fdeResources.UserList, authn.RequireUser)
+	}
 
 	projectsAPI := api.Group("/projects", authn.RequireUser)
 	projectsAPI.GET("", projectHandler.List)
@@ -129,6 +132,11 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 		adminProtected.PUT("/templates/:id", templates.AdminUpdate)
 		adminProtected.DELETE("/templates/:id", templates.AdminDelete)
 		adminProtected.GET("/templates/:id/files", templates.AdminFiles)
+	}
+	if fdeResources != nil {
+		adminProtected.GET("/fde-resources", fdeResources.AdminList)
+		adminProtected.POST("/fde-resources", fdeResources.Create)
+		adminProtected.PUT("/fde-resources/:id", fdeResources.Update)
 	}
 	if roles != nil {
 		adminProtected.GET("/roles", roles.List)

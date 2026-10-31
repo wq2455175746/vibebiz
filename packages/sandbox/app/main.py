@@ -10,7 +10,7 @@ from app.config import Settings, load_settings
 from app.errors import WorkspaceError
 from app.observability import configure_observability
 from app.response import envelope
-from app.routers import chat, files, logs, preview, projects, resources, skills
+from app.routers import chat, files, logs, preview, projects, resources, skills, tasks
 from app.services.agent import build_agent
 from app.services.chat_history import ChatHistory
 from app.services.chat_turns import ChatTurnManager
@@ -68,6 +68,7 @@ def create_app(
     app.include_router(skills.router)
     app.include_router(resources.router)
     app.include_router(preview.router)
+    app.include_router(tasks.router)
 
     configure_observability(app, tracer_provider, settings.workspaces_dir)
 

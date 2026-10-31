@@ -20,6 +20,7 @@ func TestTableNames(t *testing.T) {
 		{&Project{}, "project"},
 		{&ProjectStage{}, "project_stage"},
 		{&NotificationChannel{}, "notification_channel"},
+		{&FdeResource{}, "fde_resource"},
 		{&ProjectStorage{}, "project_storage"},
 		{&ExternalResource{}, "external_resource"},
 		{&ProjectExternalResource{}, "project_external_resource"},

@@ -246,3 +246,36 @@ export interface NotificationItem {
   publishedAt: string
   expireAt: string
 }
+
+export interface ScheduledTaskDraft {
+  name: string
+  description: string
+  scheduleType: 'daily' | 'weekly' | 'cron'
+  time: string
+  weekdays: number[]
+  cronExpression: string
+  timezone: string
+}
+
+export interface ScheduledTaskInput extends ScheduledTaskDraft {
+  source?: 'ai' | 'manual'
+}
+
+export interface ScheduledTask {
+  id: number
+  name: string
+  description: string
+  scheduleType: 'daily' | 'weekly' | 'cron'
+  time: string
+  weekdays: number[]
+  cronExpression: string
+  timezone: string
+  source: 'ai' | 'manual'
+  enabled: boolean
+  projectId: string
+  nextRunAt?: string
+  lastRunAt?: string
+  lastStatus: string
+  lastError: string
+  runCount: number
+}

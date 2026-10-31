@@ -21,6 +21,7 @@ import (
 	"vibebiz/internal/client"
 	"vibebiz/internal/config"
 	"vibebiz/internal/dao"
+	"vibebiz/internal/fderesource"
 	"vibebiz/internal/handler"
 	harnesssvc "vibebiz/internal/harness"
 	"vibebiz/internal/llmmodel"
@@ -33,6 +34,7 @@ import (
 	"vibebiz/internal/router"
 	storages3 "vibebiz/internal/s3"
 	"vibebiz/internal/sandboxregistry"
+	"vibebiz/internal/scheduledtask"
 	"vibebiz/internal/secret"
 	"vibebiz/internal/server"
 	"vibebiz/internal/storagesync"
@@ -188,16 +190,48 @@ func main() {
 		})},
 	}
 	notificationChannelHandler := handler.NewNotificationChannelHandler(channelService)
+	fdeResourceHandler := handler.NewFdeResourceHandler(fderesource.NewService(fderesource.NewMySQLStore(db)))
 
 	healthChecker := sandboxregistry.NewHealthChecker(registryRepo, cfg.SandboxHeartbeatTTL, cfg.SandboxHealthTimeout, obs)
 	asynqLogger := sandboxregistry.NewAsyncLogger(obs.Logger)
 	asynqRedis := asynq.RedisClientOpt{Addr: cfg.RedisHost, Password: cfg.RedisPassword, DB: cfg.AsynqRedisDB}
+	asynqClient := asynq.NewClient(asynqRedis)
+	defer func() { _ = asynqClient.Close() }()
+	scheduledRepo := scheduledtask.NewMySQLRepository(db)
+	scheduledFlags := scheduledtask.NewRedisFlags(redisClient, redisPrefix)
+	scheduledService := scheduledtask.NewService(
+		scheduledRepo, projectStore, provisioner, metas, sandboxRouter, scheduledFlags,
+	)
+	scheduledParser := scheduledtask.NewSandboxParser(selector, obs)
+	webBase := ""
+	if len(cfg.CorsOrigins) > 0 {
+		webBase = cfg.CorsOrigins[0]
+	}
+	scheduledRunner := scheduledtask.NewRunner(
+		scheduledRepo, sandboxRouter, sandboxRouter, scheduledFlags,
+		notificationService, webBase, obs.Logger,
+	)
+	scheduledDispatcher := scheduledtask.NewDispatcher(scheduledRepo, asynqClient, obs.Logger)
+	scheduledDispatcher.RunTimeout = cfg.ScheduledRunTimeout
+	scheduledService.Immediate = scheduledDispatcher
+	scheduledHandler := handler.NewScheduledTaskHandler(scheduledService, scheduledParser)
+
 	asynqWorker := asynq.NewServer(asynqRedis, asynq.Config{Concurrency: cfg.AsynqConcurrency, Logger: asynqLogger})
 	asynqMux := asynq.NewServeMux()
 	asynqMux.HandleFunc(sandboxregistry.TaskTypeHealthCheck, healthChecker.HandleTask)
+	asynqMux.HandleFunc(scheduledtask.TaskTypeDispatch, scheduledDispatcher.HandleTask)
+	asynqMux.HandleFunc(scheduledtask.TaskTypeRun, scheduledRunner.HandleTask)
 	asynqScheduler := asynq.NewScheduler(asynqRedis, &asynq.SchedulerOpts{Logger: asynqLogger})
 	if _, err := asynqScheduler.Register("@every "+cfg.SandboxHealthInterval.String(), asynq.NewTask(sandboxregistry.TaskTypeHealthCheck, nil), asynq.MaxRetry(0), asynq.Timeout(15*time.Second), asynq.Unique(cfg.SandboxHealthInterval)); err != nil {
 		obs.Logger.Error("sandbox health scheduler register failed", "error", err)
+		os.Exit(1)
+	}
+	dispatchUnique := cfg.ScheduledDispatchInterval - 5*time.Second
+	if dispatchUnique <= 0 {
+		dispatchUnique = cfg.ScheduledDispatchInterval / 2
+	}
+	if _, err := asynqScheduler.Register("@every "+cfg.ScheduledDispatchInterval.String(), asynq.NewTask(scheduledtask.TaskTypeDispatch, nil), asynq.MaxRetry(0), asynq.Unique(dispatchUnique)); err != nil {
+		obs.Logger.Error("scheduled task dispatcher register failed", "error", err)
 		os.Exit(1)
 	}
 	if err := asynqScheduler.Start(); err != nil {
@@ -218,7 +252,8 @@ func main() {
 	templateHandler := handler.NewTemplateHandler(templateService, projectStore, provisioner, sandboxRouter)
 	templateHandler.Metas = metas
 
-	router.RegisterControl(e, adminRepo, projectStore, provisioner, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler, registryHandler, modelHandler, roleHandler, avatarPresigner, cfg.S3PresignExpiry(), sandboxRouter, templateHandler, harnessImporter, stageStore, sandboxRouter, notificationChannelHandler)
+	router.RegisterControl(e, adminRepo, projectStore, provisioner, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler, registryHandler, modelHandler, roleHandler, avatarPresigner, cfg.S3PresignExpiry(), sandboxRouter, templateHandler, harnessImporter, stageStore, sandboxRouter, notificationChannelHandler, fdeResourceHandler)
+	router.RegisterScheduledTasks(e, scheduledHandler, authn)
 	router.RegisterChatHistory(e, handler.NewChatHistoryHandler(sandboxRouter, projectStore), authn)
 
 	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))

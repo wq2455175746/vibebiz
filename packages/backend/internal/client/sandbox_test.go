@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -99,5 +100,30 @@ func TestSandboxChatLogs(t *testing.T) {
 	}
 	if len(logs) != 1 || logs[0].Message != "agent.run.start" {
 		t.Fatalf("logs = %+v", logs)
+	}
+}
+
+func TestSandboxParseTask(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/internal/tasks/parse" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"code": 0, "message": "ok",
+			"result": map[string]any{
+				"name": "检查", "description": "检查依赖", "scheduleType": "daily",
+				"time": "09:00", "weekdays": []int{}, "cronExpression": "0 9 * * *",
+				"timezone": "Asia/Shanghai",
+			},
+		})
+	}))
+	defer server.Close()
+	sandbox := NewSandbox(server.URL, nil)
+	draft, err := sandbox.ParseTask(context.Background(), "每天 9 点检查依赖")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if draft.ScheduleType != "daily" || draft.CronExpression != "0 9 * * *" {
+		t.Fatalf("draft = %+v", draft)
 	}
 }
