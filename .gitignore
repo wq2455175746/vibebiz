@@ -40,3 +40,4 @@ deployment/helm/vibebiz/Chart.lock
 deployment/helm/vibebiz/tmpcharts/
 
 deployment/docker/workspaces/
+/node_modules/
