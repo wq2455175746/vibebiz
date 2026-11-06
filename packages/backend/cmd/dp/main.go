@@ -137,7 +137,7 @@ func main() {
 	traceRepo := usertrace.NewMySQLRepository(db)
 	var traceRecorder *usertrace.Recorder
 	if cfg.UserTraceEnabled {
-		if err := os.MkdirAll(cfg.UserTraceDir, 0o755); err != nil {
+		if err := usertrace.EnsureWritable(cfg.UserTraceDir); err != nil {
 			obs.Logger.Error("user trace dir unavailable; tracing disabled", "dir", cfg.UserTraceDir, "error", err)
 		} else {
 			traceRecorder = usertrace.NewRecorder(cfg.UserTraceDir, usertrace.TrimPlane(cfg.Plane), obs.Logger)
