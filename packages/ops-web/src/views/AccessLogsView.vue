@@ -134,7 +134,7 @@ function formatDuration(value: unknown): string {
 }
 
 .status-fail {
-  color: var(--blue, #1d4ed8);
+  color: var(--blue);
   font-weight: 600;
 }
 </style>
