@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"vibebiz/internal/admin"
+	"vibebiz/internal/auth"
 	"vibebiz/internal/model"
 	"vibebiz/internal/store"
 )
@@ -90,8 +91,16 @@ func TestAdminUsersSearchAndPagination(t *testing.T) {
 
 func TestAdminUpdatesUserStatus(t *testing.T) {
 	e, _, authState := newCP(t, store.NewMemoryProjectStore())
+	authState.sessions.items[routerSessionKey(auth.RealmUser, "user1-sid")] = &auth.Session{
+		ID: "user1-sid", Realm: auth.RealmUser, UserID: 1, Username: "wanghg11", WorkspaceIDs: []int64{1},
+	}
+	user1Cookie := cookieForSession(t, authState.authn.UserCookie, "user1-sid")
 
 	rec := serveWithAuthBody(e, http.MethodPut, "/cp/api/v1/admin/users/1/status", authState.opsCookie, `{"status":0}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("missing reason status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	rec = serveWithAuthBody(e, http.MethodPut, "/cp/api/v1/admin/users/1/status", authState.opsCookie, `{"status":0,"reason":"违规内容"}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
@@ -113,6 +122,44 @@ func TestAdminUpdatesUserStatus(t *testing.T) {
 	}
 	if len(payload.Users) != 1 || payload.Users[0].Status != "disabled" {
 		t.Fatalf("users = %+v", payload.Users)
+	}
+
+	rec = serveWithAuth(e, http.MethodGet, "/cp/api/v1/admin/users/1", authState.opsCookie)
+	var detail admin.UserDetail
+	if err := json.Unmarshal(decodeEnvelope(t, rec.Body.Bytes()).Result, &detail); err != nil {
+		t.Fatal(err)
+	}
+	if detail.DisabledReason != "违规内容" || detail.DisabledBy != "admin" || detail.Status != "disabled" {
+		t.Fatalf("detail = %+v", detail)
+	}
+	rec = serveWithAuth(e, http.MethodGet, "/cp/api/v1/projects", user1Cookie)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("disabled session status = %d, want 401", rec.Code)
+	}
+}
+
+func TestAdminUserDetailAndPassword(t *testing.T) {
+	e, _, authState := newCP(t, store.NewMemoryProjectStore())
+
+	rec := serveWithAuth(e, http.MethodGet, "/cp/api/v1/admin/users/1", authState.opsCookie)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("detail status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var detail admin.UserDetail
+	if err := json.Unmarshal(decodeEnvelope(t, rec.Body.Bytes()).Result, &detail); err != nil {
+		t.Fatal(err)
+	}
+	if detail.ID != "1" || detail.Username != "wanghg11" || detail.Status != "active" {
+		t.Fatalf("detail = %+v", detail)
+	}
+
+	rec = serveWithAuthBody(e, http.MethodPut, "/cp/api/v1/admin/users/1/password", authState.opsCookie, `{"password":"short"}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("short password status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	rec = serveWithAuthBody(e, http.MethodPut, "/cp/api/v1/admin/users/1/password", authState.opsCookie, `{"password":"new-password"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("password status = %d, body = %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -185,6 +232,61 @@ func TestAdminProjects(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("admin did not see all projects: %+v", payload.Projects)
+	}
+}
+
+func TestAdminTogglesProjectHidden(t *testing.T) {
+	projects := store.NewMemoryProjectStore()
+	if err := projects.Create(context.Background(), &model.Project{
+		ID: "p1", Name: "demo", State: model.ProjectStateReady, WorkspaceID: 2, OwnerUserID: 7, CreatedAt: time.Now(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	e, _, authState := newCP(t, projects)
+	authState.metas.items["p1"] = auth.ProjectMeta{WorkspaceID: 2, OwnerUserID: 7}
+
+	rec := serveWithAuthBody(e, http.MethodPut, "/cp/api/v1/admin/projects/p1/hidden", authState.opsCookie, `{"hidden":true}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("hide status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if meta := authState.metas.items["p1"]; meta.Status != "hidden" {
+		t.Fatalf("meta = %+v", meta)
+	}
+	rec = serveWithAuth(e, http.MethodGet, "/cp/api/v1/admin/projects", authState.opsCookie)
+	var payload struct {
+		Projects []struct {
+			ID     string `json:"id"`
+			Hidden bool   `json:"hidden"`
+		} `json:"projects"`
+	}
+	if err := json.Unmarshal(decodeEnvelope(t, rec.Body.Bytes()).Result, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if len(payload.Projects) != 1 || !payload.Projects[0].Hidden {
+		t.Fatalf("projects = %+v", payload.Projects)
+	}
+	rec = serveWithAuth(e, http.MethodGet, "/cp/api/v1/projects/p1", authState.userCookie)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("hidden project status = %d, want 404", rec.Code)
+	}
+	rec = serveWithAuthBody(e, http.MethodPut, "/cp/api/v1/admin/projects/p1/review", authState.opsCookie, `{"status":"approved","note":""}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("approve status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if meta := authState.metas.items["p1"]; meta.Status != "hidden" {
+		t.Fatalf("meta after approve = %+v", meta)
+	}
+
+	rec = serveWithAuthBody(e, http.MethodPut, "/cp/api/v1/admin/projects/p1/hidden", authState.opsCookie, `{"hidden":false}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unhide status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if meta := authState.metas.items["p1"]; meta.Status != "" {
+		t.Fatalf("meta after unhide = %+v", meta)
+	}
+	rec = serveWithAuth(e, http.MethodGet, "/cp/api/v1/projects/p1", authState.userCookie)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("visible project status = %d, want 200", rec.Code)
 	}
 }
 

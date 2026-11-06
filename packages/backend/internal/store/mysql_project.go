@@ -65,6 +65,7 @@ func (s *MySQLProjectStore) Create(ctx context.Context, project *model.Project) 
 			ReviewedBy:         project.ReviewedBy,
 			ReviewedAt:         project.ReviewedAt,
 			Status:             status,
+			IsHidden:           boolToInt8(project.IsHidden),
 			DefaultAgentRoleID: project.DefaultAgentRoleID,
 			Base: daomodel.Base{
 				CreatedAt: project.CreatedAt,
@@ -122,6 +123,27 @@ func (s *MySQLProjectStore) SetPreviewPath(ctx context.Context, id, previewPath 
 		return ErrNotFound
 	}
 	return nil
+}
+
+func (s *MySQLProjectStore) SetHidden(ctx context.Context, id string, hidden bool) error {
+	result := s.db.WithContext(ctx).
+		Model(&daomodel.Project{}).
+		Where("public_id = ?", id).
+		Update("is_hidden", boolToInt8(hidden))
+	if result.Error != nil {
+		return fmt.Errorf("update project hidden: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func boolToInt8(value bool) int8 {
+	if value {
+		return 1
+	}
+	return 0
 }
 
 func (s *MySQLProjectStore) SetAgentRoles(ctx context.Context, id string, roleIDs []int64) error {
@@ -265,6 +287,7 @@ func toProject(row *daomodel.Project) *model.Project {
 		Mode:               mode,
 		PreviewPath:        row.PreviewPath,
 		State:              row.Status,
+		IsHidden:           row.IsHidden == 1,
 		ReviewStatus:       row.ReviewStatus,
 		ReviewNote:         row.ReviewNote,
 		ReviewedBy:         row.ReviewedBy,

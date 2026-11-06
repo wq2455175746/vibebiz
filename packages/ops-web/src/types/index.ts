@@ -21,10 +21,32 @@ export interface AdminUser {
   createdAt: string
 }
 
+export interface AdminUserDetail {
+  id: string
+  username: string
+  name: string
+  nickname: string
+  email: string
+  phoneNumber: string
+  avatarUrl: string
+  plan: string
+  source: string
+  status: string
+  emailVerifiedAt?: string
+  lastLoginTime?: string
+  lastLoginIp: string
+  disabledReason: string
+  disabledAt?: string
+  disabledBy: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface AdminProject {
   id: string
   name: string
   state: string
+  hidden: boolean
   owner: string
   ownerUserId: number
   workspaceId: number

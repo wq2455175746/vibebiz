@@ -341,6 +341,48 @@ func TestGetProjectOwnWorkspace(t *testing.T) {
 	}
 }
 
+func TestListProjectsSkipsHidden(t *testing.T) {
+	projectStore := store.NewMemoryProjectStore()
+	_ = projectStore.Create(context.Background(), &model.Project{ID: "visible", WorkspaceID: 1, CreatedAt: time.Now()})
+	_ = projectStore.Create(context.Background(), &model.Project{ID: "hidden", WorkspaceID: 1, IsHidden: true, CreatedAt: time.Now()})
+
+	h := newProjectHandlerForTest(projectStore, &fakeInitializer{}, newFakeMetaStore(), &fakeAgentRoles{})
+	e := echo.New()
+	routeWithSession(e, http.MethodGet, "/cp/api/v1/projects", h.List, sessionForTest(1))
+
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/cp/api/v1/projects", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var env struct {
+		Result struct {
+			Projects []model.Project `json:"projects"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatal(err)
+	}
+	if len(env.Result.Projects) != 1 || env.Result.Projects[0].ID != "visible" {
+		t.Fatalf("projects = %+v", env.Result.Projects)
+	}
+}
+
+func TestGetHiddenProjectNotFound(t *testing.T) {
+	projectStore := store.NewMemoryProjectStore()
+	_ = projectStore.Create(context.Background(), &model.Project{ID: "p1", WorkspaceID: 1, IsHidden: true})
+
+	h := newProjectHandlerForTest(projectStore, &fakeInitializer{}, newFakeMetaStore(), &fakeAgentRoles{})
+	e := echo.New()
+	routeWithSession(e, http.MethodGet, "/cp/api/v1/projects/:id", h.Get, sessionForTest(1))
+
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/cp/api/v1/projects/p1", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rec.Code)
+	}
+}
+
 func TestDeleteProjectCrossWorkspaceNotFound(t *testing.T) {
 	projectStore := store.NewMemoryProjectStore()
 	projectStore.Create(context.Background(), &model.Project{ID: "p2", WorkspaceID: 2})

@@ -90,8 +90,8 @@ func RequireProjectAccess(metas ProjectMetaStore) echo.MiddlewareFunc {
 			if !containsWorkspace(session.WorkspaceIDs, meta.WorkspaceID) {
 				return response.Fail(c, http.StatusNotFound, 40401, "project not found")
 			}
-			if meta.Status == "disabled" {
-				return response.Fail(c, http.StatusForbidden, 40304, "project is disabled")
+			if meta.Status == "disabled" || meta.Status == "hidden" {
+				return response.Fail(c, http.StatusForbidden, 40304, "project is unavailable")
 			}
 			c.Set("auth.project_meta", meta)
 			return next(c)

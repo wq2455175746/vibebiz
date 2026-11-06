@@ -8,9 +8,13 @@ import NotificationsDialog from '@/components/home/NotificationsDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
 import type { Project, WorkspaceFolder } from '@/types'
-import { resolveEditorPath } from '@/utils/enterprise'
+import { resolveProjectTarget } from '@/utils/projectRoute'
 
-const props = defineProps<{ recentProjects: Project[]; collapsed?: boolean }>()
+const props = defineProps<{
+  recentProjects: Project[]
+  scheduledProjectIds?: string[]
+  collapsed?: boolean
+}>()
 
 const emit = defineEmits<{
   (event: 'workspace-changed'): void
@@ -21,6 +25,7 @@ const auth = useAuthStore()
 const notifications = useNotificationsStore()
 const route = useRoute()
 const router = useRouter()
+const scheduledProjectSet = computed(() => new Set(props.scheduledProjectIds ?? []))
 
 const account = computed(() => {
   const name = auth.user?.username ?? ''
@@ -60,11 +65,11 @@ const rootFolders = computed(() => folders.value.filter((folder) => folder.paren
 
 function openProject(id: string) {
   const project = props.recentProjects.find((item) => item.id === id)
-  if (project && resolveEditorPath(project).startsWith('/enterprise/')) {
-    void router.push(`/enterprise/editor/${id}`)
+  if (!project) {
+    void router.push({ name: 'editor', params: { id } })
     return
   }
-  void router.push({ name: 'editor', params: { id } })
+  void router.push(resolveProjectTarget(project, scheduledProjectSet.value))
 }
 
 async function loadFolders() {

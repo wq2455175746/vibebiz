@@ -101,6 +101,46 @@ func TestPublishRejectsForeignWorkspace(t *testing.T) {
 	}
 }
 
+func TestPublishRejectsHiddenProject(t *testing.T) {
+	project := &model.Project{ID: "p1", Name: "Demo", WorkspaceID: 3, IsHidden: true}
+	e, _ := newPublishHandlerForTest(t, project)
+
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, newPublishRequest("/cp/api/v1/projects/p1/publish", `{"title":"x"}`))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestPublishedPreviewRejectsHiddenProject(t *testing.T) {
+	root := t.TempDir()
+	workspaces := filepath.Join(root, "workspaces")
+	published := filepath.Join(root, "published")
+	if err := os.MkdirAll(filepath.Join(workspaces, "p1"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workspaces, "p1", "index.html"), []byte("<h1>game</h1>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	service := publish.NewService(workspaces, published)
+	if _, err := service.Publish(context.Background(), "p1", publish.Input{Title: "demo"}); err != nil {
+		t.Fatal(err)
+	}
+	projects := store.NewMemoryProjectStore()
+	if err := projects.Create(context.Background(), &model.Project{ID: "p1", Name: "demo", IsHidden: true}); err != nil {
+		t.Fatal(err)
+	}
+	h := NewPublishHandler(service, projects, "")
+	e := echo.New()
+	e.GET("/p/:slug/*", h.Preview)
+
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/p/p1/", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestListPublishedFiltersWorkspaceAndBuildsShareURL(t *testing.T) {
 	root := t.TempDir()
 	workspaces := filepath.Join(root, "workspaces")

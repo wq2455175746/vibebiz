@@ -62,7 +62,7 @@ func (h *PublishHandler) Publish(c echo.Context) error {
 		}
 		return response.Fail(c, http.StatusInternalServerError, 50002, "get project failed")
 	}
-	if !containsInt64(session.WorkspaceIDs, project.WorkspaceID) {
+	if !containsInt64(session.WorkspaceIDs, project.WorkspaceID) || project.IsHidden {
 		return response.Fail(c, http.StatusNotFound, 40401, "project not found")
 	}
 	var req publishRequest
@@ -96,6 +96,9 @@ func (h *PublishHandler) ListPublished(c echo.Context) error {
 	}
 	allowed := make(map[string]*model.Project)
 	for _, project := range h.Projects.ListByWorkspaces(c.Request().Context(), session.WorkspaceIDs) {
+		if project.IsHidden {
+			continue
+		}
 		allowed[project.ID] = project
 	}
 	out := make([]publishedProjectResponse, 0, len(items))
@@ -155,7 +158,7 @@ func (h *PublishHandler) DeletePublished(c echo.Context) error {
 		}
 		return response.Fail(c, http.StatusInternalServerError, 50002, "get project failed")
 	}
-	if !containsInt64(session.WorkspaceIDs, project.WorkspaceID) {
+	if !containsInt64(session.WorkspaceIDs, project.WorkspaceID) || project.IsHidden {
 		return response.Fail(c, http.StatusNotFound, 40401, "project not found")
 	}
 	if err := h.Service.Delete(c.Request().Context(), project.ID); err != nil {
@@ -172,6 +175,9 @@ func (h *PublishHandler) DeletePublished(c echo.Context) error {
 }
 
 func (h *PublishHandler) Preview(c echo.Context) error {
+	if project, err := h.Projects.Get(c.Request().Context(), c.Param("slug")); err == nil && project.IsHidden {
+		return response.Fail(c, http.StatusNotFound, 40401, "project not found")
+	}
 	path, err := h.Service.FilePath(c.Param("slug"), c.Param("*"))
 	if err != nil {
 		return publishError(c, err)

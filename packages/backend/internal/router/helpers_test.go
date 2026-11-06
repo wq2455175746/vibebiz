@@ -144,6 +144,15 @@ func (s *routerSessionStore) Delete(_ context.Context, realm auth.Realm, id stri
 	return nil
 }
 
+func (s *routerSessionStore) DeleteByUser(_ context.Context, realm auth.Realm, userID int64) error {
+	for key, session := range s.items {
+		if session.Realm == realm && session.UserID == userID {
+			delete(s.items, key)
+		}
+	}
+	return nil
+}
+
 type routerMetaStore struct {
 	items map[string]auth.ProjectMeta
 }

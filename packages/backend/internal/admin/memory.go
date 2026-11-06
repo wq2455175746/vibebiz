@@ -7,10 +7,12 @@ import (
 )
 
 type MemoryRepository struct {
-	users     []User
-	sandboxes []Sandbox
-	quotas    []Quota
-	audit     []AuditEvent
+	users        []User
+	details      map[string]UserDetail
+	passwordHash map[string]string
+	sandboxes    []Sandbox
+	quotas       []Quota
+	audit        []AuditEvent
 }
 
 func NewMemoryRepository() Repository {
@@ -20,6 +22,11 @@ func NewMemoryRepository() Repository {
 			{ID: "1", Name: "wanghg11", Email: "wanghg11@example.com", Plan: "free", Status: "active", CreatedAt: created},
 			{ID: "2", Name: "vistor", Email: "vistor@example.com", Plan: "free", Status: "active", CreatedAt: created},
 		},
+		details: map[string]UserDetail{
+			"1": {ID: "1", Username: "wanghg11", Name: "wanghg11", Email: "wanghg11@example.com", Plan: "free", Status: "active", CreatedAt: created, UpdatedAt: created},
+			"2": {ID: "2", Username: "vistor", Name: "vistor", Email: "vistor@example.com", Plan: "free", Status: "active", CreatedAt: created, UpdatedAt: created},
+		},
+		passwordHash: map[string]string{},
 		sandboxes: []Sandbox{
 			{ID: "sb-1", Name: "sandbox-a", Host: "127.0.0.1", Port: 8000, Status: "online", HealthStatus: "healthy", ActiveRequests: 2, MaxConcurrency: 8, LastHeartbeatAt: &created, LastHealthAt: &created},
 			{ID: "sb-2", Name: "sandbox-b", Host: "127.0.0.1", Port: 8001, Status: "offline", HealthStatus: "unhealthy", ActiveRequests: 0, MaxConcurrency: 8, LastHeartbeatAt: &created, LastHealthAt: &created, HealthError: "timeout"},
@@ -55,20 +62,45 @@ func (r *MemoryRepository) Users(_ context.Context, query ListQuery) (Page[User]
 	return Paginate(filtered, query), nil
 }
 
-func (r *MemoryRepository) UpdateUserStatus(_ context.Context, id int64, status int8) error {
+func (r *MemoryRepository) User(_ context.Context, id int64) (UserDetail, error) {
+	detail, ok := r.details[strconv.FormatInt(id, 10)]
+	if !ok {
+		return UserDetail{}, ErrNotFound
+	}
+	return detail, nil
+}
+
+func (r *MemoryRepository) UpdateUserStatus(_ context.Context, id int64, input UserStatusUpdate) error {
 	target := strconv.FormatInt(id, 10)
 	for index := range r.users {
 		if r.users[index].ID != target {
 			continue
 		}
-		if status == 1 {
+		if input.Status == 1 {
 			r.users[index].Status = "active"
 		} else {
 			r.users[index].Status = "disabled"
 		}
+		detail := r.details[target]
+		detail.Status = r.users[index].Status
+		if input.Status == 0 {
+			detail.DisabledReason = input.Reason
+			detail.DisabledAt = &input.At
+			detail.DisabledBy = input.Operator
+		}
+		r.details[target] = detail
 		return nil
 	}
 	return ErrNotFound
+}
+
+func (r *MemoryRepository) UpdateUserPassword(_ context.Context, id int64, hash string) error {
+	target := strconv.FormatInt(id, 10)
+	if _, ok := r.details[target]; !ok {
+		return ErrNotFound
+	}
+	r.passwordHash[target] = hash
+	return nil
 }
 
 func (r *MemoryRepository) Sandboxes(_ context.Context, query ListQuery) (Page[Sandbox], error) {

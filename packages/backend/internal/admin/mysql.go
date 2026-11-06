@@ -188,12 +188,95 @@ func (r *MySQLRepository) Quotas(ctx context.Context) ([]Quota, error) {
 	return out, nil
 }
 
-func (r *MySQLRepository) UpdateUserStatus(ctx context.Context, id int64, status int8) error {
+func (r *MySQLRepository) User(ctx context.Context, id int64) (UserDetail, error) {
+	var row struct {
+		ID              int64
+		Username        string
+		Nickname        string
+		Email           string
+		PhoneNumber     string
+		AvatarURL       string
+		AvatarS3Path    string
+		PlanCode        string
+		Source          string
+		Status          int8
+		EmailVerifiedAt *time.Time
+		LastLoginTime   *time.Time
+		LastLoginIP     string
+		DisabledReason  string
+		DisabledAt      *time.Time
+		DisabledBy      string
+		CreatedAt       time.Time
+		UpdatedAt       time.Time
+	}
+	err := r.db.WithContext(ctx).
+		Table("user AS u").
+		Select("u.id, u.username, u.nickname, u.email, u.phone_number, u.avatar_url, u.avatar_s3_path, COALESCE(q.plan_code, 'free') AS plan_code, u.source, u.status, u.email_verified_at, u.last_login_time, u.last_login_ip, u.disabled_reason, u.disabled_at, u.disabled_by, u.created_at, u.updated_at").
+		Joins("LEFT JOIN user_quota AS q ON q.user_id = u.id AND q.deleted_at IS NULL").
+		Where("u.id = ? AND u.deleted_at IS NULL", id).
+		Scan(&row).Error
+	if err != nil {
+		return UserDetail{}, fmt.Errorf("get admin user: %w", err)
+	}
+	if row.ID == 0 {
+		return UserDetail{}, ErrNotFound
+	}
+	name := row.Nickname
+	if name == "" {
+		name = row.Username
+	}
+	status := "disabled"
+	if row.Status == 1 {
+		status = "active"
+	}
+	return UserDetail{
+		ID:              strconv.FormatInt(row.ID, 10),
+		Username:        row.Username,
+		Name:            name,
+		Nickname:        row.Nickname,
+		Email:           row.Email,
+		PhoneNumber:     row.PhoneNumber,
+		AvatarURL:       row.AvatarURL,
+		AvatarS3Path:    row.AvatarS3Path,
+		Plan:            row.PlanCode,
+		Source:          row.Source,
+		Status:          status,
+		EmailVerifiedAt: row.EmailVerifiedAt,
+		LastLoginTime:   row.LastLoginTime,
+		LastLoginIP:     row.LastLoginIP,
+		DisabledReason:  row.DisabledReason,
+		DisabledAt:      row.DisabledAt,
+		DisabledBy:      row.DisabledBy,
+		CreatedAt:       row.CreatedAt,
+		UpdatedAt:       row.UpdatedAt,
+	}, nil
+}
+
+func (r *MySQLRepository) UpdateUserStatus(ctx context.Context, id int64, input UserStatusUpdate) error {
+	updates := map[string]any{"status": input.Status}
+	if input.Status == 0 {
+		updates["disabled_reason"] = input.Reason
+		updates["disabled_at"] = input.At
+		updates["disabled_by"] = input.Operator
+	}
 	result := r.db.WithContext(ctx).Model(&model.User{}).
 		Where("id = ?", id).
-		Update("status", status)
+		Updates(updates)
 	if result.Error != nil {
 		return fmt.Errorf("update user status: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return r.ensureUserExists(ctx, id)
+	}
+	return nil
+}
+
+func (r *MySQLRepository) UpdateUserPassword(ctx context.Context, id int64, hash string) error {
+	result := r.db.WithContext(ctx).Model(&model.User{}).
+		Where("id = ?", id).
+		Update("password_hash", hash)
+	if result.Error != nil {
+		return fmt.Errorf("update user password: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {
 		return r.ensureUserExists(ctx, id)

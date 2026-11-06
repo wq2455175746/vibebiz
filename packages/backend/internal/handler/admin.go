@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/labstack/echo/v4"
 
@@ -34,13 +37,19 @@ type UsageReader interface {
 	ParseDate(value string) (time.Time, error)
 }
 
+type AdminNotificationPublisher interface {
+	Create(ctx context.Context, input notification.CreateInput, creator notification.Creator) (notification.View, error)
+	Publish(ctx context.Context, id int64) (notification.View, error)
+}
+
 type AdminHandler struct {
 	Repo          admin.Repository
 	ProjectsStore store.ProjectStore
 	Sandbox       AdminSandbox
 	Covers        CoverURLSigner
 	CoverExpiry   time.Duration
-	Notifications *notification.Service
+	Notifications AdminNotificationPublisher
+	Sessions      auth.SessionRevoker
 	Metas         auth.ProjectMetaStore
 	Usage         UsageReader
 	Now           func() time.Time
@@ -54,6 +63,7 @@ type adminProject struct {
 	ID           string    `json:"id"`
 	Name         string    `json:"name"`
 	State        string    `json:"state"`
+	Hidden       bool      `json:"hidden"`
 	Owner        string    `json:"owner"`
 	OwnerUserID  int64     `json:"ownerUserId"`
 	WorkspaceID  int64     `json:"workspaceId"`
@@ -83,7 +93,29 @@ func (h *AdminHandler) Users(c echo.Context) error {
 }
 
 type userStatusRequest struct {
-	Status *int8 `json:"status"`
+	Status *int8  `json:"status"`
+	Reason string `json:"reason"`
+}
+
+func (h *AdminHandler) UserDetail(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		return response.Fail(c, http.StatusBadRequest, 40001, "invalid user id")
+	}
+	detail, err := h.Repo.User(c.Request().Context(), id)
+	if err != nil {
+		return adminRepoError(c, err)
+	}
+	if detail.AvatarS3Path != "" && h.Covers != nil {
+		expiry := h.CoverExpiry
+		if expiry <= 0 {
+			expiry = 15 * time.Minute
+		}
+		if signed, signErr := h.Covers.PresignGet(c.Request().Context(), detail.AvatarS3Path, expiry); signErr == nil {
+			detail.AvatarURL = signed
+		}
+	}
+	return response.OK(c, detail)
 }
 
 func (h *AdminHandler) UpdateUserStatus(c echo.Context) error {
@@ -95,10 +127,71 @@ func (h *AdminHandler) UpdateUserStatus(c echo.Context) error {
 	if err := c.Bind(&req); err != nil || req.Status == nil || (*req.Status != 0 && *req.Status != 1) {
 		return response.Fail(c, http.StatusBadRequest, 40001, "invalid status")
 	}
-	if err := h.Repo.UpdateUserStatus(c.Request().Context(), id, *req.Status); err != nil {
+	reason := strings.TrimSpace(req.Reason)
+	if *req.Status == 0 {
+		if reason == "" || utf8.RuneCountInString(reason) > 500 {
+			return response.Fail(c, http.StatusBadRequest, 40001, "invalid reason")
+		}
+	} else {
+		reason = ""
+	}
+	operator := ""
+	if session, ok := auth.SessionFrom(c); ok {
+		operator = session.Username
+	}
+	now := h.now()
+	if err := h.Repo.UpdateUserStatus(c.Request().Context(), id, admin.UserStatusUpdate{
+		Status: *req.Status, Reason: reason, Operator: operator, At: now,
+	}); err != nil {
 		return adminRepoError(c, err)
 	}
+	if *req.Status == 0 {
+		if h.Sessions != nil {
+			if err := h.Sessions.DeleteByUser(c.Request().Context(), auth.RealmUser, id); err != nil {
+				slog.Default().Error("revoke disabled user sessions failed", "user_id", id, "error", err)
+			}
+		}
+		h.notifyUserDisabled(c.Request().Context(), id, reason, now)
+	}
 	return response.OK(c, map[string]any{"id": strconv.FormatInt(id, 10), "status": *req.Status})
+}
+
+func (h *AdminHandler) UpdateUserPassword(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		return response.Fail(c, http.StatusBadRequest, 40001, "invalid user id")
+	}
+	var req struct {
+		Password string `json:"password"`
+	}
+	if err := c.Bind(&req); err != nil || len(req.Password) < 8 || len(req.Password) > 72 {
+		return response.Fail(c, http.StatusBadRequest, 40001, "invalid password")
+	}
+	hash, err := auth.HashPassword(req.Password)
+	if err != nil {
+		return response.Fail(c, http.StatusInternalServerError, 50001, "hash password failed")
+	}
+	if err := h.Repo.UpdateUserPassword(c.Request().Context(), id, hash); err != nil {
+		return adminRepoError(c, err)
+	}
+	return response.OK(c, map[string]any{"id": strconv.FormatInt(id, 10)})
+}
+
+func (h *AdminHandler) notifyUserDisabled(ctx context.Context, userID int64, reason string, now time.Time) {
+	if h.Notifications == nil {
+		return
+	}
+	view, err := h.Notifications.Create(ctx, notification.CreateInput{
+		Title: "账号已被禁用", Content: "你的账号已被禁用。\n\n原因：" + reason,
+		Type: daomodel.NotificationInbox, ExpireAt: now.Add(30 * 24 * time.Hour), RecipientUserID: userID,
+	}, notification.Creator{Name: "system"})
+	if err != nil {
+		slog.Default().Error("create disabled user notification failed", "user_id", userID, "error", err)
+		return
+	}
+	if _, err := h.Notifications.Publish(ctx, view.ID); err != nil {
+		slog.Default().Error("publish disabled user notification failed", "user_id", userID, "error", err)
+	}
 }
 
 func (h *AdminHandler) Sandboxes(c echo.Context) error {
@@ -246,6 +339,7 @@ func (h *AdminHandler) Projects(c echo.Context) error {
 			ID:           project.ID,
 			Name:         project.Name,
 			State:        project.State,
+			Hidden:       project.IsHidden,
 			Owner:        owner,
 			OwnerUserID:  project.OwnerUserID,
 			WorkspaceID:  project.WorkspaceID,
@@ -300,6 +394,45 @@ func (h *AdminHandler) ProjectLive(c echo.Context) error {
 	return nil
 }
 
+type projectHiddenRequest struct {
+	Hidden *bool `json:"hidden"`
+}
+
+func (h *AdminHandler) UpdateProjectHidden(c echo.Context) error {
+	id := c.Param("id")
+	var req projectHiddenRequest
+	if err := c.Bind(&req); err != nil || req.Hidden == nil {
+		return response.Fail(c, http.StatusBadRequest, 40001, "invalid hidden")
+	}
+	project, err := h.ProjectsStore.Get(c.Request().Context(), id)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return response.Fail(c, http.StatusNotFound, 40401, "project not found")
+		}
+		return response.Fail(c, http.StatusInternalServerError, 50002, "get project failed")
+	}
+	if err := h.ProjectsStore.SetHidden(c.Request().Context(), id, *req.Hidden); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return response.Fail(c, http.StatusNotFound, 40401, "project not found")
+		}
+		return response.Fail(c, http.StatusInternalServerError, 50001, "update project hidden failed")
+	}
+	if h.Metas != nil {
+		if meta, metaErr := h.Metas.Get(c.Request().Context(), id); metaErr == nil {
+			switch {
+			case *req.Hidden:
+				meta.Status = "hidden"
+			case project.State == model.ProjectStateDisabled:
+				meta.Status = model.ProjectStateDisabled
+			default:
+				meta.Status = ""
+			}
+			_ = h.Metas.Set(c.Request().Context(), id, meta)
+		}
+	}
+	return response.OK(c, map[string]any{"id": id, "hidden": *req.Hidden})
+}
+
 type reviewProjectRequest struct {
 	Status string `json:"status"`
 	Note   string `json:"note"`
@@ -333,9 +466,12 @@ func (h *AdminHandler) ReviewProject(c echo.Context) error {
 	}
 	if h.Metas != nil {
 		if meta, err := h.Metas.Get(c.Request().Context(), project.ID); err == nil {
-			if req.Status == model.ReviewStatusRejected {
+			switch {
+			case req.Status == model.ReviewStatusRejected:
 				meta.Status = model.ProjectStateDisabled
-			} else {
+			case project.IsHidden:
+				meta.Status = "hidden"
+			default:
 				meta.Status = ""
 			}
 			_ = h.Metas.Set(c.Request().Context(), project.ID, meta)

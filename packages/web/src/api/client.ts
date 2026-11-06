@@ -102,6 +102,10 @@ export function onUnauthorized(handler: UnauthorizedHandler): () => void {
   }
 }
 
+export function notifyUnauthorized(): void {
+  unauthorizedHandler?.()
+}
+
 export function unwrapEnvelope<T>(envelope: Envelope<T>): T {
   if (!envelope || envelope.code !== 0) {
     throw new ApiError(envelope?.message || 'request failed', -1, envelope?.code ?? -1)
@@ -120,7 +124,7 @@ export async function request<T>(client: AxiosInstance, config: AxiosRequestConf
     if (axios.isAxiosError(error)) {
       const data = error.response?.data as Partial<Envelope<unknown>> | undefined
       if (error.response?.status === 401) {
-        unauthorizedHandler?.()
+        notifyUnauthorized()
       }
       const apiError = new ApiError(
         data?.message || error.message,

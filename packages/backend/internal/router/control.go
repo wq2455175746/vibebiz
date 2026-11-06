@@ -31,6 +31,11 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 		stageHandler = handler.NewStageHandler(projects, stageStore, stageSandbox)
 	}
 	adminHandler := handler.NewAdminHandler(repo, projects)
+	if authn != nil && authn.Service != nil {
+		if revoker, ok := authn.Service.Sessions.(auth.SessionRevoker); ok {
+			adminHandler.Sessions = revoker
+		}
+	}
 	adminHandler.Sandbox = adminSandbox
 	adminHandler.Covers = coverSigner
 	adminHandler.CoverExpiry = coverExpiry
@@ -132,11 +137,14 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 	adminProtected.Use(admin.AuditMiddleware(repo, auditLogger))
 	adminProtected.GET("/overview", adminHandler.Overview)
 	adminProtected.GET("/users", adminHandler.Users)
+	adminProtected.GET("/users/:id", adminHandler.UserDetail)
 	adminProtected.PUT("/users/:id/status", adminHandler.UpdateUserStatus)
+	adminProtected.PUT("/users/:id/password", adminHandler.UpdateUserPassword)
 	adminProtected.GET("/projects", adminHandler.Projects)
 	adminProtected.GET("/projects/:id/files", adminHandler.ProjectFiles)
 	adminProtected.GET("/projects/:id/live/*", adminHandler.ProjectLive)
 	adminProtected.PUT("/projects/:id/review", adminHandler.ReviewProject)
+	adminProtected.PUT("/projects/:id/hidden", adminHandler.UpdateProjectHidden)
 	adminProtected.GET("/sandboxes", adminHandler.Sandboxes)
 	adminProtected.GET("/quotas", adminHandler.Quotas)
 	adminProtected.PUT("/quotas/:userId", adminHandler.UpdateQuota)

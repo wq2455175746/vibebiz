@@ -327,7 +327,7 @@ func (h *ProjectHandler) UpdateAgentRoles(c echo.Context) error {
 	if err != nil {
 		return response.Fail(c, http.StatusNotFound, 40401, "project not found")
 	}
-	if !containsInt64(session.WorkspaceIDs, project.WorkspaceID) {
+	if !containsInt64(session.WorkspaceIDs, project.WorkspaceID) || project.IsHidden {
 		return response.Fail(c, http.StatusNotFound, 40401, "project not found")
 	}
 	roleIDs, hasTeam, err := h.normalizeAgentRoles(c.Request().Context(), req.AgentRoleIDs)
@@ -383,7 +383,7 @@ func (h *ProjectHandler) UpdatePreviewPath(c echo.Context) error {
 		}
 		return response.Fail(c, http.StatusInternalServerError, 50002, "get project failed")
 	}
-	if !containsInt64(session.WorkspaceIDs, project.WorkspaceID) || project.State == model.ProjectStateDisabled {
+	if !containsInt64(session.WorkspaceIDs, project.WorkspaceID) || project.IsHidden || project.State == model.ProjectStateDisabled {
 		return response.Fail(c, http.StatusNotFound, 40401, "project not found")
 	}
 	var req updatePreviewPathRequest
@@ -414,7 +414,7 @@ func (h *ProjectHandler) List(c echo.Context) error {
 	projects := h.Store.ListByWorkspaces(c.Request().Context(), []int64{session.CurrentWorkspaceID})
 	visible := make([]*model.Project, 0, len(projects))
 	for _, project := range projects {
-		if project.State == model.ProjectStateDisabled {
+		if project.IsHidden || project.State == model.ProjectStateDisabled {
 			continue
 		}
 		h.attachCoverURL(c.Request().Context(), project)
@@ -435,7 +435,7 @@ func (h *ProjectHandler) Get(c echo.Context) error {
 		}
 		return response.Fail(c, http.StatusInternalServerError, 50002, "get project failed")
 	}
-	if !containsInt64(session.WorkspaceIDs, project.WorkspaceID) || project.State == model.ProjectStateDisabled {
+	if !containsInt64(session.WorkspaceIDs, project.WorkspaceID) || project.IsHidden || project.State == model.ProjectStateDisabled {
 		return response.Fail(c, http.StatusNotFound, 40401, "project not found")
 	}
 	h.attachCoverURL(c.Request().Context(), project)
@@ -473,7 +473,7 @@ func (h *ProjectHandler) Delete(c echo.Context) error {
 		}
 		return response.Fail(c, http.StatusInternalServerError, 50002, "get project failed")
 	}
-	if !containsInt64(session.WorkspaceIDs, project.WorkspaceID) {
+	if !containsInt64(session.WorkspaceIDs, project.WorkspaceID) || project.IsHidden {
 		return response.Fail(c, http.StatusNotFound, 40401, "project not found")
 	}
 	if err := h.Store.Delete(c.Request().Context(), id); err != nil {

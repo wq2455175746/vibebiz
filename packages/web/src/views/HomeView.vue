@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { deleteStaging } from '@/api/resources'
 import { createProject, deleteProject, listProjects } from '@/api/projects'
+import { listScheduledTasks } from '@/api/scheduledTasks'
 import { listTemplates, useTemplate as createFromTemplate } from '@/api/templates'
 import { fetchChatStatus } from '@/api/chat'
 import ClonePanel from '@/components/clone/ClonePanel.vue'
@@ -15,29 +16,27 @@ import ProjectCard from '@/components/home/ProjectCard.vue'
 import TemplateCard from '@/components/home/TemplateCard.vue'
 import ProjectPickerDialog from '@/components/home/ProjectPickerDialog.vue'
 import ScheduledTasksPanel from '@/components/scheduled/ScheduledTasksPanel.vue'
-import { useNotificationSocket } from '@/composables/useNotificationSocket'
 import { useAuthStore } from '@/stores/auth'
-import { useNotificationsStore } from '@/stores/notifications'
 import { useResourceStore } from '@/stores/resources'
 import {
   DEFAULT_ENTERPRISE_PROMPT,
   isEnterpriseProject,
   markEnterpriseProject,
-  resolveEditorPath,
 } from '@/utils/enterprise'
 import { canAppendToProject, resolveHomeSubmit } from '@/utils/homeSubmit'
+import { filterStandardProjects, resolveProjectTarget } from '@/utils/projectRoute'
 import '@/styles/home.css'
 import type { Project, Template } from '@/types'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
-const notifications = useNotificationsStore()
 const resources = useResourceStore()
 const prompt = ref('')
 const creating = ref(false)
 const error = ref('')
 const projects = ref<Project[]>([])
+const scheduledProjectIds = ref<Set<string>>(new Set())
 const templates = ref<Template[]>([])
 const templatesLoading = ref(false)
 const templatesError = ref('')
@@ -52,13 +51,12 @@ const isClonesPage = computed(() => route.name === 'clones')
 const enterpriseProjects = computed(() =>
   projects.value.filter((project) => isEnterpriseProject(project)),
 )
+const standardProjects = computed(() =>
+  filterStandardProjects(projects.value, scheduledProjectIds.value),
+)
 let wasEnterprise = false
 let homeDraft = ''
 let enterpriseDraft = ''
-
-const { connect, disconnect } = useNotificationSocket(() => {
-  void notifications.load(true)
-})
 
 watch(
   isEnterprisePage,
@@ -73,18 +71,6 @@ watch(
     wasEnterprise = enterprise
   },
   { immediate: true },
-)
-
-watch(
-  () => auth.isAuthenticated,
-  (authenticated) => {
-    if (authenticated) {
-      connect()
-    } else {
-      disconnect()
-      notifications.clear()
-    }
-  },
 )
 
 function toggleSidebar() {
@@ -192,9 +178,17 @@ function selectProject(project: Project) {
 
 async function loadProjects() {
   try {
-    projects.value = await listProjects()
+    const [projectList, tasks] = await Promise.all([
+      listProjects(),
+      listScheduledTasks().catch(() => []),
+    ])
+    projects.value = projectList
+    scheduledProjectIds.value = new Set(
+      tasks.map((task) => task.projectId).filter((id): id is string => Boolean(id)),
+    )
   } catch {
     projects.value = []
+    scheduledProjectIds.value = new Set()
   }
 }
 
@@ -224,11 +218,11 @@ async function useTemplate(template: Template) {
 
 function openProject(id: string) {
   const project = projects.value.find((item) => item.id === id)
-  if (project && resolveEditorPath(project).startsWith('/enterprise/')) {
-    void router.push(`/enterprise/editor/${id}`)
+  if (!project) {
+    void router.push({ name: 'editor', params: { id } })
     return
   }
-  void router.push({ name: 'editor', params: { id } })
+  void router.push(resolveProjectTarget(project, scheduledProjectIds.value))
 }
 
 async function removeProject(project: Project) {
@@ -246,9 +240,6 @@ async function removeProject(project: Project) {
 onMounted(async () => {
   resources.reset()
   await auth.ensure()
-  if (auth.isAuthenticated) {
-    connect()
-  }
   await Promise.allSettled([loadProjects(), loadTemplates()])
 })
 </script>
@@ -257,6 +248,7 @@ onMounted(async () => {
   <div class="home-shell" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
     <HomeSidebar
       :recent-projects="projects.slice(0, 10)"
+      :scheduled-project-ids="Array.from(scheduledProjectIds)"
       :collapsed="sidebarCollapsed"
       @toggle-collapse="toggleSidebar"
       @workspace-changed="loadProjects"
@@ -266,13 +258,13 @@ onMounted(async () => {
       <div v-if="isProjectsPage" class="projects-page">
         <header class="projects-head">
           <h1>我的项目</h1>
-          <span>{{ projects.length }} 个项目</span>
+          <span>{{ standardProjects.length }} 个项目</span>
         </header>
         <p v-if="error" class="error-text">{{ error }}</p>
-        <p v-if="projects.length === 0" class="discovery-empty">暂无项目</p>
+        <p v-if="standardProjects.length === 0" class="discovery-empty">暂无项目</p>
         <div v-else class="project-grid">
           <ProjectCard
-            v-for="project in projects"
+            v-for="project in standardProjects"
             :key="project.id"
             :project="project"
             @open="openProject"
@@ -342,7 +334,7 @@ onMounted(async () => {
           @clear-target="targetProject = null"
         />
         <HomeDiscovery
-          :projects="projects"
+          :projects="standardProjects"
           :templates="templates"
           :templates-loading="templatesLoading"
           :templates-error="templatesError"
@@ -357,7 +349,7 @@ onMounted(async () => {
 
     <ProjectPickerDialog
       v-if="pickerOpen"
-      :projects="projects"
+      :projects="standardProjects"
       @close="pickerOpen = false"
       @select="selectProject"
     />

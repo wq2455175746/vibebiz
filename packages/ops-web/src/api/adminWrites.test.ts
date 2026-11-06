@@ -6,9 +6,12 @@ import {
   deleteTemplate,
   getAdminTopics,
   getProjectFiles,
+  getUser,
   reviewProject,
+  updateProjectHidden,
   updateQuota,
   updateTemplate,
+  updateUserPassword,
   updateUserStatus,
 } from './admin'
 import { http } from './client'
@@ -23,6 +26,49 @@ describe('admin writes', () => {
       method: 'put',
       url: '/users/1/status',
       data: { status: 0 },
+    })
+  })
+
+  it('sends the disable reason', async () => {
+    const spy = vi.spyOn(http, 'request').mockResolvedValueOnce({
+      data: { code: 0, message: 'ok', result: { id: '1', status: 0 } },
+    })
+    await updateUserStatus('1', 0, '违规内容')
+    expect(spy).toHaveBeenCalledWith({
+      method: 'put',
+      url: '/users/1/status',
+      data: { status: 0, reason: '违规内容' },
+    })
+  })
+
+  it('loads a user detail', async () => {
+    vi.spyOn(http, 'request').mockResolvedValueOnce({
+      data: { code: 0, message: 'ok', result: { id: '1', username: 'wanghg11' } },
+    })
+    await expect(getUser('1')).resolves.toMatchObject({ id: '1', username: 'wanghg11' })
+  })
+
+  it('updates a user password', async () => {
+    const spy = vi.spyOn(http, 'request').mockResolvedValueOnce({
+      data: { code: 0, message: 'ok', result: { id: '1' } },
+    })
+    await updateUserPassword('1', 'new-password')
+    expect(spy).toHaveBeenCalledWith({
+      method: 'put',
+      url: '/users/1/password',
+      data: { password: 'new-password' },
+    })
+  })
+
+  it('hides a project', async () => {
+    const spy = vi.spyOn(http, 'request').mockResolvedValueOnce({
+      data: { code: 0, message: 'ok', result: { id: 'p1', hidden: true } },
+    })
+    await updateProjectHidden('p1', true)
+    expect(spy).toHaveBeenCalledWith({
+      method: 'put',
+      url: '/projects/p1/hidden',
+      data: { hidden: true },
     })
   })
 

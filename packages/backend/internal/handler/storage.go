@@ -9,6 +9,7 @@ import (
 
 	"vibebiz/internal/account"
 	"vibebiz/internal/auth"
+	"vibebiz/internal/model"
 	"vibebiz/internal/response"
 	"vibebiz/internal/storagesync"
 	"vibebiz/internal/store"
@@ -57,6 +58,13 @@ func (h *StorageHandler) Summary(c echo.Context) error {
 		return settingsError(c, err)
 	}
 	projects := h.Projects.ListByWorkspaces(ctx, []int64{workspace.ID})
+	visible := make([]*model.Project, 0, len(projects))
+	for _, project := range projects {
+		if !project.IsHidden {
+			visible = append(visible, project)
+		}
+	}
+	projects = visible
 	records, err := h.Storage.ListByWorkspace(ctx, workspace.ID)
 	if err != nil {
 		return settingsError(c, err)

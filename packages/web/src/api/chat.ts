@@ -1,4 +1,4 @@
-import { cpHttp, dpHttp, notifyQuotaExceeded, request } from './client'
+import { cpHttp, dpHttp, notifyQuotaExceeded, notifyUnauthorized, request } from './client'
 import type { LogLevel } from '@/types'
 import { deviceHeader } from '@/utils/device'
 import { splitSSE } from '@/utils/sse'
@@ -116,6 +116,9 @@ export async function* streamChat(
 
   if (!response.ok || !response.body) {
     const text = await response.text().catch(() => '')
+    if (response.status === 401) {
+      notifyUnauthorized()
+    }
     if (response.status === 429) {
       try {
         const envelope = JSON.parse(text) as {

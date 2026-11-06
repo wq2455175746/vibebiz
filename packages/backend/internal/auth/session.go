@@ -27,6 +27,10 @@ type Session struct {
 
 var ErrSessionNotFound = errors.New("session not found")
 
+type SessionRevoker interface {
+	DeleteByUser(ctx context.Context, realm Realm, userID int64) error
+}
+
 type Store interface {
 	Create(ctx context.Context, session *Session, ttl time.Duration) error
 	Get(ctx context.Context, realm Realm, id string) (*Session, error)

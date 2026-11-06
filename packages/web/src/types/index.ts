@@ -68,7 +68,7 @@ export interface StorageSummary {
 
 export interface Project {
   id: string
-  mode?: 'standard' | 'enterprise'
+  mode?: 'standard' | 'enterprise' | 'clone'
   name: string
   prompt: string
   previewPath: string

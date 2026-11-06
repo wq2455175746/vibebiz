@@ -21,6 +21,7 @@ type ProjectStore interface {
 	SetAgentRoles(ctx context.Context, id string, roleIDs []int64) error
 	SetCover(ctx context.Context, id, key string) error
 	SetPreviewPath(ctx context.Context, id, previewPath string) error
+	SetHidden(ctx context.Context, id string, hidden bool) error
 }
 
 type MemoryProjectStore struct {
@@ -146,6 +147,17 @@ func (s *MemoryProjectStore) SetPreviewPath(_ context.Context, id, previewPath s
 		return ErrNotFound
 	}
 	project.PreviewPath = previewPath
+	return nil
+}
+
+func (s *MemoryProjectStore) SetHidden(_ context.Context, id string, hidden bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	project, ok := s.items[id]
+	if !ok {
+		return ErrNotFound
+	}
+	project.IsHidden = hidden
 	return nil
 }
 

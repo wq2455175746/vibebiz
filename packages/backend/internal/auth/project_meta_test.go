@@ -102,6 +102,20 @@ func TestRequireProjectAccessDeniesNonMember(t *testing.T) {
 	}
 }
 
+func TestRequireProjectAccessDeniesHidden(t *testing.T) {
+	store, _ := newTestMetaStore(t)
+	if err := store.Set(context.Background(), "p1", ProjectMeta{WorkspaceID: 2, OwnerUserID: 7, Status: "hidden"}); err != nil {
+		t.Fatal(err)
+	}
+	rec := runProjectAccess(t, store, &Session{Realm: RealmUser, UserID: 8, WorkspaceIDs: []int64{1, 2}}, "p1")
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", rec.Code)
+	}
+	if env := decodeTestEnvelope(t, rec); env.Code != 40304 {
+		t.Fatalf("code = %d, want 40304", env.Code)
+	}
+}
+
 func TestRequireProjectAccessMissingMeta(t *testing.T) {
 	store, _ := newTestMetaStore(t)
 	rec := runProjectAccess(t, store, &Session{Realm: RealmUser, WorkspaceIDs: []int64{1}}, "missing")

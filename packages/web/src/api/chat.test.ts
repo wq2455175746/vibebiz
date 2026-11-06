@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { onUnauthorized } from './client'
 import { streamChat } from './chat'
 
 function memoryStorage(initial: Record<string, string> = {}) {
@@ -19,6 +20,16 @@ describe('streamChat', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+  })
+
+  it('notifies the unauthorized handler on 401', async () => {
+    const handler = vi.fn()
+    const dispose = onUnauthorized(handler)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('unauthorized', { status: 401 })))
+
+    await expect(streamChat('p1', 'hello').next()).rejects.toThrow()
+    expect(handler).toHaveBeenCalledTimes(1)
+    dispose()
   })
 
   it('sends the device id header', async () => {

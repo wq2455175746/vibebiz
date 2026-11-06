@@ -131,6 +131,30 @@ func TestMemoryProjectStoreClearAgentRoles(t *testing.T) {
 	}
 }
 
+func TestMemoryProjectStoreSetHidden(t *testing.T) {
+	s := NewMemoryProjectStore()
+	if err := s.Create(context.Background(), &model.Project{ID: "p1", WorkspaceID: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetHidden(context.Background(), "p1", true); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := s.Get(context.Background(), "p1")
+	if !got.IsHidden {
+		t.Fatal("project should be hidden")
+	}
+	if err := s.SetHidden(context.Background(), "p1", false); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = s.Get(context.Background(), "p1")
+	if got.IsHidden {
+		t.Fatal("project should be visible")
+	}
+	if err := s.SetHidden(context.Background(), "missing", true); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing err = %v", err)
+	}
+}
+
 func TestMemoryProjectStoreSetCover(t *testing.T) {
 	s := NewMemoryProjectStore()
 	if err := s.Create(context.Background(), &model.Project{ID: "p1", WorkspaceID: 1}); err != nil {

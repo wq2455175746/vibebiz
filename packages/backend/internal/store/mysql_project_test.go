@@ -243,6 +243,23 @@ func TestMySQLProjectStoreSetCover(t *testing.T) {
 	}
 }
 
+func TestMySQLProjectStoreSetHidden(t *testing.T) {
+	db, mock := newMockProjectDB(t)
+	s := newMySQLProjectStore(t, db, mock)
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE `project` SET `is_hidden`=\\?,`updated_at`=\\? WHERE public_id = \\? AND `project`.`deleted_at` IS NULL").
+		WithArgs(int8(1), sqlmock.AnyArg(), "p1").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	if err := s.SetHidden(context.Background(), "p1", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestMySQLProjectStoreUpdateNotFound(t *testing.T) {
 	db, mock := newMockProjectDB(t)
 	s := newMySQLProjectStore(t, db, mock)

@@ -86,6 +86,35 @@ type User struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+type UserDetail struct {
+	ID              string     `json:"id"`
+	Username        string     `json:"username"`
+	Name            string     `json:"name"`
+	Nickname        string     `json:"nickname"`
+	Email           string     `json:"email"`
+	PhoneNumber     string     `json:"phoneNumber"`
+	AvatarURL       string     `json:"avatarUrl"`
+	AvatarS3Path    string     `json:"-"`
+	Plan            string     `json:"plan"`
+	Source          string     `json:"source"`
+	Status          string     `json:"status"`
+	EmailVerifiedAt *time.Time `json:"emailVerifiedAt,omitempty"`
+	LastLoginTime   *time.Time `json:"lastLoginTime,omitempty"`
+	LastLoginIP     string     `json:"lastLoginIp"`
+	DisabledReason  string     `json:"disabledReason"`
+	DisabledAt      *time.Time `json:"disabledAt,omitempty"`
+	DisabledBy      string     `json:"disabledBy"`
+	CreatedAt       time.Time  `json:"createdAt"`
+	UpdatedAt       time.Time  `json:"updatedAt"`
+}
+
+type UserStatusUpdate struct {
+	Status   int8
+	Reason   string
+	Operator string
+	At       time.Time
+}
+
 type Sandbox struct {
 	ID              string     `json:"id"`
 	Name            string     `json:"name"`
@@ -161,7 +190,9 @@ type Repository interface {
 	AuditRecorder
 	Overview(ctx context.Context, projectCount int) (Overview, error)
 	Users(ctx context.Context, query ListQuery) (Page[User], error)
-	UpdateUserStatus(ctx context.Context, id int64, status int8) error
+	User(ctx context.Context, id int64) (UserDetail, error)
+	UpdateUserStatus(ctx context.Context, id int64, input UserStatusUpdate) error
+	UpdateUserPassword(ctx context.Context, id int64, hash string) error
 	Sandboxes(ctx context.Context, query ListQuery) (Page[Sandbox], error)
 	Quotas(ctx context.Context) ([]Quota, error)
 	UpdateQuota(ctx context.Context, userID int64, input QuotaUpdateInput) error

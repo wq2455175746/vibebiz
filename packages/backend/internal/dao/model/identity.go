@@ -13,6 +13,9 @@ type User struct {
 	AvatarURL       string     `gorm:"column:avatar_url" json:"avatarUrl"`
 	AvatarS3Path    string     `gorm:"column:avatar_s3_path" json:"avatarS3Path"`
 	Status          int8       `gorm:"column:status" json:"status"`
+	DisabledReason  string     `gorm:"column:disabled_reason" json:"disabledReason"`
+	DisabledAt      *time.Time `gorm:"column:disabled_at" json:"disabledAt,omitempty"`
+	DisabledBy      string     `gorm:"column:disabled_by" json:"disabledBy"`
 	EmailVerifiedAt *time.Time `gorm:"column:email_verified_at" json:"emailVerifiedAt,omitempty"`
 	LastLoginTime   *time.Time `gorm:"column:last_login_time" json:"lastLoginTime,omitempty"`
 	LastLoginIP     string     `gorm:"column:last_login_ip" json:"lastLoginIp"`

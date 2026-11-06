@@ -351,7 +351,7 @@ func (s *Service) List(ctx context.Context, workspaceIDs []int64) ([]View, error
 	projects := s.Projects.ListByWorkspaces(ctx, workspaceIDs)
 	views := make([]View, 0, len(projects))
 	for _, project := range projects {
-		if project.Mode != model.ProjectModeClone {
+		if project.IsHidden || project.Mode != model.ProjectModeClone {
 			continue
 		}
 		view, err := s.buildView(ctx, project)
@@ -584,7 +584,7 @@ func (s *Service) projectFor(ctx context.Context, workspaceIDs []int64, projectI
 	if err != nil {
 		return nil, ErrNotFound
 	}
-	if project.Mode != model.ProjectModeClone || !containsInt64(workspaceIDs, project.WorkspaceID) {
+	if project.IsHidden || project.Mode != model.ProjectModeClone || !containsInt64(workspaceIDs, project.WorkspaceID) {
 		return nil, ErrNotFound
 	}
 	return project, nil

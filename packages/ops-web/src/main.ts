@@ -1,6 +1,7 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import PrimeVue from 'primevue/config'
+import ToastService from 'primevue/toastservice'
 import { definePreset } from '@primevue/themes'
 import Aura from '@primevue/themes/aura'
 import 'primeicons/primeicons.css'
@@ -44,6 +45,7 @@ const pinia = createPinia()
 
 app.use(pinia)
 app.use(router)
+app.use(ToastService)
 app.use(PrimeVue, {
   theme: {
     preset: VibebizPreset,

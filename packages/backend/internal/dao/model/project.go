@@ -68,6 +68,7 @@ type Project struct {
 	ProjectStructure   JSON       `gorm:"column:project_structure;type:json" json:"projectStructure,omitempty"`
 	IsPublic           int8       `gorm:"column:is_public" json:"isPublic"`
 	Status             string     `gorm:"column:status" json:"status"`
+	IsHidden           int8       `gorm:"column:is_hidden" json:"hidden"`
 	DefaultAgentRoleID *int64     `gorm:"column:default_agent_role_id" json:"defaultAgentRoleId,omitempty"`
 	LastActiveAt       *time.Time `gorm:"column:last_active_at" json:"lastActiveAt,omitempty"`
 	ArchivedAt         *time.Time `gorm:"column:archived_at" json:"archivedAt,omitempty"`

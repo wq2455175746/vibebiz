@@ -11,6 +11,7 @@ import type {
   AdminScheduledTask,
   AdminSandbox,
   AdminUser,
+  AdminUserDetail,
   AuditEvent,
   FdeResourceInput,
   ModelInput,
@@ -137,11 +138,23 @@ export async function createTemplate(
   })
 }
 
-export async function updateUserStatus(id: string, status: number): Promise<void> {
+export async function getUser(id: string): Promise<AdminUserDetail> {
+  return request<AdminUserDetail>({ method: 'get', url: `/users/${id}` })
+}
+
+export async function updateUserStatus(id: string, status: number, reason = ''): Promise<void> {
   await request<{ id: string; status: number }>({
     method: 'put',
     url: `/users/${id}/status`,
-    data: { status },
+    data: reason ? { status, reason } : { status },
+  })
+}
+
+export async function updateUserPassword(id: string, password: string): Promise<void> {
+  await request<{ id: string }>({
+    method: 'put',
+    url: `/users/${id}/password`,
+    data: { password },
   })
 }
 
@@ -152,6 +165,14 @@ export async function getProjects(query: PageQuery = {}): Promise<PageResult<Adm
     params: pageParams(query),
   })
   return toPage(result, 'projects')
+}
+
+export async function updateProjectHidden(id: string, hidden: boolean): Promise<void> {
+  await request<{ id: string; hidden: boolean }>({
+    method: 'put',
+    url: `/projects/${id}/hidden`,
+    data: { hidden },
+  })
 }
 
 export async function getFdeResources(): Promise<AdminFdeResource[]> {

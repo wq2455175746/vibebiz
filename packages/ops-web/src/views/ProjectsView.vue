@@ -14,6 +14,7 @@ import {
   getTemplateTopics,
   projectPreviewURL,
   reviewProject,
+  updateProjectHidden,
 } from '@/api/admin'
 import DataTable from '@/components/DataTable.vue'
 import TablePagination from '@/components/TablePagination.vue'
@@ -29,14 +30,16 @@ const columns: TableColumn[] = [
   { key: 'coverUrl', label: '截图', width: '90px' },
   { key: 'name', label: '名称' },
   { key: 'state', label: '状态', width: '100px', tag: true, highlight: ['ready', 'running'] },
+  { key: 'hidden', label: '可见性', width: '90px' },
   { key: 'reviewStatus', label: '审核', width: '100px' },
   { key: 'owner', label: '所有者', width: '120px' },
   { key: 'createdAt', label: '创建时间', width: '170px', format: (value) => formatDateTime(value) },
-  { key: 'actions', label: '操作', width: '280px' },
+  { key: 'actions', label: '操作', width: '360px' },
 ]
 
 const notice = ref('')
 const actionError = ref('')
+const hidingId = ref('')
 
 const previewVisible = ref(false)
 const previewProject = ref<AdminProject | null>(null)
@@ -107,6 +110,21 @@ function closePreview() {
   if (fileTimer) {
     clearInterval(fileTimer)
     fileTimer = null
+  }
+}
+
+async function toggleHidden(row: unknown) {
+  const project = row as AdminProject
+  hidingId.value = project.id
+  actionError.value = ''
+  try {
+    await updateProjectHidden(project.id, !project.hidden)
+    notice.value = project.hidden ? '项目已取消隐藏' : '项目已隐藏'
+    await load()
+  } catch (err) {
+    actionError.value = err instanceof Error ? err.message : '更新项目可见性失败'
+  } finally {
+    hidingId.value = ''
   }
 }
 
@@ -225,6 +243,7 @@ onUnmounted(() => {
         <span v-else class="project-cover project-cover-empty">无图</span>
       </template>
       <template #cell-state="{ value }">{{ stateLabel(String(value)) }}</template>
+      <template #cell-hidden="{ value }">{{ value ? '已隐藏' : '显示' }}</template>
       <template #cell-reviewStatus="{ value }">{{ reviewLabel(String(value)) }}</template>
       <template #cell-actions="{ row }">
         <div class="row-actions">
@@ -232,6 +251,13 @@ onUnmounted(() => {
           <Button label="文件" size="small" text @click="openPreview(row)" />
           <Button label="审核" size="small" text @click="openReview(row)" />
           <Button label="转模板" size="small" text @click="openTemplate(row)" />
+          <Button
+            :label="(row as AdminProject).hidden ? '取消隐藏' : '隐藏'"
+            size="small"
+            text
+            :loading="hidingId === (row as AdminProject).id"
+            @click="toggleHidden(row)"
+          />
         </div>
       </template>
     </DataTable>

@@ -115,11 +115,13 @@ func TestMySQLRepositoryUpdateUserStatus(t *testing.T) {
 	repo := NewMySQLRepository(db, fixedCounter(0))
 
 	mock.ExpectBegin()
-	mock.ExpectExec("UPDATE `user` SET `status`=\\?,`updated_at`=\\? WHERE id = \\? AND `user`.`deleted_at` IS NULL").
+	mock.ExpectExec("UPDATE `user` SET .*disabled_at.*disabled_by.*disabled_reason.*WHERE id = \\? AND `user`.`deleted_at` IS NULL").
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
-	if err := repo.UpdateUserStatus(context.Background(), 1, 0); err != nil {
+	if err := repo.UpdateUserStatus(context.Background(), 1, UserStatusUpdate{
+		Status: 0, Reason: "违规", Operator: "admin", At: time.Now(),
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -132,14 +134,63 @@ func TestMySQLRepositoryUpdateUserStatusNotFound(t *testing.T) {
 	repo := NewMySQLRepository(db, fixedCounter(0))
 
 	mock.ExpectBegin()
-	mock.ExpectExec("UPDATE `user` SET `status`=\\?,`updated_at`=\\? WHERE id = \\? AND `user`.`deleted_at` IS NULL").
+	mock.ExpectExec("UPDATE `user` SET .*WHERE id = \\? AND `user`.`deleted_at` IS NULL").
 		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectCommit()
 	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `user`").
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 
-	if err := repo.UpdateUserStatus(context.Background(), 99, 1); !errors.Is(err, ErrNotFound) {
+	if err := repo.UpdateUserStatus(context.Background(), 99, UserStatusUpdate{Status: 1}); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("err = %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMySQLRepositoryUserDetail(t *testing.T) {
+	db, mock := newAdminMockDB(t)
+	repo := NewMySQLRepository(db, fixedCounter(0))
+	created := time.Date(2026, 10, 29, 8, 0, 0, 0, time.UTC)
+	disabledAt := created.Add(time.Hour)
+	lastLogin := created.Add(-time.Hour)
+	mock.ExpectQuery("SELECT u.id, u.username, u.nickname").
+		WithArgs(int64(1)).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "username", "nickname", "email", "phone_number", "avatar_url", "avatar_s3_path",
+			"plan_code", "source", "status", "email_verified_at", "last_login_time", "last_login_ip",
+			"disabled_reason", "disabled_at", "disabled_by", "created_at", "updated_at",
+		}).AddRow(
+			1, "wanghg11", "老王", "wang@example.com", "13800000000", "https://old/avatar.png", "avatar/1/a.png",
+			"pro", "CUSTOM", 0, created, lastLogin, "10.0.0.1",
+			"违规内容", disabledAt, "admin", created, created,
+		))
+
+	detail, err := repo.User(context.Background(), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.ID != "1" || detail.Name != "老王" || detail.Username != "wanghg11" || detail.Plan != "pro" ||
+		detail.Status != "disabled" || detail.AvatarS3Path != "avatar/1/a.png" ||
+		detail.DisabledReason != "违规内容" || detail.DisabledBy != "admin" || detail.DisabledAt == nil {
+		t.Fatalf("detail = %+v", detail)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMySQLRepositoryUpdateUserPassword(t *testing.T) {
+	db, mock := newAdminMockDB(t)
+	repo := NewMySQLRepository(db, fixedCounter(0))
+
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE `user` SET `password_hash`=\\?,`updated_at`=\\? WHERE id = \\? AND `user`.`deleted_at` IS NULL").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	if err := repo.UpdateUserPassword(context.Background(), 1, "hashed"); err != nil {
+		t.Fatal(err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)

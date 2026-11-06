@@ -28,6 +28,7 @@ type Project struct {
 	Mode               string     `json:"mode"`
 	PreviewPath        string     `json:"previewPath"`
 	State              string     `json:"state"`
+	IsHidden           bool       `json:"hidden"`
 	ReviewStatus       string     `json:"reviewStatus"`
 	ReviewNote         string     `json:"reviewNote"`
 	ReviewedBy         string     `json:"reviewedBy"`
