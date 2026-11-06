@@ -65,6 +65,8 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://vibebiz-dev.com:5173,http://vibebiz-dev-ops.com:5174}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_DIR: /app/logs
+      USER_TRACE_DIR: /app/logs/user-trace
+      USAGE_TIMEZONE: ${USAGE_TIMEZONE:-Asia/Shanghai}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       OTEL_EXPORTER_OTLP_PROTOCOL: ${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}
       OTEL_RESOURCE_ATTRIBUTES: ${OTEL_RESOURCE_ATTRIBUTES:-deployment.environment=local,service.namespace=vibebiz}

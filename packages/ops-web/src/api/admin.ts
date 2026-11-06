@@ -1,6 +1,8 @@
 import { request } from './client'
 import { toEntity, toList, toPage } from './normalize'
 import type {
+  AccessLog,
+  AccessLogQuery,
   AdminAgentRole,
   AdminFdeResource,
   AdminLLMModel,
@@ -208,6 +210,22 @@ export async function getAudit(query: PageQuery = {}): Promise<PageResult<AuditE
     params: pageParams(query),
   })
   return toPage(result, 'audit')
+}
+
+export async function getAccessLogs(query: AccessLogQuery = {}): Promise<PageResult<AccessLog>> {
+  const result = await request<Record<string, unknown>>({
+    method: 'get',
+    url: '/access-logs',
+    params: {
+      page: query.page,
+      pageSize: query.pageSize,
+      keyword: query.keyword,
+      eventType: query.eventType,
+      from: query.from,
+      to: query.to,
+    },
+  })
+  return toPage<AccessLog>(result, 'logs')
 }
 
 export async function getModels(): Promise<AdminLLMModel[]> {

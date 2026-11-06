@@ -19,6 +19,7 @@ describe('ops navigation', () => {
       '/scheduled-tasks',
       '/quotas',
       '/audit',
+      '/access-logs',
       '/notifications',
       '/settings',
     ])
@@ -35,6 +36,7 @@ describe('ops navigation', () => {
       '定时任务',
       '配额',
       '审计日志',
+      '访问日志',
       '消息通知',
       '系统设置',
     ])

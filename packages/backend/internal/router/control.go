@@ -15,7 +15,7 @@ import (
 	"vibebiz/internal/usage"
 )
 
-func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.ProjectStore, provisioner handler.ProjectInitializer, obs *observability.Provider, authn *auth.Authenticator, authHandler *handler.AuthHandler, settingsHandler *handler.SettingsHandler, storageHandler *handler.StorageHandler, metas auth.ProjectMetaStore, notifications *handler.NotificationHandler, registry *handler.SandboxRegistryHandler, models *handler.ModelHandler, roles *handler.RoleHandler, coverSigner handler.CoverURLSigner, coverExpiry time.Duration, adminSandbox handler.AdminSandbox, templates *handler.TemplateHandler, harness handler.HarnessImporter, stageStore projectstage.Store, stageSandbox handler.StageSandbox, notificationChannels *handler.NotificationChannelHandler, fdeResources *handler.FdeResourceHandler, publishApp *handler.PublishHandler, cloneHandler *handler.CloneHandler, usageService *usage.Service) {
+func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.ProjectStore, provisioner handler.ProjectInitializer, obs *observability.Provider, authn *auth.Authenticator, authHandler *handler.AuthHandler, settingsHandler *handler.SettingsHandler, storageHandler *handler.StorageHandler, metas auth.ProjectMetaStore, notifications *handler.NotificationHandler, registry *handler.SandboxRegistryHandler, models *handler.ModelHandler, roles *handler.RoleHandler, coverSigner handler.CoverURLSigner, coverExpiry time.Duration, adminSandbox handler.AdminSandbox, templates *handler.TemplateHandler, harness handler.HarnessImporter, stageStore projectstage.Store, stageSandbox handler.StageSandbox, notificationChannels *handler.NotificationChannelHandler, fdeResources *handler.FdeResourceHandler, publishApp *handler.PublishHandler, cloneHandler *handler.CloneHandler, usageService *usage.Service, accessLogs *handler.AccessLogHandler) {
 	var roleStore handler.AgentRoleStore
 	if roles != nil {
 		roleStore = roles.Service
@@ -50,8 +50,8 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 		api.POST("/templates/:id/use", templates.Use, authn.RequireUser)
 	}
 	api.POST("/auth/login", authHandler.LoginUser)
-	api.GET("/auth/me", authHandler.MeUser)
-	api.POST("/auth/logout", authHandler.LogoutUser)
+	api.GET("/auth/me", authHandler.MeUser, authHandler.AttachUserSession)
+	api.POST("/auth/logout", authHandler.LogoutUser, authHandler.AttachUserSession)
 	api.PUT("/auth/workspace", authHandler.SwitchWorkspace, authn.RequireUser)
 
 	meAPI := api.Group("/me", authn.RequireUser)
@@ -142,6 +142,9 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 	adminProtected.PUT("/quotas/:userId", adminHandler.UpdateQuota)
 	adminProtected.GET("/usage/daily", adminHandler.UsageDaily)
 	adminProtected.GET("/audit", adminHandler.Audit)
+	if accessLogs != nil {
+		adminProtected.GET("/access-logs", accessLogs.List)
+	}
 	if models != nil {
 		adminProtected.GET("/models", models.List)
 		adminProtected.POST("/models", models.Create)

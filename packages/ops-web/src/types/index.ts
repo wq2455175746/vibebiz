@@ -187,6 +187,31 @@ export interface AuditEvent {
   createdAt: string
 }
 
+export interface AccessLog {
+  id: string
+  eventType: 'login' | 'request'
+  userId: number
+  username: string
+  workspaceId: number
+  projectId: string
+  ip: string
+  region: string
+  deviceId: string
+  deviceType: string
+  os: string
+  browser: string
+  userAgent: string
+  method: string
+  path: string
+  query: string
+  route: string
+  statusCode: number
+  durationMs: number
+  loginResult: string
+  errorMessage: string
+  eventAt: string
+}
+
 export type NotificationType = 'version_release' | 'inbox'
 export type NotificationStatus = 'draft' | 'published' | 'unpublished' | 'expired'
 
@@ -232,6 +257,12 @@ export interface PageQuery {
   page?: number
   pageSize?: number
   keyword?: string
+}
+
+export interface AccessLogQuery extends PageQuery {
+  eventType?: string
+  from?: string
+  to?: string
 }
 
 export interface PageResult<T> {

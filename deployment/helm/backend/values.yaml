@@ -59,6 +59,8 @@ config:
   smtpPort: "587"
   smtpFrom: ""
   smtpSecurity: starttls
+  userTraceDir: /app/logs/user-trace
+  usageTimezone: Asia/Shanghai
   otelExporterOtlpEndpoint: ""
   otelExporterOtlpProtocol: http/protobuf
   otelResourceAttributes: "deployment.environment=k8s,service.namespace=vibebiz"

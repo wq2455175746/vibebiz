@@ -43,6 +43,7 @@ import (
 	"vibebiz/internal/storagesync"
 	"vibebiz/internal/store"
 	"vibebiz/internal/usage"
+	"vibebiz/internal/usertrace"
 )
 
 const redisPrefix = "vibebiz"
@@ -122,7 +123,23 @@ func main() {
 	}
 	settingsRepo := dao.NewSettingsRepository(db)
 	accountService := account.NewService(settingsRepo, sessions, avatarPresigner, cfg.S3PresignExpiry())
+	traceRepo := usertrace.NewMySQLRepository(db)
+	accessLogHandler := handler.NewAccessLogHandler(traceRepo)
+	var traceRecorder *usertrace.Recorder
+	if cfg.UserTraceEnabled {
+		if err := usertrace.EnsureWritable(cfg.UserTraceDir); err != nil {
+			obs.Logger.Error("user trace dir unavailable; tracing disabled", "dir", cfg.UserTraceDir, "error", err)
+		} else {
+			traceRecorder = usertrace.NewRecorder(cfg.UserTraceDir, usertrace.TrimPlane(cfg.Plane), obs.Logger)
+			traceCtx, traceCancel := context.WithCancel(ctx)
+			defer traceCancel()
+			go usertrace.NewSyncer(cfg.UserTraceDir, usertrace.TrimPlane(cfg.Plane), traceRepo, cfg.UserTraceSyncInterval, obs.Logger).Run(traceCtx)
+		}
+	}
 	authHandler := &handler.AuthHandler{Service: authService, Account: accountService, UserCookie: userCookie, OpsCookie: opsCookie}
+	if traceRecorder != nil {
+		authHandler.Trace = traceRecorder
+	}
 	settingsHandler := handler.NewSettingsHandler(accountService, userCookie)
 
 	projectStore, err := store.NewMySQLProjectStore(ctx, db)
@@ -279,13 +296,16 @@ func main() {
 
 	e := server.New(cfg, obs)
 	e.GET("/metrics/usage", handler.NewUsageMetricsHandler(usageService).Serve)
+	if traceRecorder != nil {
+		e.Use(usertrace.Middleware(traceRecorder, obs.Logger))
+	}
 	e.Use(requestCounter.Middleware())
 	templateService := projecttemplate.NewService(projecttemplate.NewMySQLRepository(db), projectStore, sandboxRouter, avatarPresigner, cfg.S3PresignExpiry())
 	templateService.Logger = obs.Logger
 	templateHandler := handler.NewTemplateHandler(templateService, projectStore, provisioner, sandboxRouter)
 	templateHandler.Metas = metas
 
-	router.RegisterControl(e, adminRepo, projectStore, provisioner, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler, registryHandler, modelHandler, roleHandler, avatarPresigner, cfg.S3PresignExpiry(), sandboxRouter, templateHandler, harnessImporter, stageStore, sandboxRouter, notificationChannelHandler, fdeResourceHandler, publishHandler, cloneHandler, usageService)
+	router.RegisterControl(e, adminRepo, projectStore, provisioner, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler, registryHandler, modelHandler, roleHandler, avatarPresigner, cfg.S3PresignExpiry(), sandboxRouter, templateHandler, harnessImporter, stageStore, sandboxRouter, notificationChannelHandler, fdeResourceHandler, publishHandler, cloneHandler, usageService, accessLogHandler)
 	router.RegisterScheduledTasks(e, scheduledHandler, authn)
 	router.RegisterChatHistory(e, handler.NewChatHistoryHandler(sandboxRouter, projectStore), authn)
 

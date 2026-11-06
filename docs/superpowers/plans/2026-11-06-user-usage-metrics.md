@@ -26,7 +26,7 @@
 ### Task 1: 数据库迁移与模型
 
 **Files:**
-- Create: `packages/backend/migrations/00024_user_usage_daily.sql`
+- Create: `packages/backend/migrations/00025_user_usage_daily.sql`
 - Create: `packages/backend/internal/dao/model/usage.go`
 - Modify: `packages/backend/internal/dao/model/workspace.go`
 - Modify: `packages/backend/internal/dao/model/table_test.go`
@@ -38,7 +38,7 @@
 
 - [ ] **Step 1: 写迁移文件**
 
-`00024_user_usage_daily.sql` 使用 spec 第 4.1 节的 Up/Down 与历史回填 SQL。Up 必须包含 `-- +goose Up`，Down 必须包含 `-- +goose Down`。
+`00025_user_usage_daily.sql` 使用 spec 第 4.1 节的 Up/Down 与历史回填 SQL。Up 必须包含 `-- +goose Up`，Down 必须包含 `-- +goose Down`。
 
 - [ ] **Step 2: 写模型**
 
@@ -85,7 +85,7 @@ UploadDailyBytesQuota int64 `gorm:"column:upload_daily_bytes_quota" json:"upload
 
 ```go
 func TestUserUsageDailyMigration(t *testing.T) {
-	body, err := fs.ReadFile(FS, "00024_user_usage_daily.sql")
+	body, err := fs.ReadFile(FS, "00025_user_usage_daily.sql")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ Expected: PASS
 - [ ] **Step 6: 提交**
 
 ```bash
-git add packages/backend/migrations/00024_user_usage_daily.sql packages/backend/internal/dao/model/usage.go packages/backend/internal/dao/model/workspace.go packages/backend/internal/dao/model/table_test.go packages/backend/migrations/migrations_test.go
+git add packages/backend/migrations/00025_user_usage_daily.sql packages/backend/internal/dao/model/usage.go packages/backend/internal/dao/model/workspace.go packages/backend/internal/dao/model/table_test.go packages/backend/migrations/migrations_test.go
 git commit -m "feat: add user usage daily schema"
 ```
 

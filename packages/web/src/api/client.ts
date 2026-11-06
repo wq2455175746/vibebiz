@@ -1,4 +1,10 @@
-import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios'
+import axios, {
+  type AxiosInstance,
+  type AxiosRequestConfig,
+  type InternalAxiosRequestConfig,
+} from 'axios'
+
+import { deviceHeader } from '@/utils/device'
 
 export interface Envelope<T> {
   code: number
@@ -69,6 +75,19 @@ export const dpHttp = axios.create({
   ...common,
   baseURL: import.meta.env.VITE_DP_BASE || '/dp/api/v1',
 })
+
+const applyDeviceHeader = (config: InternalAxiosRequestConfig) => {
+  const deviceId = deviceHeader()['X-Device-Id']
+  if (typeof config.headers.set === 'function') {
+    config.headers.set('X-Device-Id', deviceId)
+  } else {
+    config.headers['X-Device-Id'] = deviceId
+  }
+  return config
+}
+
+cpHttp.interceptors.request.use(applyDeviceHeader)
+dpHttp.interceptors.request.use(applyDeviceHeader)
 
 type UnauthorizedHandler = () => void
 

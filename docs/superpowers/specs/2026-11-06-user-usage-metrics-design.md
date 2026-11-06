@@ -90,7 +90,7 @@ sandbox 不直接写数据库；usage 事件只经 SSE 传递。
 
 ### 4.1 迁移
 
-新增 `packages/backend/migrations/00024_user_usage_daily.sql`，包含 goose Up / Down。
+新增 `packages/backend/migrations/00025_user_usage_daily.sql`，包含 goose Up / Down。
 
 Up：
 

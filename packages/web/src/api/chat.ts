@@ -1,5 +1,6 @@
 import { cpHttp, dpHttp, notifyQuotaExceeded, request } from './client'
 import type { LogLevel } from '@/types'
+import { deviceHeader } from '@/utils/device'
 import { splitSSE } from '@/utils/sse'
 
 export interface StreamEvent {
@@ -106,6 +107,7 @@ export async function* streamChat(
     headers: {
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
+      ...deviceHeader(),
     },
     body: JSON.stringify({ message, references }),
     credentials: 'include',

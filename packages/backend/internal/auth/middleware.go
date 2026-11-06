@@ -43,7 +43,7 @@ func (a *Authenticator) require(next echo.HandlerFunc, realm Realm, cookies Cook
 		if session.Realm != realm {
 			return response.Fail(c, http.StatusUnauthorized, 40101, "unauthorized")
 		}
-		c.Set(sessionContextKey, session)
+		SetSession(c, session)
 		return next(c)
 	}
 }
