@@ -24,3 +24,9 @@ ignore = ["B008", "E501"]
 
 [tool.ruff.format]
 quote-style = "double"
+
+
+# 项目级别添加国内镜像
+[[tool.uv.index]]
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+default = true
