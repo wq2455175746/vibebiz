@@ -98,7 +98,9 @@
 | GET | `/admin/users` | - |
 | GET | `/admin/projects` | - |
 | GET | `/admin/sandboxes` | - |
-| GET | `/admin/quotas` | - |
+| GET | `/admin/quotas` | 含月度与每日额度 |
+| PUT | `/admin/quotas/:userId` | 支持月度与每日额度部分更新 |
+| GET | `/admin/usage/daily` | 按日使用趋势，支持 `from`/`to`/`userId` |
 | GET | `/admin/audit` | - |
 | POST | `/internal/sandboxes/heartbeat` | sandbox 心跳，`X-Sandbox-Token` |
 
@@ -160,10 +162,11 @@ Agent 事件形状（sandbox → web，CP / DP 原样透传）：
 { "type": "agent", "payload": { "type": "user", "message": { "content": [] } } }
 { "type": "agent", "payload": { "type": "result", "subtype": "success" } }
 { "type": "sandbox-status", "state": "ready", "commit": "a1b2c3d" }
+{ "type": "usage", "inputTokens": 1234, "outputTokens": 567, "modelRequests": 2, "model": "claude-...", "turnId": "..." }
 { "type": "error", "message": "..." }
 ```
 
-事件内部结构属于 sandbox 所有；CP / DP 不得据此分支。
+事件内部结构属于 sandbox 所有；CP / DP 不得据此分支。DP 只允许识别顶层 `type=usage` 并写入 `user_usage_daily`。
 
 ## 5. Sandbox 工作区规则
 
@@ -261,6 +264,8 @@ data/workspaces/<projectId>/
 - W3C `traceparent` 在 CP / DP → sandbox 调用链上传播。
 - `/metrics` 不加前缀，也不要求鉴权；生产必须只允许内网或 Prometheus 访问。
 - 指标：`vibebiz_http_requests_total`、`vibebiz_http_request_duration_seconds`、`vibebiz_sandbox_requests_total`、`vibebiz_project_agent_runs_total`、`vibebiz_sse_events_total`。
+- `/metrics/usage` 由 CP 提供，按 `user_id` 与 `date` 输出每日使用 gauge；指标名 `vibebiz_user_daily_{projects_created,input_tokens,output_tokens,model_requests,upload_count,upload_bytes}`。
+- 每日额度与用量存 MySQL：`user_quota.project_daily_quota` / `llm_token_daily_quota` / `upload_daily_count_quota` / `upload_daily_bytes_quota`，用量表 `user_usage_daily`。超限 HTTP 429，业务码 `42901`~`42904`。
 - `route` 使用路由模板，禁止原始 URL。
 - 不交付 Collector / Jaeger / Grafana；endpoint 为空时应用正常启动。
 

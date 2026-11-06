@@ -5,7 +5,7 @@ import type { UsageDailyPoint } from '@/types'
 const BLUE = '#2563eb'
 const BLACK = '#111111'
 const GRAY = '#6b7280'
-const LIGHT_GRAY = '#9ca3af'
+const LIGHT_GRAY = '#d1d5db'
 
 const baseAxis = {
   axisLine: { lineStyle: { color: LIGHT_GRAY } },

@@ -1,10 +1,10 @@
 {
   "service": "all",
-  "task_id": "clone-capability-e2e",
-  "task_name": "克隆能力 sandbox 打通 + 前端走 MySQL",
+  "task_id": "user-usage-metrics",
+  "task_name": "用户按日使用指标、每日额度与监控图表",
   "status": "completed",
-  "started_at": "2026-10-31",
-  "description": "sandbox 同步 .clone/source.json、解压并执行单测、写测试报告；web 克隆页与编辑器切换到 CP/DP + MySQL；完成真实创建/上传/阶段启动/单测执行验证。",
+  "started_at": "2026-11-06",
+  "description": "MySQL 按日用量、Prometheus /metrics/usage、每日额度、ops-web ECharts 概览、web 额度超限弹窗。",
   "milestones": {
     "根目录与开发命令": "2026-10-28 - 根聚合 Makefile / 各 package Makefile+.env.example / docker-compose / scripts/dev.sh",
     "Go 网关骨架": "2026-10-28 - 项目、文件、SSE、预览代理 + httptest",
@@ -73,7 +73,15 @@
     "克隆前端：CP/DP API、资源 purpose 上传、MySQL 列表/创建/详情/附件、真实阶段/聊天/预览/终端",
     "克隆前端：测试阶段执行单测并读取报告，制品空间展示真实项目统计",
     "克隆 E2E：真实账号创建项目、上传图片/zip/文档、sandbox 解压通过、pytest 通过、阶段启动成功",
-    "验证：pytest 100、go test/vet、web 199 tests/build/lint、make validate 全部通过"
+    "验证：pytest 100、go test/vet、web 199 tests/build/lint、make validate 全部通过",
+    "迁移 00024：user_usage_daily + user_quota 每日额度字段 + 历史回填",
+    "internal/usage：原子累加、每日额度校验、按日查询",
+    "CP：项目创建额度/记录、admin usage API、/metrics/usage、USAGE_TIMEZONE",
+    "DP：聊天 usage SSE 落库、Token 额度；资源上传额度/记录",
+    "sandbox：Assistant/Result usage 采集与顶层 usage 事件",
+    "web：全局额度超限 Dialog（axios + SSE fetch）",
+    "ops-web：ECharts 7/30/90 天趋势、用户筛选、每日额度编辑",
+    "验证：go test、pytest 105、web 203、ops-web 76、make validate 通过"
   ],
   "next_tasks": [
     "克隆制品空间：源码归档、镜像构建与版本说明",
@@ -93,5 +101,5 @@
     "工作区成员角色管理 / 移除成员；邀请后 Session 自动刷新",
     "把 CP ProjectStore 与 admin Repository 接入 MySQL；项目归属迁移到 project 表"
   ],
-  "updated_at": "2026-10-31T22:40:51.037764"
+  "updated_at": "2026-11-06T07:43:41.975618+00:00"
 }
