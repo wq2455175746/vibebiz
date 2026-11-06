@@ -40,3 +40,60 @@ func TestCaptureRequestDropsInvalidDeviceID(t *testing.T) {
 		t.Fatalf("device id = %q, want empty", info.DeviceID)
 	}
 }
+
+func TestSanitizeQueryRedactsAllSensitiveKeys(t *testing.T) {
+	keys := []string{"password", "passwd", "token", "access_token", "secret", "api_key", "key", "authorization"}
+	for _, key := range keys {
+		t.Run(key, func(t *testing.T) {
+			got := sanitizeQuery(key + "=plainvalue&keyword=abc")
+			if strings.Contains(got, "plainvalue") {
+				t.Fatalf("%s not redacted: %q", key, got)
+			}
+			if !strings.Contains(got, "keyword=abc") {
+				t.Fatalf("keyword dropped: %q", got)
+			}
+		})
+	}
+}
+
+func TestSanitizeQueryMalformedInputNeverLeaks(t *testing.T) {
+	cases := map[string]string{
+		"semicolon":  "token=secret;foo=bar",
+		"bad escape": "token=%zz&password=p",
+	}
+	for name, raw := range cases {
+		t.Run(name, func(t *testing.T) {
+			got := sanitizeQuery(raw)
+			if strings.Contains(got, "secret") || strings.Contains(got, "password") || strings.Contains(got, "token") {
+				t.Fatalf("sanitized query leaked: %q", got)
+			}
+		})
+	}
+}
+
+func TestCaptureRequestSanitizesRefererQuery(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/cp/api/v1/projects", nil)
+	req.Header.Set("Referer", "https://vibebiz-dev.com/page?token=secret&keyword=abc")
+	c := e.NewContext(req, httptest.NewRecorder())
+
+	info := CaptureRequest(c)
+	if strings.Contains(info.Referer, "secret") {
+		t.Fatalf("referer leaked: %q", info.Referer)
+	}
+	if !strings.Contains(info.Referer, "keyword=abc") || !strings.Contains(info.Referer, "vibebiz-dev.com") {
+		t.Fatalf("referer = %q", info.Referer)
+	}
+}
+
+func TestCaptureRequestDropsMalformedRefererQuery(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/cp/api/v1/projects", nil)
+	req.Header.Set("Referer", "https://vibebiz-dev.com/page?token=%zz")
+	c := e.NewContext(req, httptest.NewRecorder())
+
+	info := CaptureRequest(c)
+	if strings.Contains(info.Referer, "token") || strings.Contains(info.Referer, "%zz") {
+		t.Fatalf("referer leaked: %q", info.Referer)
+	}
+}

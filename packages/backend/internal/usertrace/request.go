@@ -39,7 +39,7 @@ func CaptureRequest(c echo.Context) RequestInfo {
 		Route:     truncate(c.Path(), 255),
 		DeviceID:  normalizeDeviceID(req.Header.Get("X-Device-Id")),
 		UserAgent: truncate(req.UserAgent(), 512),
-		Referer:   truncate(req.Referer(), 1024),
+		Referer:   sanitizeReferer(req.Referer()),
 		RequestID: requestID(c),
 		TraceID:   traceID(c),
 	}
@@ -59,14 +59,33 @@ func sanitizeQuery(raw string) string {
 	}
 	values, err := url.ParseQuery(raw)
 	if err != nil {
-		return truncate(raw, 1024)
+		return ""
 	}
+	redactQueryValues(values)
+	return truncate(values.Encode(), 1024)
+}
+
+func redactQueryValues(values url.Values) {
 	for key := range values {
 		if _, ok := sensitiveQueryKeys[strings.ToLower(key)]; ok {
 			values[key] = []string{"***"}
 		}
 	}
-	return truncate(values.Encode(), 1024)
+}
+
+func sanitizeReferer(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	if u.RawQuery != "" {
+		u.RawQuery = sanitizeQuery(u.RawQuery)
+	}
+	return truncate(u.String(), 1024)
 }
 
 func normalizeDeviceID(raw string) string {
