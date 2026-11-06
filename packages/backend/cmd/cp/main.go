@@ -275,6 +275,7 @@ func main() {
 	defer asynqWorker.Shutdown()
 
 	e := server.New(cfg, obs)
+	e.GET("/metrics/usage", handler.NewUsageMetricsHandler(usageService).Serve)
 	e.Use(requestCounter.Middleware())
 	templateService := projecttemplate.NewService(projecttemplate.NewMySQLRepository(db), projectStore, sandboxRouter, avatarPresigner, cfg.S3PresignExpiry())
 	templateService.Logger = obs.Logger
