@@ -270,3 +270,33 @@ def test_claude_agent_retries_without_resume_when_session_missing(tmp_path, monk
     assert seen == ["stale", None]
     assert agent._sessions["p1"] == "fresh"
     assert any(event["payload"]["type"] == "result" for event in events)
+
+
+def test_serialize_assistant_includes_usage():
+    message = AssistantMessage(
+        content=[TextBlock(text="hi")],
+        model="deepseek-chat",
+        usage={"input_tokens": 12, "output_tokens": 3},
+    )
+
+    event = serialize_sdk_message(message)
+
+    assert event["payload"]["usage"] == {"input_tokens": 12, "output_tokens": 3}
+
+
+def test_serialize_result_includes_usage_and_model_usage():
+    message = ResultMessage(
+        subtype="success",
+        duration_ms=1,
+        duration_api_ms=1,
+        is_error=False,
+        num_turns=2,
+        session_id="s",
+        usage={"input_tokens": 10, "output_tokens": 4},
+        model_usage={"m": {"inputTokens": 10, "outputTokens": 4}},
+    )
+
+    event = serialize_sdk_message(message)
+
+    assert event["payload"]["usage"]["input_tokens"] == 10
+    assert event["payload"]["modelUsage"]["m"]["inputTokens"] == 10

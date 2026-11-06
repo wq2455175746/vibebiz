@@ -236,6 +236,7 @@ def serialize_sdk_message(message: Any) -> dict | None:
                 "sessionId": message.session_id,
                 "message": {"content": serialize_blocks(message.content)},
                 "error": message.error,
+                "usage": message.usage,
             }
         )
 
@@ -263,6 +264,8 @@ def serialize_sdk_message(message: Any) -> dict | None:
                 "numTurns": message.num_turns,
                 "totalCostUsd": message.total_cost_usd,
                 "result": message.result,
+                "usage": message.usage,
+                "modelUsage": message.model_usage,
             }
         )
 

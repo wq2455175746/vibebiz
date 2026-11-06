@@ -201,6 +201,8 @@ def test_chat_stream_updates_workspace(tmp_path):
 
     assert "data: [DONE]" in body
     assert '"tool_use"' in body
+    assert '"type": "usage"' in body or '"type":"usage"' in body
+    assert body.index("usage") < body.index("[DONE]")
 
     updated = client.get("/internal/projects/p1/file", params={"path": "index.html"}).json()[
         "result"

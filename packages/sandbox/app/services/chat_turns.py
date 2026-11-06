@@ -48,6 +48,9 @@ class TurnCollector:
         self.duration_ms: int | None = None
         self.num_turns: int | None = None
         self.result_error = False
+        self.input_tokens = 0
+        self.output_tokens = 0
+        self.model_requests = 0
 
     def consume(self, event: dict[str, Any]) -> None:
         if event.get("type") != "agent":
@@ -64,6 +67,8 @@ class TurnCollector:
             self._consume_result(payload)
 
     def _consume_assistant(self, payload: dict[str, Any]) -> None:
+        self.model_requests += 1
+        self._consume_usage(payload.get("usage"))
         message = payload.get("message")
         if not isinstance(message, dict):
             return
@@ -107,7 +112,32 @@ class TurnCollector:
         turns = payload.get("numTurns", payload.get("num_turns"))
         if isinstance(turns, int):
             self.num_turns = turns
+        if self.input_tokens == 0 and self.output_tokens == 0:
+            self._consume_usage(payload.get("usage"))
+            self._consume_model_usage(payload.get("modelUsage") or payload.get("model_usage"))
         self.result_error = bool(payload.get("isError") or payload.get("is_error"))
+
+    def _consume_usage(self, usage: Any) -> None:
+        if not isinstance(usage, dict):
+            return
+        self.input_tokens += int(usage.get("input_tokens", usage.get("inputTokens", 0)) or 0)
+        self.output_tokens += int(usage.get("output_tokens", usage.get("outputTokens", 0)) or 0)
+
+    def _consume_model_usage(self, model_usage: Any) -> None:
+        if not isinstance(model_usage, dict):
+            return
+        for item in model_usage.values():
+            if not isinstance(item, dict):
+                continue
+            self.input_tokens += int(item.get("inputTokens", item.get("input_tokens", 0)) or 0)
+            self.output_tokens += int(item.get("outputTokens", item.get("output_tokens", 0)) or 0)
+
+    def usage(self) -> dict[str, int]:
+        return {
+            "inputTokens": self.input_tokens,
+            "outputTokens": self.output_tokens,
+            "modelRequests": self.model_requests,
+        }
 
     def content(self) -> str:
         if self.texts:
@@ -272,6 +302,17 @@ class ChatTurnManager:
                 logger.exception(
                     "chat.history.write_failed",
                     extra={"project_id": turn.project_id, "turn_id": turn.id},
+                )
+            usage = collector.usage()
+            if usage["modelRequests"] > 0 or usage["inputTokens"] > 0 or usage["outputTokens"] > 0:
+                self._broadcast(
+                    turn,
+                    {
+                        "type": "usage",
+                        **usage,
+                        "model": self.model,
+                        "turnId": turn.id,
+                    },
                 )
             self._broadcast(turn, None)
             async with self._lock:
