@@ -13,6 +13,7 @@ import (
 	"vibebiz/internal/observability"
 	"vibebiz/internal/resource"
 	"vibebiz/internal/response"
+	"vibebiz/internal/usage"
 )
 
 type ResourceHandler struct {
@@ -137,6 +138,11 @@ func (h *ResourceHandler) log(c echo.Context, action, resourceID string, err err
 }
 
 func resourceError(c echo.Context, err error) error {
+	var exceeded *usage.QuotaExceededError
+	if errors.As(err, &exceeded) {
+		return response.FailWithResult(c, http.StatusTooManyRequests, quotaCode(exceeded.QuotaType), "daily quota exceeded",
+			map[string]any{"quotaType": exceeded.QuotaType, "used": exceeded.Used, "limit": exceeded.Limit})
+	}
 	switch {
 	case errors.Is(err, resource.ErrNotFound):
 		return response.Fail(c, http.StatusNotFound, 40404, "resource not found")

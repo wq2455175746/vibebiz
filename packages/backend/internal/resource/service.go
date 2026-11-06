@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"path/filepath"
 	"strings"
 	"time"
@@ -51,6 +52,11 @@ type Sandbox interface {
 	DeleteResource(ctx context.Context, projectID, resourceID string) error
 }
 
+type UsageGuard interface {
+	CheckUpload(ctx context.Context, userID int64, addCount, addBytes int64) error
+	RecordUpload(ctx context.Context, userID int64, count, bytes int64) error
+}
+
 type Repository interface {
 	Create(ctx context.Context, item *model.ProjectResource) error
 	GetByResourceID(ctx context.Context, resourceID string) (*model.ProjectResource, error)
@@ -65,6 +71,8 @@ type Service struct {
 	Repo    Repository
 	S3      S3
 	Sandbox Sandbox
+	Usage   UsageGuard
+	Logger  *slog.Logger
 	Expiry  time.Duration
 	Now     func() time.Time
 	NewID   func() string
@@ -141,6 +149,11 @@ func (s *Service) Presign(ctx context.Context, workspaceID, userID int64, input 
 	if input.Size <= 0 || input.Size > maxFile {
 		return PresignResult{}, ErrTooLarge
 	}
+	if s.Usage != nil {
+		if err := s.Usage.CheckUpload(ctx, userID, 1, input.Size); err != nil {
+			return PresignResult{}, err
+		}
+	}
 	resourceID := s.NewID()
 	storageName := resourceID + ext
 	key := fmt.Sprintf("staging/%d/%d/%s/%s", workspaceID, userID, resourceID, storageName)
@@ -214,6 +227,11 @@ func (s *Service) Adopt(ctx context.Context, workspaceID, userID int64, projectI
 	if item.Status == "ready" {
 		return toItem(*item), nil
 	}
+	if s.Usage != nil {
+		if err := s.Usage.CheckUpload(ctx, userID, 1, item.SizeBytes); err != nil {
+			return Item{}, err
+		}
+	}
 	if item.Status == "deleted" || item.Status == "staging" && item.ProjectPublicID != nil {
 		return Item{}, ErrNotFound
 	}
@@ -283,6 +301,15 @@ func (s *Service) Adopt(ctx context.Context, workspaceID, userID int64, projectI
 		return Item{}, err
 	}
 	_ = s.S3.Delete(ctx, item.S3StagingKey)
+	if s.Usage != nil {
+		if err := s.Usage.RecordUpload(ctx, userID, 1, item.SizeBytes); err != nil {
+			logger := s.Logger
+			if logger == nil {
+				logger = slog.Default()
+			}
+			logger.Warn("resource.usage_record_error", "project_id", projectID, "resource_id", item.ResourceID, "error", err)
+		}
+	}
 	return toItem(*item), nil
 }
 

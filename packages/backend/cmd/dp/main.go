@@ -116,6 +116,8 @@ func main() {
 	}
 	usageService := usage.NewService(usage.NewMySQLRepository(db), usageLoc)
 	resourceService := resource.NewService(dao.NewProjectResourceRepository(db), resourceS3, sandbox)
+	resourceService.Usage = usageService
+	resourceService.Logger = obs.Logger
 	resourceService.Expiry = cfg.S3PresignExpiry()
 	resourceHandler := handler.NewResourceHandler(resourceService, obs)
 	cloneService := clone.NewService(nil, nil, nil, nil, nil, nil, resourceService, clone.NewMySQLStore(db))

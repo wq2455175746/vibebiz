@@ -3,6 +3,7 @@ package resource
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -10,6 +11,7 @@ import (
 
 	"vibebiz/internal/dao"
 	"vibebiz/internal/dao/model"
+	"vibebiz/internal/usage"
 )
 
 type fakeS3 struct {
@@ -197,5 +199,67 @@ func TestPresignRejectsUnsupportedFile(t *testing.T) {
 	_, err := svc.Presign(context.Background(), 1, 2, PresignInput{Filename: "run.exe", ContentType: "application/octet-stream", Size: 22})
 	if err != ErrInvalidFile {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+type fakeUsage struct {
+	checkErr error
+	recorded bool
+	count    int64
+	bytes    int64
+}
+
+func (f *fakeUsage) CheckUpload(context.Context, int64, int64, int64) error { return f.checkErr }
+
+func (f *fakeUsage) RecordUpload(_ context.Context, _ int64, count, bytes int64) error {
+	f.recorded = true
+	f.count = count
+	f.bytes = bytes
+	return nil
+}
+
+func TestPresignRejectsDailyUploadQuota(t *testing.T) {
+	svc, _, _, _ := newTestService()
+	svc.Usage = &fakeUsage{checkErr: &usage.QuotaExceededError{QuotaType: "upload_count", Used: 5, Limit: 5}}
+	_, err := svc.Presign(context.Background(), 1, 2, PresignInput{Filename: "需求.txt", ContentType: "text/plain", Size: 22})
+	var exceeded *usage.QuotaExceededError
+	if !errors.As(err, &exceeded) || exceeded.QuotaType != "upload_count" {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestAdoptRecordsUpload(t *testing.T) {
+	svc, _, _, _ := newTestService()
+	guard := &fakeUsage{}
+	svc.Usage = guard
+	presign, err := svc.Presign(context.Background(), 1, 2, PresignInput{Filename: "需求.txt", ContentType: "text/plain", Size: 22})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Adopt(context.Background(), 1, 2, "p1", presign.ResourceID); err != nil {
+		t.Fatal(err)
+	}
+	if !guard.recorded || guard.count != 1 || guard.bytes != 22 {
+		t.Fatalf("guard = %+v", guard)
+	}
+}
+
+func TestAdoptReadyDoesNotRecordAgain(t *testing.T) {
+	svc, _, _, _ := newTestService()
+	guard := &fakeUsage{}
+	svc.Usage = guard
+	presign, err := svc.Presign(context.Background(), 1, 2, PresignInput{Filename: "需求.txt", ContentType: "text/plain", Size: 22})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Adopt(context.Background(), 1, 2, "p1", presign.ResourceID); err != nil {
+		t.Fatal(err)
+	}
+	guard.recorded = false
+	if _, err := svc.Adopt(context.Background(), 1, 2, "p1", presign.ResourceID); err != nil {
+		t.Fatal(err)
+	}
+	if guard.recorded {
+		t.Fatal("ready resource should not record upload again")
 	}
 }
