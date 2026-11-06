@@ -92,7 +92,6 @@ export interface TemplateInput {
   recommendScore: number
 }
 
-
 export interface AdminFdeResource {
   id: number
   name: string

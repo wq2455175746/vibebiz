@@ -38,9 +38,9 @@ const columns: TableColumn[] = [
   { key: 'eventType', label: '类型', width: '80px' },
   { key: 'username', label: '用户', width: '120px' },
   { key: 'ip', label: 'IP', width: '130px' },
-  { key: 'path', label: '请求路径', width: '260px' },
+  { key: 'path', label: '方法 + 路径', width: '300px' },
   { key: 'statusCode', label: '状态', width: '70px' },
-  { key: 'durationMs', label: '耗时', width: '80px', format: (value) => `${value} ms` },
+  { key: 'durationMs', label: '耗时', width: '80px', format: (value) => formatDuration(value) },
   { key: 'terminal', label: '终端', width: '160px' },
   { key: 'deviceId', label: '设备码', width: '160px' },
   { key: 'projectId', label: '项目', width: '120px' },
@@ -57,6 +57,13 @@ function eventLabel(row: unknown): string {
   const type = (row as AccessLog).eventType
   return eventLabels[type] ?? type
 }
+
+function formatDuration(value: unknown): string {
+  if (value === null || value === undefined || value === '') {
+    return '—'
+  }
+  return `${value} ms`
+}
 </script>
 
 <template>
@@ -70,9 +77,16 @@ function eventLabel(row: unknown): string {
     </header>
 
     <div class="filters">
-      <Select v-model="eventType" :options="eventOptions" option-label="label" option-value="value" placeholder="事件类型" />
-      <InputText v-model="from" type="date" />
-      <InputText v-model="to" type="date" />
+      <Select
+        v-model="eventType"
+        :options="eventOptions"
+        option-label="label"
+        option-value="value"
+        placeholder="事件类型"
+        aria-label="事件类型"
+      />
+      <InputText v-model="from" type="date" placeholder="开始日期" aria-label="开始日期" />
+      <InputText v-model="to" type="date" placeholder="结束日期" aria-label="结束日期" />
       <Button label="筛选" icon="pi pi-filter" @click="search" />
     </div>
 
@@ -88,6 +102,9 @@ function eventLabel(row: unknown): string {
     >
       <template #cell-eventType="{ row }">
         <span class="tag">{{ eventLabel(row) }}</span>
+      </template>
+      <template #cell-path="{ row }">
+        {{ (row as AccessLog).method }} {{ (row as AccessLog).path }}
       </template>
       <template #cell-statusCode="{ value }">
         <span :class="{ 'status-fail': Number(value) >= 400 }">{{ value }}</span>
@@ -117,7 +134,7 @@ function eventLabel(row: unknown): string {
 }
 
 .status-fail {
-  color: #1d4ed8;
+  color: var(--blue, #1d4ed8);
   font-weight: 600;
 }
 </style>

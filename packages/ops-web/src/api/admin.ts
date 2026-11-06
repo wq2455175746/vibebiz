@@ -169,10 +169,7 @@ export function createFdeResource(input: FdeResourceInput): Promise<AdminFdeReso
   })
 }
 
-export function updateFdeResource(
-  id: number,
-  input: FdeResourceInput,
-): Promise<AdminFdeResource> {
+export function updateFdeResource(id: number, input: FdeResourceInput): Promise<AdminFdeResource> {
   return request<AdminFdeResource>({
     method: 'put',
     url: `/fde-resources/${id}`,
@@ -214,9 +211,7 @@ export async function getAudit(query: PageQuery = {}): Promise<PageResult<AuditE
   return toPage(result, 'audit')
 }
 
-export async function getAccessLogs(
-  query: AccessLogQuery = {},
-): Promise<PageResult<AccessLog>> {
+export async function getAccessLogs(query: AccessLogQuery = {}): Promise<PageResult<AccessLog>> {
   const result = await request<Record<string, unknown>>({
     method: 'get',
     url: '/access-logs',
