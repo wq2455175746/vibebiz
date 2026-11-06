@@ -28,6 +28,7 @@ import (
 	"vibebiz/internal/server"
 	"vibebiz/internal/storagesync"
 	"vibebiz/internal/store"
+	"vibebiz/internal/usertrace"
 )
 
 const redisPrefix = "vibebiz"
@@ -133,7 +134,17 @@ func main() {
 
 	coverHandler := handler.NewCoverHandler(projectStore, coverS3, cfg.S3PresignExpiry())
 
+	traceRepo := usertrace.NewMySQLRepository(db)
+	var traceRecorder *usertrace.Recorder
+	if cfg.UserTraceEnabled {
+		traceRecorder = usertrace.NewRecorder(cfg.UserTraceDir, usertrace.TrimPlane(cfg.Plane), obs.Logger)
+		traceCtx, traceCancel := context.WithCancel(ctx)
+		defer traceCancel()
+		go usertrace.NewSyncer(cfg.UserTraceDir, usertrace.TrimPlane(cfg.Plane), traceRepo, cfg.UserTraceSyncInterval, obs.Logger).Run(traceCtx)
+	}
+
 	e := server.New(cfg, obs)
+	e.Use(usertrace.Middleware(traceRecorder, obs.Logger))
 	router.RegisterData(e, sandbox, obs, authn, metas, resourceHandler, roleResolver, coverHandler, storageSyncer, cloneHandler)
 
 	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))

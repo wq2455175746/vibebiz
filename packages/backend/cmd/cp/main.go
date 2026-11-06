@@ -42,6 +42,7 @@ import (
 	"vibebiz/internal/server"
 	"vibebiz/internal/storagesync"
 	"vibebiz/internal/store"
+	"vibebiz/internal/usertrace"
 )
 
 const redisPrefix = "vibebiz"
@@ -121,6 +122,14 @@ func main() {
 	}
 	settingsRepo := dao.NewSettingsRepository(db)
 	accountService := account.NewService(settingsRepo, sessions, avatarPresigner, cfg.S3PresignExpiry())
+	traceRepo := usertrace.NewMySQLRepository(db)
+	var traceRecorder *usertrace.Recorder
+	if cfg.UserTraceEnabled {
+		traceRecorder = usertrace.NewRecorder(cfg.UserTraceDir, usertrace.TrimPlane(cfg.Plane), obs.Logger)
+		traceCtx, traceCancel := context.WithCancel(ctx)
+		defer traceCancel()
+		go usertrace.NewSyncer(cfg.UserTraceDir, usertrace.TrimPlane(cfg.Plane), traceRepo, cfg.UserTraceSyncInterval, obs.Logger).Run(traceCtx)
+	}
 	authHandler := &handler.AuthHandler{Service: authService, Account: accountService, UserCookie: userCookie, OpsCookie: opsCookie}
 	settingsHandler := handler.NewSettingsHandler(accountService, userCookie)
 
@@ -268,6 +277,7 @@ func main() {
 	defer asynqWorker.Shutdown()
 
 	e := server.New(cfg, obs)
+	e.Use(usertrace.Middleware(traceRecorder, obs.Logger))
 	e.Use(requestCounter.Middleware())
 	templateService := projecttemplate.NewService(projecttemplate.NewMySQLRepository(db), projectStore, sandboxRouter, avatarPresigner, cfg.S3PresignExpiry())
 	templateService.Logger = obs.Logger
