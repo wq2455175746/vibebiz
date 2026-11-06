@@ -1,4 +1,4 @@
-import { cpHttp, dpHttp, request } from './client'
+import { cpHttp, dpHttp, notifyQuotaExceeded, request } from './client'
 import type { LogLevel } from '@/types'
 import { splitSSE } from '@/utils/sse'
 
@@ -114,6 +114,23 @@ export async function* streamChat(
 
   if (!response.ok || !response.body) {
     const text = await response.text().catch(() => '')
+    if (response.status === 429) {
+      try {
+        const envelope = JSON.parse(text) as {
+          code?: number
+          message?: string
+          result?: unknown
+        }
+        notifyQuotaExceeded(
+          envelope.message ?? 'quota exceeded',
+          429,
+          envelope.code ?? -1,
+          envelope.result,
+        )
+      } catch {
+        // ignore malformed quota body
+      }
+    }
     throw new Error(text || `chat failed (${response.status})`)
   }
 

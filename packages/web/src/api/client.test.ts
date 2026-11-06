@@ -1,7 +1,15 @@
 import axios from 'axios'
 import { describe, expect, it, vi } from 'vitest'
 
-import { ApiError, cpHttp, dpHttp, onUnauthorized, request, unwrapEnvelope } from './client'
+import {
+  ApiError,
+  cpHttp,
+  dpHttp,
+  onQuotaExceeded,
+  onUnauthorized,
+  request,
+  unwrapEnvelope,
+} from './client'
 
 describe('unwrapEnvelope', () => {
   it('returns result when code is 0', () => {
@@ -104,5 +112,67 @@ describe('request', () => {
       status: 404,
       code: 40401,
     })
+  })
+})
+
+describe('quota exceeded hook', () => {
+  it('calls the quota handler on a 429 quota response', async () => {
+    const handler = vi.fn()
+    const dispose = onQuotaExceeded(handler)
+    const client = axios.create({
+      baseURL: 'http://test.local/cp/api/v1',
+      adapter: async (config) => {
+        throw Object.assign(new Error('quota'), {
+          isAxiosError: true,
+          config,
+          response: {
+            data: {
+              code: 42901,
+              message: 'daily project quota exceeded',
+              result: { quotaType: 'project', used: 3, limit: 3 },
+            },
+            status: 429,
+            statusText: 'Too Many Requests',
+            headers: {},
+            config,
+          },
+        })
+      },
+    })
+
+    await expect(request(client, { method: 'post', url: '/projects' })).rejects.toBeInstanceOf(
+      ApiError,
+    )
+    expect(handler).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 42901, quotaType: 'project', used: 3, limit: 3 }),
+    )
+    dispose()
+  })
+
+  it('ignores non-quota errors', async () => {
+    const handler = vi.fn()
+    const dispose = onQuotaExceeded(handler)
+    const client = axios.create({
+      baseURL: 'http://test.local/cp/api/v1',
+      adapter: async (config) => {
+        throw Object.assign(new Error('not found'), {
+          isAxiosError: true,
+          config,
+          response: {
+            data: { code: 40401, message: 'project not found' },
+            status: 404,
+            statusText: 'Not Found',
+            headers: {},
+            config,
+          },
+        })
+      },
+    })
+
+    await expect(request(client, { method: 'get', url: '/projects/x' })).rejects.toBeInstanceOf(
+      ApiError,
+    )
+    expect(handler).not.toHaveBeenCalled()
+    dispose()
   })
 })

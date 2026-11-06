@@ -6,6 +6,47 @@ export interface Envelope<T> {
   result: T
 }
 
+export type QuotaType = 'project' | 'token' | 'upload_count' | 'upload_bytes' | 'unknown'
+
+export interface QuotaExceededInfo {
+  message: string
+  code: number
+  quotaType: QuotaType
+  used?: number
+  limit?: number
+}
+
+const QUOTA_CODES = new Set([42901, 42902, 42903, 42904])
+let quotaExceededHandler: ((info: QuotaExceededInfo) => void) | null = null
+
+export function onQuotaExceeded(handler: (info: QuotaExceededInfo) => void): () => void {
+  quotaExceededHandler = handler
+  return () => {
+    if (quotaExceededHandler === handler) {
+      quotaExceededHandler = null
+    }
+  }
+}
+
+export function notifyQuotaExceeded(
+  message: string,
+  status: number,
+  code: number,
+  result?: unknown,
+): void {
+  if (status !== 429 || !QUOTA_CODES.has(code)) {
+    return
+  }
+  const detail = (result ?? {}) as { quotaType?: QuotaType; used?: number; limit?: number }
+  quotaExceededHandler?.({
+    message,
+    code,
+    quotaType: detail.quotaType ?? 'unknown',
+    used: detail.used,
+    limit: detail.limit,
+  })
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -62,11 +103,18 @@ export async function request<T>(client: AxiosInstance, config: AxiosRequestConf
       if (error.response?.status === 401) {
         unauthorizedHandler?.()
       }
-      throw new ApiError(
+      const apiError = new ApiError(
         data?.message || error.message,
         error.response?.status ?? -1,
         data?.code ?? -1,
       )
+      notifyQuotaExceeded(
+        apiError.message,
+        apiError.status,
+        apiError.code,
+        (data as { result?: unknown } | undefined)?.result,
+      )
+      throw apiError
     }
     throw error
   }
