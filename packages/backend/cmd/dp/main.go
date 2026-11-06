@@ -144,7 +144,9 @@ func main() {
 	}
 
 	e := server.New(cfg, obs)
-	e.Use(usertrace.Middleware(traceRecorder, obs.Logger))
+	if cfg.UserTraceEnabled {
+		e.Use(usertrace.Middleware(traceRecorder, obs.Logger))
+	}
 	router.RegisterData(e, sandbox, obs, authn, metas, resourceHandler, roleResolver, coverHandler, storageSyncer, cloneHandler)
 
 	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))

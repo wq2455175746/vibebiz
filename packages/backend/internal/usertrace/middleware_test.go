@@ -1,6 +1,7 @@
 package usertrace
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -65,5 +66,104 @@ func TestMiddlewareSkipsAnonymousAndOps(t *testing.T) {
 
 	if len(appender.events) != 0 {
 		t.Fatalf("events = %+v, want none", appender.events)
+	}
+}
+
+func TestMiddlewareRecordsHTTPErrorStatus(t *testing.T) {
+	appender := &fakeAppender{}
+	e := echo.New()
+	e.Use(Middleware(appender, nil))
+	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			c.Set("auth.session", &auth.Session{Realm: auth.RealmUser, UserID: 7, Username: "wang"})
+			return next(c)
+		}
+	})
+	e.PUT("/cp/api/v1/projects/:id/file", func(c echo.Context) error {
+		return &echo.HTTPError{Code: http.StatusConflict, Message: "version conflict"}
+	})
+
+	e.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPut, "/cp/api/v1/projects/p1/file", nil))
+
+	if len(appender.events) != 1 {
+		t.Fatalf("events = %+v", appender.events)
+	}
+	if appender.events[0].StatusCode != http.StatusConflict {
+		t.Fatalf("status = %d, want %d", appender.events[0].StatusCode, http.StatusConflict)
+	}
+}
+
+func TestMiddlewareRecordsPlainErrorAs500(t *testing.T) {
+	appender := &fakeAppender{}
+	e := echo.New()
+	e.Use(Middleware(appender, nil))
+	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			c.Set("auth.session", &auth.Session{Realm: auth.RealmUser, UserID: 7})
+			return next(c)
+		}
+	})
+	e.GET("/cp/api/v1/projects/:id", func(c echo.Context) error {
+		return errors.New("boom")
+	})
+
+	e.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/cp/api/v1/projects/p1", nil))
+
+	if len(appender.events) != 1 {
+		t.Fatalf("events = %+v", appender.events)
+	}
+	if appender.events[0].StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", appender.events[0].StatusCode, http.StatusInternalServerError)
+	}
+}
+
+func TestMiddlewareSkipsOptionsHealthMetrics(t *testing.T) {
+	appender := &fakeAppender{}
+	e := echo.New()
+	e.Use(Middleware(appender, nil))
+	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			c.Set("auth.session", &auth.Session{Realm: auth.RealmUser, UserID: 7})
+			return next(c)
+		}
+	})
+	noContent := func(c echo.Context) error { return c.NoContent(http.StatusNoContent) }
+	e.GET("/cp/api/v1/projects", noContent)
+	e.OPTIONS("/cp/api/v1/projects", noContent)
+	e.GET("/health", noContent)
+	e.GET("/metrics", noContent)
+
+	for _, tc := range []struct {
+		method string
+		path   string
+	}{
+		{http.MethodOptions, "/cp/api/v1/projects"},
+		{http.MethodGet, "/health"},
+		{http.MethodGet, "/metrics"},
+	} {
+		e.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(tc.method, tc.path, nil))
+	}
+
+	if len(appender.events) != 0 {
+		t.Fatalf("events = %+v, want none", appender.events)
+	}
+}
+
+func TestMiddlewareNilAppenderDoesNotRecord(t *testing.T) {
+	e := echo.New()
+	e.Use(Middleware(nil, nil))
+	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			c.Set("auth.session", &auth.Session{Realm: auth.RealmUser, UserID: 7})
+			return next(c)
+		}
+	})
+	e.GET("/cp/api/v1/projects", func(c echo.Context) error { return c.NoContent(http.StatusOK) })
+
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/cp/api/v1/projects", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 }

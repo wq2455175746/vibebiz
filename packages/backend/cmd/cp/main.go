@@ -277,7 +277,9 @@ func main() {
 	defer asynqWorker.Shutdown()
 
 	e := server.New(cfg, obs)
-	e.Use(usertrace.Middleware(traceRecorder, obs.Logger))
+	if cfg.UserTraceEnabled {
+		e.Use(usertrace.Middleware(traceRecorder, obs.Logger))
+	}
 	e.Use(requestCounter.Middleware())
 	templateService := projecttemplate.NewService(projecttemplate.NewMySQLRepository(db), projectStore, sandboxRouter, avatarPresigner, cfg.S3PresignExpiry())
 	templateService.Logger = obs.Logger

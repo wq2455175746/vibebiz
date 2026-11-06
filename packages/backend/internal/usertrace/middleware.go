@@ -60,9 +60,6 @@ func Middleware(appender Appender, logger *slog.Logger) echo.MiddlewareFunc {
 				RequestID:     info.RequestID,
 				TraceID:       info.TraceID,
 			})
-			if logger != nil && status >= http.StatusInternalServerError {
-				logger.Debug("user trace recorded failed request", "path", info.Path, "status", status)
-			}
 			return handlerErr
 		}
 	}
