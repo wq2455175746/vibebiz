@@ -146,18 +146,22 @@ func (r *MySQLRepository) Sandboxes(ctx context.Context, query ListQuery) (Page[
 
 func (r *MySQLRepository) Quotas(ctx context.Context) ([]Quota, error) {
 	var rows []struct {
-		UserID              int64
-		PlanCode            string
-		LLMTokenQuotaMonth  int64
-		LLMTokensUsedMonth  int64
-		SandboxMinutesQuota int64
-		SandboxMinutesUsed  int64
-		StorageQuotaBytes   int64
-		StorageUsedBytes    int64
+		UserID                int64
+		PlanCode              string
+		LLMTokenQuotaMonth    int64
+		LLMTokensUsedMonth    int64
+		SandboxMinutesQuota   int64
+		SandboxMinutesUsed    int64
+		StorageQuotaBytes     int64
+		StorageUsedBytes      int64
+		ProjectDailyQuota     int64
+		LLMTokenDailyQuota    int64
+		UploadDailyCountQuota int64
+		UploadDailyBytesQuota int64
 	}
 	err := r.db.WithContext(ctx).
 		Table("user_quota").
-		Select("user_id, plan_code, llm_token_quota_month, llm_tokens_used_month, sandbox_minutes_quota_month, sandbox_minutes_used_month, storage_quota_bytes, storage_used_bytes").
+		Select("user_id, plan_code, llm_token_quota_month, llm_tokens_used_month, sandbox_minutes_quota_month, sandbox_minutes_used_month, storage_quota_bytes, storage_used_bytes, project_daily_quota, llm_token_daily_quota, upload_daily_count_quota, upload_daily_bytes_quota").
 		Where("deleted_at IS NULL").
 		Order("user_id ASC").
 		Scan(&rows).Error
@@ -167,14 +171,18 @@ func (r *MySQLRepository) Quotas(ctx context.Context) ([]Quota, error) {
 	out := make([]Quota, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, Quota{
-			UserID:              strconv.FormatInt(row.UserID, 10),
-			Plan:                row.PlanCode,
-			LLMTokensQuota:      row.LLMTokenQuotaMonth,
-			LLMTokensUsed:       row.LLMTokensUsedMonth,
-			SandboxMinutesQuota: row.SandboxMinutesQuota,
-			SandboxMinutesUsed:  row.SandboxMinutesUsed,
-			StorageQuotaMB:      row.StorageQuotaBytes / (1024 * 1024),
-			StorageUsedMB:       row.StorageUsedBytes / (1024 * 1024),
+			UserID:                strconv.FormatInt(row.UserID, 10),
+			Plan:                  row.PlanCode,
+			LLMTokensQuota:        row.LLMTokenQuotaMonth,
+			LLMTokensUsed:         row.LLMTokensUsedMonth,
+			SandboxMinutesQuota:   row.SandboxMinutesQuota,
+			SandboxMinutesUsed:    row.SandboxMinutesUsed,
+			StorageQuotaMB:        row.StorageQuotaBytes / (1024 * 1024),
+			StorageUsedMB:         row.StorageUsedBytes / (1024 * 1024),
+			ProjectDailyQuota:     row.ProjectDailyQuota,
+			LLMTokenDailyQuota:    row.LLMTokenDailyQuota,
+			UploadDailyCountQuota: row.UploadDailyCountQuota,
+			UploadDailyBytesQuota: row.UploadDailyBytesQuota,
 		})
 	}
 	return out, nil
@@ -205,13 +213,34 @@ func (r *MySQLRepository) ensureUserExists(ctx context.Context, id int64) error 
 }
 
 func (r *MySQLRepository) UpdateQuota(ctx context.Context, userID int64, input QuotaUpdateInput) error {
+	updates := map[string]any{}
+	if input.LLMTokensQuota != nil {
+		updates["llm_token_quota_month"] = *input.LLMTokensQuota
+	}
+	if input.SandboxMinutesQuota != nil {
+		updates["sandbox_minutes_quota_month"] = *input.SandboxMinutesQuota
+	}
+	if input.StorageQuotaMB != nil {
+		updates["storage_quota_bytes"] = *input.StorageQuotaMB * 1024 * 1024
+	}
+	if input.ProjectDailyQuota != nil {
+		updates["project_daily_quota"] = *input.ProjectDailyQuota
+	}
+	if input.LLMTokenDailyQuota != nil {
+		updates["llm_token_daily_quota"] = *input.LLMTokenDailyQuota
+	}
+	if input.UploadDailyCountQuota != nil {
+		updates["upload_daily_count_quota"] = *input.UploadDailyCountQuota
+	}
+	if input.UploadDailyBytesQuota != nil {
+		updates["upload_daily_bytes_quota"] = *input.UploadDailyBytesQuota
+	}
+	if len(updates) == 0 {
+		return nil
+	}
 	result := r.db.WithContext(ctx).Model(&model.UserQuota{}).
 		Where("user_id = ?", userID).
-		Updates(map[string]any{
-			"llm_token_quota_month":       input.LLMTokensQuota,
-			"sandbox_minutes_quota_month": input.SandboxMinutesQuota,
-			"storage_quota_bytes":         input.StorageQuotaMB * 1024 * 1024,
-		})
+		Updates(updates)
 	if result.Error != nil {
 		return fmt.Errorf("update user quota: %w", result.Error)
 	}

@@ -101,20 +101,28 @@ type Sandbox struct {
 }
 
 type Quota struct {
-	UserID              string `json:"userId"`
-	Plan                string `json:"plan"`
-	LLMTokensQuota      int64  `json:"llmTokensQuota"`
-	LLMTokensUsed       int64  `json:"llmTokensUsed"`
-	SandboxMinutesQuota int64  `json:"sandboxMinutesQuota"`
-	SandboxMinutesUsed  int64  `json:"sandboxMinutesUsed"`
-	StorageQuotaMB      int64  `json:"storageQuotaMb"`
-	StorageUsedMB       int64  `json:"storageUsedMb"`
+	UserID                string `json:"userId"`
+	Plan                  string `json:"plan"`
+	LLMTokensQuota        int64  `json:"llmTokensQuota"`
+	LLMTokensUsed         int64  `json:"llmTokensUsed"`
+	SandboxMinutesQuota   int64  `json:"sandboxMinutesQuota"`
+	SandboxMinutesUsed    int64  `json:"sandboxMinutesUsed"`
+	StorageQuotaMB        int64  `json:"storageQuotaMb"`
+	StorageUsedMB         int64  `json:"storageUsedMb"`
+	ProjectDailyQuota     int64  `json:"projectDailyQuota"`
+	LLMTokenDailyQuota    int64  `json:"llmTokenDailyQuota"`
+	UploadDailyCountQuota int64  `json:"uploadDailyCountQuota"`
+	UploadDailyBytesQuota int64  `json:"uploadDailyBytesQuota"`
 }
 
 type QuotaUpdateInput struct {
-	LLMTokensQuota      int64
-	SandboxMinutesQuota int64
-	StorageQuotaMB      int64
+	LLMTokensQuota        *int64
+	SandboxMinutesQuota   *int64
+	StorageQuotaMB        *int64
+	ProjectDailyQuota     *int64
+	LLMTokenDailyQuota    *int64
+	UploadDailyCountQuota *int64
+	UploadDailyBytesQuota *int64
 }
 
 type AuditEvent struct {

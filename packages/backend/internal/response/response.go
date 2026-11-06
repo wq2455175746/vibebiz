@@ -23,3 +23,7 @@ func Created(c echo.Context, result any) error {
 func Fail(c echo.Context, status, code int, message string) error {
 	return c.JSON(status, Envelope{Code: code, Message: message})
 }
+
+func FailWithResult(c echo.Context, status, code int, message string, result any) error {
+	return c.JSON(status, Envelope{Code: code, Message: message, Result: result})
+}

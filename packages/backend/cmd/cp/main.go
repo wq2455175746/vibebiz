@@ -42,6 +42,7 @@ import (
 	"vibebiz/internal/server"
 	"vibebiz/internal/storagesync"
 	"vibebiz/internal/store"
+	"vibebiz/internal/usage"
 )
 
 const redisPrefix = "vibebiz"
@@ -131,6 +132,12 @@ func main() {
 	}
 	stageStore := projectstage.NewMySQLStore(db)
 	cloneStore := clone.NewMySQLStore(db)
+	usageLoc, err := time.LoadLocation(cfg.UsageTimezone)
+	if err != nil {
+		obs.Logger.Warn("invalid usage timezone, falling back to UTC", "value", cfg.UsageTimezone)
+		usageLoc = time.UTC
+	}
+	usageService := usage.NewService(usage.NewMySQLRepository(db), usageLoc)
 	requestCounter := requestcount.NewCounter(redisClient, redisPrefix)
 	adminRepo := admin.NewMySQLRepository(db, requestCounter)
 	var modelCipher *secret.Cipher
@@ -274,7 +281,7 @@ func main() {
 	templateHandler := handler.NewTemplateHandler(templateService, projectStore, provisioner, sandboxRouter)
 	templateHandler.Metas = metas
 
-	router.RegisterControl(e, adminRepo, projectStore, provisioner, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler, registryHandler, modelHandler, roleHandler, avatarPresigner, cfg.S3PresignExpiry(), sandboxRouter, templateHandler, harnessImporter, stageStore, sandboxRouter, notificationChannelHandler, fdeResourceHandler, publishHandler, cloneHandler)
+	router.RegisterControl(e, adminRepo, projectStore, provisioner, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler, registryHandler, modelHandler, roleHandler, avatarPresigner, cfg.S3PresignExpiry(), sandboxRouter, templateHandler, harnessImporter, stageStore, sandboxRouter, notificationChannelHandler, fdeResourceHandler, publishHandler, cloneHandler, usageService)
 	router.RegisterScheduledTasks(e, scheduledHandler, authn)
 	router.RegisterChatHistory(e, handler.NewChatHistoryHandler(sandboxRouter, projectStore), authn)
 

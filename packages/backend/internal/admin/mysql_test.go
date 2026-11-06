@@ -61,14 +61,14 @@ func TestMySQLRepositoryQuotas(t *testing.T) {
 	db, mock := newAdminMockDB(t)
 	repo := NewMySQLRepository(db, fixedCounter(0))
 	mock.ExpectQuery("SELECT user_id, plan_code, llm_token_quota_month").
-		WillReturnRows(sqlmock.NewRows([]string{"user_id", "plan_code", "llm_token_quota_month", "llm_tokens_used_month", "sandbox_minutes_quota_month", "sandbox_minutes_used_month", "storage_quota_bytes", "storage_used_bytes"}).
-			AddRow(1, "free", 500000, 12000, 600, 45, 1024*1024*1024, 12*1024*1024))
+		WillReturnRows(sqlmock.NewRows([]string{"user_id", "plan_code", "llm_token_quota_month", "llm_tokens_used_month", "sandbox_minutes_quota_month", "sandbox_minutes_used_month", "storage_quota_bytes", "storage_used_bytes", "project_daily_quota", "llm_token_daily_quota", "upload_daily_count_quota", "upload_daily_bytes_quota"}).
+			AddRow(1, "free", 500000, 12000, 600, 45, 1024*1024*1024, 12*1024*1024, 3, 1000, 5, 2000))
 
 	quotas, err := repo.Quotas(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(quotas) != 1 || quotas[0].UserID != "1" || quotas[0].LLMTokensQuota != 500000 || quotas[0].LLMTokensUsed != 12000 || quotas[0].StorageQuotaMB != 1024 || quotas[0].StorageUsedMB != 12 {
+	if len(quotas) != 1 || quotas[0].UserID != "1" || quotas[0].LLMTokensQuota != 500000 || quotas[0].LLMTokensUsed != 12000 || quotas[0].StorageQuotaMB != 1024 || quotas[0].StorageUsedMB != 12 || quotas[0].ProjectDailyQuota != 3 || quotas[0].LLMTokenDailyQuota != 1000 {
 		t.Fatalf("quotas = %+v", quotas)
 	}
 }
@@ -155,8 +155,11 @@ func TestMySQLRepositoryUpdateQuota(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
+	llm := int64(500000)
+	sandbox := int64(600)
+	storage := int64(1024)
 	if err := repo.UpdateQuota(context.Background(), 1, QuotaUpdateInput{
-		LLMTokensQuota: 500000, SandboxMinutesQuota: 600, StorageQuotaMB: 1024,
+		LLMTokensQuota: &llm, SandboxMinutesQuota: &sandbox, StorageQuotaMB: &storage,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +179,8 @@ func TestMySQLRepositoryUpdateQuotaNotFound(t *testing.T) {
 	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `user_quota`").
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 
-	if err := repo.UpdateQuota(context.Background(), 99, QuotaUpdateInput{}); !errors.Is(err, ErrNotFound) {
+	missing := int64(1)
+	if err := repo.UpdateQuota(context.Background(), 99, QuotaUpdateInput{LLMTokensQuota: &missing}); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("err = %v", err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {

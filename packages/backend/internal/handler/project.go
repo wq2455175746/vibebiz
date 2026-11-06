@@ -22,6 +22,7 @@ import (
 	"vibebiz/internal/response"
 	"vibebiz/internal/sandboxregistry"
 	"vibebiz/internal/store"
+	"vibebiz/internal/usage"
 )
 
 type ProjectInitializer interface {
@@ -50,6 +51,11 @@ type CoverURLSigner interface {
 	PresignGet(ctx context.Context, key string, expiry time.Duration) (string, error)
 }
 
+type UsageGuard interface {
+	CheckProjectCreate(ctx context.Context, userID int64) error
+	RecordProjectCreate(ctx context.Context, userID int64) error
+}
+
 type ProjectHandler struct {
 	Store       store.ProjectStore
 	Sandbox     ProjectInitializer
@@ -59,6 +65,7 @@ type ProjectHandler struct {
 	CoverExpiry time.Duration
 	Harness     HarnessImporter
 	Stages      ProjectStageInitializer
+	Usage       UsageGuard
 	Obs         *observability.Provider
 	Now         func() time.Time
 }
@@ -181,6 +188,18 @@ func (h *ProjectHandler) Create(c echo.Context) error {
 		return response.Fail(c, http.StatusForbidden, 40303, "workspace not accessible")
 	}
 
+	ctx := c.Request().Context()
+	if h.Usage != nil {
+		if err := h.Usage.CheckProjectCreate(ctx, session.UserID); err != nil {
+			var exceeded *usage.QuotaExceededError
+			if errors.As(err, &exceeded) {
+				return response.FailWithResult(c, http.StatusTooManyRequests, quotaCode(exceeded.QuotaType), "daily quota exceeded",
+					map[string]any{"quotaType": exceeded.QuotaType, "used": exceeded.Used, "limit": exceeded.Limit})
+			}
+			return response.Fail(c, http.StatusServiceUnavailable, 50304, "quota check failed")
+		}
+	}
+
 	id := uuid.NewString()
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
@@ -202,7 +221,6 @@ func (h *ProjectHandler) Create(c echo.Context) error {
 		UpdatedAt:          now,
 	}
 
-	ctx := c.Request().Context()
 	if h.Obs != nil {
 		var span trace.Span
 		ctx, span = h.Obs.Tracer.Start(ctx, "project.create",
@@ -264,11 +282,32 @@ func (h *ProjectHandler) Create(c echo.Context) error {
 		}
 	}
 
+	if h.Usage != nil {
+		if err := h.Usage.RecordProjectCreate(ctx, session.UserID); err != nil && h.Obs != nil {
+			h.Obs.Log(ctx, slog.LevelWarn, "project.create", "project_id", id, "status", "usage_record_error", "error", err.Error())
+		}
+	}
+
 	if h.Obs != nil {
 		h.Obs.Log(ctx, slog.LevelInfo, "project.create", "project_id", id, "state", project.State, "mode", project.Mode)
 	}
 
 	return response.Created(c, project)
+}
+
+func quotaCode(quotaType string) int {
+	switch quotaType {
+	case "project":
+		return 42901
+	case "token":
+		return 42902
+	case "upload_count":
+		return 42903
+	case "upload_bytes":
+		return 42904
+	default:
+		return 42900
+	}
 }
 
 type updateAgentRolesRequest struct {

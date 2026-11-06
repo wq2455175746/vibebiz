@@ -53,6 +53,7 @@ type Config struct {
 	PublicBaseURL          string
 	ModelSecretKey         string
 	NotificationSecretKey  string
+	UsageTimezone          string
 
 	SMTPHost     string
 	SMTPPort     int
@@ -110,6 +111,7 @@ func Load(plane string) Config {
 		PublicBaseURL:          getString("PUBLIC_BASE_URL", ""),
 		ModelSecretKey:         getString("MODEL_SECRET_KEY", ""),
 		NotificationSecretKey:  getString("NOTIFICATION_SECRET_KEY", getString("MODEL_SECRET_KEY", "")),
+		UsageTimezone:          getString("USAGE_TIMEZONE", "Asia/Shanghai"),
 
 		SMTPHost:     getString("SMTP_HOST", ""),
 		SMTPPort:     getInt("SMTP_PORT", 587),

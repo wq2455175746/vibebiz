@@ -91,9 +91,27 @@ func (r *MemoryRepository) UpdateQuota(_ context.Context, userID int64, input Qu
 		if r.quotas[index].UserID != target {
 			continue
 		}
-		r.quotas[index].LLMTokensQuota = input.LLMTokensQuota
-		r.quotas[index].SandboxMinutesQuota = input.SandboxMinutesQuota
-		r.quotas[index].StorageQuotaMB = input.StorageQuotaMB
+		if input.LLMTokensQuota != nil {
+			r.quotas[index].LLMTokensQuota = *input.LLMTokensQuota
+		}
+		if input.SandboxMinutesQuota != nil {
+			r.quotas[index].SandboxMinutesQuota = *input.SandboxMinutesQuota
+		}
+		if input.StorageQuotaMB != nil {
+			r.quotas[index].StorageQuotaMB = *input.StorageQuotaMB
+		}
+		if input.ProjectDailyQuota != nil {
+			r.quotas[index].ProjectDailyQuota = *input.ProjectDailyQuota
+		}
+		if input.LLMTokenDailyQuota != nil {
+			r.quotas[index].LLMTokenDailyQuota = *input.LLMTokenDailyQuota
+		}
+		if input.UploadDailyCountQuota != nil {
+			r.quotas[index].UploadDailyCountQuota = *input.UploadDailyCountQuota
+		}
+		if input.UploadDailyBytesQuota != nil {
+			r.quotas[index].UploadDailyBytesQuota = *input.UploadDailyBytesQuota
+		}
 		return nil
 	}
 	return ErrNotFound

@@ -20,11 +20,18 @@ import (
 	"vibebiz/internal/notification"
 	"vibebiz/internal/response"
 	"vibebiz/internal/store"
+	"vibebiz/internal/usage"
 )
 
 type AdminSandbox interface {
 	ListFiles(ctx context.Context, id string) ([]client.FileEntry, error)
 	PreviewURL(ctx context.Context, id string) (string, error)
+}
+
+type UsageReader interface {
+	Series(ctx context.Context, filter usage.Filter) ([]usage.DailyRow, error)
+	Today() time.Time
+	ParseDate(value string) (time.Time, error)
 }
 
 type AdminHandler struct {
@@ -35,6 +42,7 @@ type AdminHandler struct {
 	CoverExpiry   time.Duration
 	Notifications *notification.Service
 	Metas         auth.ProjectMetaStore
+	Usage         UsageReader
 	Now           func() time.Time
 }
 
@@ -112,9 +120,13 @@ func (h *AdminHandler) Quotas(c echo.Context) error {
 }
 
 type quotaUpdateRequest struct {
-	LLMTokensQuota      *int64 `json:"llmTokensQuota"`
-	SandboxMinutesQuota *int64 `json:"sandboxMinutesQuota"`
-	StorageQuotaMB      *int64 `json:"storageQuotaMb"`
+	LLMTokensQuota        *int64 `json:"llmTokensQuota"`
+	SandboxMinutesQuota   *int64 `json:"sandboxMinutesQuota"`
+	StorageQuotaMB        *int64 `json:"storageQuotaMb"`
+	ProjectDailyQuota     *int64 `json:"projectDailyQuota"`
+	LLMTokenDailyQuota    *int64 `json:"llmTokenDailyQuota"`
+	UploadDailyCountQuota *int64 `json:"uploadDailyCountQuota"`
+	UploadDailyBytesQuota *int64 `json:"uploadDailyBytesQuota"`
 }
 
 func (h *AdminHandler) UpdateQuota(c echo.Context) error {
@@ -123,20 +135,86 @@ func (h *AdminHandler) UpdateQuota(c echo.Context) error {
 		return response.Fail(c, http.StatusBadRequest, 40001, "invalid user id")
 	}
 	var req quotaUpdateRequest
-	if err := c.Bind(&req); err != nil || req.LLMTokensQuota == nil || req.SandboxMinutesQuota == nil || req.StorageQuotaMB == nil {
+	if err := c.Bind(&req); err != nil {
 		return response.Fail(c, http.StatusBadRequest, 40001, "invalid quota")
 	}
-	if *req.LLMTokensQuota < 0 || *req.SandboxMinutesQuota < 0 || *req.StorageQuotaMB < 0 {
+	if !validQuotaField(req.LLMTokensQuota) || !validQuotaField(req.SandboxMinutesQuota) ||
+		!validQuotaField(req.StorageQuotaMB) || !validQuotaField(req.ProjectDailyQuota) ||
+		!validQuotaField(req.LLMTokenDailyQuota) || !validQuotaField(req.UploadDailyCountQuota) ||
+		!validQuotaField(req.UploadDailyBytesQuota) {
+		return response.Fail(c, http.StatusBadRequest, 40001, "invalid quota")
+	}
+	if req.LLMTokensQuota == nil && req.SandboxMinutesQuota == nil && req.StorageQuotaMB == nil &&
+		req.ProjectDailyQuota == nil && req.LLMTokenDailyQuota == nil &&
+		req.UploadDailyCountQuota == nil && req.UploadDailyBytesQuota == nil {
 		return response.Fail(c, http.StatusBadRequest, 40001, "invalid quota")
 	}
 	if err := h.Repo.UpdateQuota(c.Request().Context(), userID, admin.QuotaUpdateInput{
-		LLMTokensQuota:      *req.LLMTokensQuota,
-		SandboxMinutesQuota: *req.SandboxMinutesQuota,
-		StorageQuotaMB:      *req.StorageQuotaMB,
+		LLMTokensQuota:        req.LLMTokensQuota,
+		SandboxMinutesQuota:   req.SandboxMinutesQuota,
+		StorageQuotaMB:        req.StorageQuotaMB,
+		ProjectDailyQuota:     req.ProjectDailyQuota,
+		LLMTokenDailyQuota:    req.LLMTokenDailyQuota,
+		UploadDailyCountQuota: req.UploadDailyCountQuota,
+		UploadDailyBytesQuota: req.UploadDailyBytesQuota,
 	}); err != nil {
 		return adminRepoError(c, err)
 	}
 	return response.OK(c, map[string]any{"userId": strconv.FormatInt(userID, 10)})
+}
+
+func validQuotaField(value *int64) bool {
+	return value == nil || *value >= 0
+}
+
+func (h *AdminHandler) UsageDaily(c echo.Context) error {
+	if h.Usage == nil {
+		return response.Fail(c, http.StatusServiceUnavailable, 50304, "usage unavailable")
+	}
+	from, to, err := parseUsageRange(c, h.Usage)
+	if err != nil {
+		return response.Fail(c, http.StatusBadRequest, 40001, "invalid date range")
+	}
+	userID, _ := strconv.ParseInt(c.QueryParam("userId"), 10, 64)
+	rows, err := h.Usage.Series(c.Request().Context(), usage.Filter{From: from, To: to, UserID: userID})
+	if err != nil {
+		return response.Fail(c, http.StatusInternalServerError, 50001, "read usage failed")
+	}
+	totals := usage.Usage{}
+	for _, row := range rows {
+		totals.ProjectsCreated += row.ProjectsCreated
+		totals.InputTokens += row.InputTokens
+		totals.OutputTokens += row.OutputTokens
+		totals.ModelRequests += row.ModelRequests
+		totals.UploadCount += row.UploadCount
+		totals.UploadBytes += row.UploadBytes
+	}
+	return response.OK(c, map[string]any{
+		"from": from.Format("2006-01-02"), "to": to.Format("2006-01-02"),
+		"userId": userID, "series": rows, "totals": totals,
+	})
+}
+
+func parseUsageRange(c echo.Context, reader UsageReader) (time.Time, time.Time, error) {
+	from := reader.Today()
+	to := from
+	var err error
+	if raw := c.QueryParam("from"); raw != "" {
+		from, err = reader.ParseDate(raw)
+		if err != nil {
+			return time.Time{}, time.Time{}, err
+		}
+	}
+	if raw := c.QueryParam("to"); raw != "" {
+		to, err = reader.ParseDate(raw)
+		if err != nil {
+			return time.Time{}, time.Time{}, err
+		}
+	}
+	if to.Before(from) || to.Sub(from) > 90*24*time.Hour {
+		return time.Time{}, time.Time{}, errors.New("invalid range")
+	}
+	return from, to, nil
 }
 
 func (h *AdminHandler) Audit(c echo.Context) error {

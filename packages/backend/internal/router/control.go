@@ -12,9 +12,10 @@ import (
 	"vibebiz/internal/observability"
 	"vibebiz/internal/projectstage"
 	"vibebiz/internal/store"
+	"vibebiz/internal/usage"
 )
 
-func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.ProjectStore, provisioner handler.ProjectInitializer, obs *observability.Provider, authn *auth.Authenticator, authHandler *handler.AuthHandler, settingsHandler *handler.SettingsHandler, storageHandler *handler.StorageHandler, metas auth.ProjectMetaStore, notifications *handler.NotificationHandler, registry *handler.SandboxRegistryHandler, models *handler.ModelHandler, roles *handler.RoleHandler, coverSigner handler.CoverURLSigner, coverExpiry time.Duration, adminSandbox handler.AdminSandbox, templates *handler.TemplateHandler, harness handler.HarnessImporter, stageStore projectstage.Store, stageSandbox handler.StageSandbox, notificationChannels *handler.NotificationChannelHandler, fdeResources *handler.FdeResourceHandler, publishApp *handler.PublishHandler, cloneHandler *handler.CloneHandler) {
+func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.ProjectStore, provisioner handler.ProjectInitializer, obs *observability.Provider, authn *auth.Authenticator, authHandler *handler.AuthHandler, settingsHandler *handler.SettingsHandler, storageHandler *handler.StorageHandler, metas auth.ProjectMetaStore, notifications *handler.NotificationHandler, registry *handler.SandboxRegistryHandler, models *handler.ModelHandler, roles *handler.RoleHandler, coverSigner handler.CoverURLSigner, coverExpiry time.Duration, adminSandbox handler.AdminSandbox, templates *handler.TemplateHandler, harness handler.HarnessImporter, stageStore projectstage.Store, stageSandbox handler.StageSandbox, notificationChannels *handler.NotificationChannelHandler, fdeResources *handler.FdeResourceHandler, publishApp *handler.PublishHandler, cloneHandler *handler.CloneHandler, usageService *usage.Service) {
 	var roleStore handler.AgentRoleStore
 	if roles != nil {
 		roleStore = roles.Service
@@ -24,6 +25,7 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 	projectHandler.CoverExpiry = coverExpiry
 	projectHandler.Harness = harness
 	projectHandler.Stages = stageStore
+	projectHandler.Usage = usageService
 	var stageHandler *handler.StageHandler
 	if stageStore != nil {
 		stageHandler = handler.NewStageHandler(projects, stageStore, stageSandbox)
@@ -33,6 +35,7 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 	adminHandler.Covers = coverSigner
 	adminHandler.CoverExpiry = coverExpiry
 	adminHandler.Metas = metas
+	adminHandler.Usage = usageService
 	if notifications != nil {
 		adminHandler.Notifications = notifications.Service
 	}
@@ -137,6 +140,7 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 	adminProtected.GET("/sandboxes", adminHandler.Sandboxes)
 	adminProtected.GET("/quotas", adminHandler.Quotas)
 	adminProtected.PUT("/quotas/:userId", adminHandler.UpdateQuota)
+	adminProtected.GET("/usage/daily", adminHandler.UsageDaily)
 	adminProtected.GET("/audit", adminHandler.Audit)
 	if models != nil {
 		adminProtected.GET("/models", models.List)

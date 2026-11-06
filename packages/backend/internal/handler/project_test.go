@@ -17,6 +17,7 @@ import (
 	"vibebiz/internal/model"
 	"vibebiz/internal/sandboxregistry"
 	"vibebiz/internal/store"
+	"vibebiz/internal/usage"
 )
 
 type fakeInitializer struct {
@@ -700,5 +701,69 @@ func TestUpdateProjectPreviewPath(t *testing.T) {
 				t.Fatalf("preview path = %q, want %q", saved.PreviewPath, tc.wantPath)
 			}
 		})
+	}
+}
+
+type fakeUsageGuard struct {
+	checkErr error
+	recorded bool
+}
+
+func (f *fakeUsageGuard) CheckProjectCreate(context.Context, int64) error { return f.checkErr }
+
+func (f *fakeUsageGuard) RecordProjectCreate(context.Context, int64) error {
+	f.recorded = true
+	return nil
+}
+
+func TestCreateProjectRejectsDailyQuota(t *testing.T) {
+	init := &fakeInitializer{sandboxID: 42}
+	h := newProjectHandlerForTest(store.NewMemoryProjectStore(), init, newFakeMetaStore(), &fakeAgentRoles{})
+	h.Usage = &fakeUsageGuard{checkErr: &usage.QuotaExceededError{QuotaType: "project", Used: 3, Limit: 3}}
+
+	e := echo.New()
+	routeWithSession(e, http.MethodPost, "/cp/api/v1/projects", h.Create, sessionForTest(3))
+
+	req := httptest.NewRequest(http.MethodPost, "/cp/api/v1/projects", strings.NewReader(`{"prompt":"hello"}`))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var env struct {
+		Code   int            `json:"code"`
+		Result map[string]any `json:"result"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatal(err)
+	}
+	if env.Code != 42901 || env.Result["quotaType"] != "project" {
+		t.Fatalf("env = %+v", env)
+	}
+	if init.calledID != "" {
+		t.Fatalf("sandbox should not be called, got %q", init.calledID)
+	}
+}
+
+func TestCreateProjectRecordsUsage(t *testing.T) {
+	guard := &fakeUsageGuard{}
+	h := newProjectHandlerForTest(store.NewMemoryProjectStore(), &fakeInitializer{sandboxID: 1}, newFakeMetaStore(), &fakeAgentRoles{})
+	h.Usage = guard
+
+	e := echo.New()
+	routeWithSession(e, http.MethodPost, "/cp/api/v1/projects", h.Create, sessionForTest(3))
+
+	req := httptest.NewRequest(http.MethodPost, "/cp/api/v1/projects", strings.NewReader(`{"prompt":"hello"}`))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if !guard.recorded {
+		t.Fatal("usage was not recorded")
 	}
 }
