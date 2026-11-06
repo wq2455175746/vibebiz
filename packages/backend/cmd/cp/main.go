@@ -167,8 +167,11 @@ func main() {
 		resourceS3 = s3Presigner
 	}
 	resourceService := resource.NewService(dao.NewProjectResourceRepository(db), resourceS3, sandboxRouter)
+	resourceService.Usage = usageService
+	resourceService.Logger = obs.Logger
 	resourceService.Expiry = cfg.S3PresignExpiry()
 	cloneService := clone.NewService(projectStore, provisioner, stageStore, harnessImporter, metas, roleService, resourceService, cloneStore)
+	cloneService.Usage = usageService
 	cloneService.SandboxClone = sandboxRouter
 	cloneService.Covers = avatarPresigner
 	cloneService.CoverExpiry = cfg.S3PresignExpiry()

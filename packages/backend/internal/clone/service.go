@@ -110,8 +110,14 @@ type SandboxClone interface {
 	InitClone(ctx context.Context, projectID string, setup client.CloneSetup) error
 }
 
+type UsageGuard interface {
+	CheckProjectCreate(ctx context.Context, userID int64) error
+	RecordProjectCreate(ctx context.Context, userID int64) error
+}
+
 type Service struct {
 	Projects     ProjectStore
+	Usage        UsageGuard
 	Sandbox      ProjectInitializer
 	Stages       StageInitializer
 	Harness      HarnessImporter
@@ -187,6 +193,11 @@ func (s *Service) Create(ctx context.Context, workspaceID, userID int64, input C
 	draft, err := normalizeInput(input)
 	if err != nil {
 		return View{}, err
+	}
+	if s.Usage != nil {
+		if err := s.Usage.CheckProjectCreate(ctx, userID); err != nil {
+			return View{}, err
+		}
 	}
 	roleIDs, defaultRoleID, err := s.cloneRoleIDs(ctx)
 	if err != nil {
@@ -326,6 +337,9 @@ func (s *Service) Create(ctx context.Context, workspaceID, userID int64, input C
 	if err := s.initSandboxClone(ctx, project, source, assets, items); err != nil {
 		rollback()
 		return View{}, err
+	}
+	if s.Usage != nil {
+		_ = s.Usage.RecordProjectCreate(ctx, userID)
 	}
 	return s.buildViewFrom(ctx, project, source, assets, items), nil
 }

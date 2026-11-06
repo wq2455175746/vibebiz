@@ -13,6 +13,7 @@ import (
 	"vibebiz/internal/clone"
 	"vibebiz/internal/observability"
 	"vibebiz/internal/response"
+	"vibebiz/internal/usage"
 )
 
 type CloneService interface {
@@ -183,6 +184,11 @@ func (h *CloneHandler) fail(c echo.Context, action, projectID string, err error)
 	if h.Obs != nil {
 		h.Obs.Log(c.Request().Context(), slog.LevelError, action,
 			"project_id", projectID, "status", "error", "error", err.Error())
+	}
+	var exceeded *usage.QuotaExceededError
+	if errors.As(err, &exceeded) {
+		return response.FailWithResult(c, http.StatusTooManyRequests, quotaCode(exceeded.QuotaType), "daily quota exceeded",
+			map[string]any{"quotaType": exceeded.QuotaType, "used": exceeded.Used, "limit": exceeded.Limit})
 	}
 	switch {
 	case errors.Is(err, clone.ErrInvalid):
