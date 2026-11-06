@@ -76,3 +76,50 @@ func TestMySQLRepositoryList(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestToModelUserIDMapping(t *testing.T) {
+	at := time.Date(2026, 11, 6, 10, 0, 0, 0, time.UTC)
+
+	zero := toModel(Event{EventID: "e1", EventType: EventRequest, RequestPath: "/cp/api/v1/projects", EventAt: at})
+	if zero.UserID != nil {
+		t.Fatalf("UserID = %v, want nil for UserID=0", *zero.UserID)
+	}
+	if zero.EventID != "e1" || zero.EventType != EventRequest || zero.RequestPath != "/cp/api/v1/projects" || !zero.EventAt.Equal(at) {
+		t.Fatalf("model = %+v", zero)
+	}
+
+	seven := toModel(Event{EventID: "e2", EventType: EventLogin, UserID: 7})
+	if seven.UserID == nil || *seven.UserID != 7 {
+		t.Fatalf("UserID = %v, want 7", seven.UserID)
+	}
+}
+
+func TestNormalizeQuery(t *testing.T) {
+	tests := []struct {
+		name     string
+		in       Query
+		wantPage int
+		wantSize int
+		wantWord string
+	}{
+		{name: "defaults", in: Query{Page: 0, PageSize: 0}, wantPage: 1, wantSize: 10},
+		{name: "negative page", in: Query{Page: -3, PageSize: 5}, wantPage: 1, wantSize: 5},
+		{name: "zero size", in: Query{Page: 2, PageSize: 0}, wantPage: 2, wantSize: 10},
+		{name: "clamp max", in: Query{Page: 1, PageSize: 101}, wantPage: 1, wantSize: 100},
+		{name: "valid unchanged", in: Query{Page: 3, PageSize: 50}, wantPage: 3, wantSize: 50},
+		{name: "trim keyword", in: Query{Keyword: "  wang  ", Page: 1, PageSize: 10}, wantPage: 1, wantSize: 10, wantWord: "wang"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := normalizeQuery(tt.in)
+			if got.Page != tt.wantPage || got.PageSize != tt.wantSize || got.Keyword != tt.wantWord {
+				t.Fatalf("normalizeQuery(%+v) = %+v", tt.in, got)
+			}
+		})
+	}
+}
+
+var (
+	_ Sink    = (*MySQLRepository)(nil)
+	_ Queryer = (*MySQLRepository)(nil)
+)

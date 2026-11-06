@@ -76,40 +76,7 @@ func (r *MySQLRepository) Write(ctx context.Context, events []Event) error {
 	}
 	rows := make([]model.UserAccessLog, 0, len(events))
 	for _, event := range events {
-		var userID *int64
-		if event.UserID > 0 {
-			id := event.UserID
-			userID = &id
-		}
-		rows = append(rows, model.UserAccessLog{
-			EventID:        event.EventID,
-			EventType:      event.EventType,
-			UserID:         userID,
-			Username:       event.Username,
-			WorkspaceID:    event.WorkspaceID,
-			ProjectID:      event.ProjectID,
-			IP:             event.IP,
-			RegionCountry:  event.RegionCountry,
-			RegionProvince: event.RegionProvince,
-			RegionCity:     event.RegionCity,
-			DeviceID:       event.DeviceID,
-			DeviceType:     event.DeviceType,
-			OS:             event.OS,
-			Browser:        event.Browser,
-			UserAgent:      event.UserAgent,
-			Referer:        event.Referer,
-			RequestMethod:  event.RequestMethod,
-			RequestPath:    event.RequestPath,
-			RequestQuery:   event.RequestQuery,
-			Route:          event.Route,
-			StatusCode:     event.StatusCode,
-			DurationMs:     event.DurationMs,
-			RequestID:      event.RequestID,
-			TraceID:        event.TraceID,
-			LoginResult:    event.LoginResult,
-			ErrorMessage:   event.ErrorMessage,
-			EventAt:        event.EventAt,
-		})
+		rows = append(rows, toModel(event))
 	}
 	err := r.db.WithContext(ctx).
 		Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "event_id"}}, DoNothing: true}).
@@ -118,6 +85,43 @@ func (r *MySQLRepository) Write(ctx context.Context, events []Event) error {
 		return fmt.Errorf("write user access log: %w", err)
 	}
 	return nil
+}
+
+func toModel(event Event) model.UserAccessLog {
+	var userID *int64
+	if event.UserID > 0 {
+		id := event.UserID
+		userID = &id
+	}
+	return model.UserAccessLog{
+		EventID:        event.EventID,
+		EventType:      event.EventType,
+		UserID:         userID,
+		Username:       event.Username,
+		WorkspaceID:    event.WorkspaceID,
+		ProjectID:      event.ProjectID,
+		IP:             event.IP,
+		RegionCountry:  event.RegionCountry,
+		RegionProvince: event.RegionProvince,
+		RegionCity:     event.RegionCity,
+		DeviceID:       event.DeviceID,
+		DeviceType:     event.DeviceType,
+		OS:             event.OS,
+		Browser:        event.Browser,
+		UserAgent:      event.UserAgent,
+		Referer:        event.Referer,
+		RequestMethod:  event.RequestMethod,
+		RequestPath:    event.RequestPath,
+		RequestQuery:   event.RequestQuery,
+		Route:          event.Route,
+		StatusCode:     event.StatusCode,
+		DurationMs:     event.DurationMs,
+		RequestID:      event.RequestID,
+		TraceID:        event.TraceID,
+		LoginResult:    event.LoginResult,
+		ErrorMessage:   event.ErrorMessage,
+		EventAt:        event.EventAt,
+	}
 }
 
 func (r *MySQLRepository) List(ctx context.Context, query Query) (Page, error) {
