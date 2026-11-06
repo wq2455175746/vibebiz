@@ -113,6 +113,9 @@ func (s *Service) CheckUpload(ctx context.Context, userID, addCount, addBytes in
 	if err != nil {
 		return err
 	}
+	if quota.UploadDailyCountQuota <= 0 && quota.UploadDailyBytesQuota <= 0 {
+		return nil
+	}
 	used, err := s.Repo.Usage(ctx, userID, s.Today())
 	if err != nil {
 		return err
