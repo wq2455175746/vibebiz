@@ -45,7 +45,7 @@ func TestInitialSchemaCoversAllBusinessTables(t *testing.T) {
 		"sandbox_instance", "project_resource",
 		"scheduled_task", "chat_conversation", "chat_message", "chat_memory",
 		"rag_knowledge_base", "project_rag", "fde_resource",
-		"project_clone_source", "project_clone_asset",
+		"project_clone_source", "project_clone_asset", "user_usage_daily",
 	}
 	var all strings.Builder
 	entries, err := fs.ReadDir(FS, ".")
@@ -216,8 +216,8 @@ func TestGooseCanCollectMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("collect migrations: %v", err)
 	}
-	if len(migs) != 23 {
-		t.Fatalf("collected %d migrations, want 23", len(migs))
+	if len(migs) != 24 {
+		t.Fatalf("collected %d migrations, want 24", len(migs))
 	}
 	for i, mig := range migs {
 		want := int64(i + 1)
@@ -394,6 +394,25 @@ func TestCloneCapabilityMigration(t *testing.T) {
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("clone migration missing %q", want)
+		}
+	}
+}
+
+func TestUserUsageDailyMigration(t *testing.T) {
+	body, err := fs.ReadFile(FS, "00024_user_usage_daily.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	for _, want := range []string{
+		"CREATE TABLE `user_usage_daily`", "project_daily_quota",
+		"llm_token_daily_quota", "upload_daily_count_quota",
+		"upload_daily_bytes_quota", "uk_user_usage_daily_user_date",
+		"DROP TABLE IF EXISTS `user_usage_daily`",
+		"-- +goose Up", "-- +goose Down",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("usage migration missing %q", want)
 		}
 	}
 }

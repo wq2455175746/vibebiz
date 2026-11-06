@@ -43,6 +43,10 @@ type UserQuota struct {
 	WorkspaceUsed            int64      `gorm:"column:workspace_used" json:"workspaceUsed"`
 	LLMTokenQuotaMonth       int64      `gorm:"column:llm_token_quota_month" json:"llmTokenQuotaMonth"`
 	LLMTokensUsedMonth       int64      `gorm:"column:llm_tokens_used_month" json:"llmTokensUsedMonth"`
+	ProjectDailyQuota        int64      `gorm:"column:project_daily_quota" json:"projectDailyQuota"`
+	LLMTokenDailyQuota       int64      `gorm:"column:llm_token_daily_quota" json:"llmTokenDailyQuota"`
+	UploadDailyCountQuota    int64      `gorm:"column:upload_daily_count_quota" json:"uploadDailyCountQuota"`
+	UploadDailyBytesQuota    int64      `gorm:"column:upload_daily_bytes_quota" json:"uploadDailyBytesQuota"`
 	SandboxMinutesQuotaMonth int64      `gorm:"column:sandbox_minutes_quota_month" json:"sandboxMinutesQuotaMonth"`
 	SandboxMinutesUsedMonth  int64      `gorm:"column:sandbox_minutes_used_month" json:"sandboxMinutesUsedMonth"`
 	ConcurrentAgentRuns      int64      `gorm:"column:concurrent_agent_runs" json:"concurrentAgentRuns"`

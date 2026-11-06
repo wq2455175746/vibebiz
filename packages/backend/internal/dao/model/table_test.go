@@ -15,6 +15,7 @@ func TestTableNames(t *testing.T) {
 		{&WorkspaceUser{}, "workspace_user"},
 		{&WorkspaceFolder{}, "workspace_folder"},
 		{&UserQuota{}, "user_quota"},
+		{&UserUsageDaily{}, "user_usage_daily"},
 		{&ProjectTopic{}, "project_topic"},
 		{&ProjectTemplate{}, "project_template"},
 		{&Project{}, "project"},
