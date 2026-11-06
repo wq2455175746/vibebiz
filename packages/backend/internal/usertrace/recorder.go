@@ -13,6 +13,8 @@ import (
 	"github.com/google/uuid"
 )
 
+var traceFileMu sync.Mutex
+
 type Recorder struct {
 	dir    string
 	plane  string
@@ -76,6 +78,8 @@ func (r *Recorder) Append(event Event) {
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	traceFileMu.Lock()
+	defer traceFileMu.Unlock()
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		r.warn("open user trace file failed", err)

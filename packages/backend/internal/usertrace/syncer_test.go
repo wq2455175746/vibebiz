@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
@@ -105,5 +107,71 @@ func TestSyncerSkipsMalformedLines(t *testing.T) {
 	}
 	if len(sink.batches) != 1 || len(sink.batches[0]) != 1 || sink.batches[0][0].EventID != "e1" {
 		t.Fatalf("batches = %+v", sink.batches)
+	}
+}
+
+type concurrencyTrackingSink struct {
+	mu        sync.Mutex
+	active    int
+	maxActive int
+	batches   int
+	events    int
+}
+
+func (s *concurrencyTrackingSink) Write(_ context.Context, events []Event) error {
+	s.mu.Lock()
+	s.active++
+	if s.active > s.maxActive {
+		s.maxActive = s.active
+	}
+	s.mu.Unlock()
+
+	time.Sleep(5 * time.Millisecond)
+
+	s.mu.Lock()
+	s.active--
+	s.batches++
+	s.events += len(events)
+	s.mu.Unlock()
+	return nil
+}
+
+func TestSyncerSyncOnceSingleFlight(t *testing.T) {
+	root := t.TempDir()
+	events := make([]Event, 1200)
+	for i := range events {
+		events[i] = Event{EventID: fmt.Sprintf("e%d", i), EventType: EventRequest, UserID: 7}
+	}
+	writeTraceFile(t, root, "2026-11-06", "7.log", events)
+	sink := &concurrencyTrackingSink{}
+	syncer := NewSyncer(root, "cp", sink, time.Minute, nil)
+
+	start := make(chan struct{})
+	errs := make(chan error, 2)
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			errs <- syncer.SyncOnce(context.Background())
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("SyncOnce() error = %v", err)
+		}
+	}
+
+	sink.mu.Lock()
+	defer sink.mu.Unlock()
+	if sink.maxActive != 1 {
+		t.Fatalf("max concurrent writes = %d, want 1", sink.maxActive)
+	}
+	if sink.batches != 3 || sink.events != 1200 {
+		t.Fatalf("batches = %d, events = %d, want 3 and 1200", sink.batches, sink.events)
 	}
 }

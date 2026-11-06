@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -22,6 +23,7 @@ type Syncer struct {
 	interval time.Duration
 	logger   *slog.Logger
 	now      func() time.Time
+	mu       sync.Mutex
 }
 
 func NewSyncer(dir, plane string, sink Sink, interval time.Duration, logger *slog.Logger) *Syncer {
@@ -55,16 +57,22 @@ func (s *Syncer) run(ctx context.Context) {
 }
 
 func (s *Syncer) SyncOnce(ctx context.Context) error {
+	if s == nil || s.sink == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.syncOnceLocked(ctx)
+}
+
+func (s *Syncer) syncOnceLocked(ctx context.Context) error {
 	root := filepath.Join(s.dir, s.plane)
 	live, err := filepath.Glob(filepath.Join(root, "*", "*.log"))
 	if err != nil {
 		return err
 	}
-	for _, path := range live {
-		target := strings.TrimSuffix(path, ".log") + fmt.Sprintf(".%d.syncing", s.now().UnixNano())
-		if err := os.Rename(path, target); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("rotate user trace file: %w", err)
-		}
+	if err := s.rotateLiveFiles(live); err != nil {
+		return err
 	}
 
 	pending, err := filepath.Glob(filepath.Join(root, "*", "*.syncing"))
@@ -78,6 +86,18 @@ func (s *Syncer) SyncOnce(ctx context.Context) error {
 		}
 	}
 	return firstErr
+}
+
+func (s *Syncer) rotateLiveFiles(live []string) error {
+	traceFileMu.Lock()
+	defer traceFileMu.Unlock()
+	for _, path := range live {
+		target := strings.TrimSuffix(path, ".log") + fmt.Sprintf(".%d.syncing", s.now().UnixNano())
+		if err := os.Rename(path, target); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("rotate user trace file: %w", err)
+		}
+	}
+	return nil
 }
 
 func (s *Syncer) flushFile(ctx context.Context, path string) error {
