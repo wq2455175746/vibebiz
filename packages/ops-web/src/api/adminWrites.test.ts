@@ -108,7 +108,15 @@ describe('admin writes', () => {
     const spy = vi.spyOn(http, 'request').mockResolvedValueOnce({
       data: { code: 0, message: 'ok', result: { userId: '1' } },
     })
-    const input = { llmTokensQuota: 100, sandboxMinutesQuota: 200, storageQuotaMb: 300 }
+    const input = {
+      llmTokensQuota: 100,
+      sandboxMinutesQuota: 200,
+      storageQuotaMb: 300,
+      projectDailyQuota: 10,
+      llmTokenDailyQuota: 1000,
+      uploadDailyCountQuota: 5,
+      uploadDailyBytesQuota: 2000,
+    }
     await updateQuota('1', input)
     expect(spy).toHaveBeenCalledWith({
       method: 'put',

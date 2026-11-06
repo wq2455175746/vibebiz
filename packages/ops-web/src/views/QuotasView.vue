@@ -46,6 +46,30 @@ const columns: TableColumn[] = [
       return usage(item.storageUsedMb, item.storageQuotaMb)
     },
   },
+  {
+    key: 'projectDailyQuota',
+    label: '每日项目',
+    width: '110px',
+    format: (value) => (Number(value) > 0 ? formatNumber(Number(value)) : '不限'),
+  },
+  {
+    key: 'llmTokenDailyQuota',
+    label: '每日 Token',
+    width: '140px',
+    format: (value) => (Number(value) > 0 ? formatNumber(Number(value)) : '不限'),
+  },
+  {
+    key: 'uploadDailyCountQuota',
+    label: '每日上传数',
+    width: '120px',
+    format: (value) => (Number(value) > 0 ? formatNumber(Number(value)) : '不限'),
+  },
+  {
+    key: 'uploadDailyBytesQuota',
+    label: '每日上传字节',
+    width: '150px',
+    format: (value) => (Number(value) > 0 ? formatNumber(Number(value)) : '不限'),
+  },
   { key: 'actions', label: '操作', width: '80px' },
 ]
 
@@ -57,6 +81,10 @@ const form = ref<QuotaUpdateInput>({
   llmTokensQuota: 0,
   sandboxMinutesQuota: 0,
   storageQuotaMb: 0,
+  projectDailyQuota: 0,
+  llmTokenDailyQuota: 0,
+  uploadDailyCountQuota: 0,
+  uploadDailyBytesQuota: 0,
 })
 
 function openEdit(row: unknown) {
@@ -66,6 +94,10 @@ function openEdit(row: unknown) {
     llmTokensQuota: quota.llmTokensQuota,
     sandboxMinutesQuota: quota.sandboxMinutesQuota,
     storageQuotaMb: quota.storageQuotaMb,
+    projectDailyQuota: quota.projectDailyQuota,
+    llmTokenDailyQuota: quota.llmTokenDailyQuota,
+    uploadDailyCountQuota: quota.uploadDailyCountQuota,
+    uploadDailyBytesQuota: quota.uploadDailyBytesQuota,
   }
   actionError.value = ''
   dialogVisible.value = true
@@ -147,6 +179,42 @@ async function submit() {
             :min="0"
             :max="100000000"
             @update:model-value="setNumber('storageQuotaMb', $event)"
+          />
+        </label>
+        <label class="field">
+          <span>每日项目额度（0 表示不限）</span>
+          <InputNumber
+            :model-value="form.projectDailyQuota"
+            :min="0"
+            :max="1000000"
+            @update:model-value="setNumber('projectDailyQuota', $event)"
+          />
+        </label>
+        <label class="field">
+          <span>每日 Token 额度（0 表示不限）</span>
+          <InputNumber
+            :model-value="form.llmTokenDailyQuota"
+            :min="0"
+            :max="1000000000000"
+            @update:model-value="setNumber('llmTokenDailyQuota', $event)"
+          />
+        </label>
+        <label class="field">
+          <span>每日上传文件数（0 表示不限）</span>
+          <InputNumber
+            :model-value="form.uploadDailyCountQuota"
+            :min="0"
+            :max="1000000"
+            @update:model-value="setNumber('uploadDailyCountQuota', $event)"
+          />
+        </label>
+        <label class="field">
+          <span>每日上传字节（0 表示不限）</span>
+          <InputNumber
+            :model-value="form.uploadDailyBytesQuota"
+            :min="0"
+            :max="1000000000000"
+            @update:model-value="setNumber('uploadDailyBytesQuota', $event)"
           />
         </label>
         <p v-if="actionError" class="error-text">{{ actionError }}</p>

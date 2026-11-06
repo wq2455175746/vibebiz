@@ -191,7 +191,7 @@ func (h *AdminHandler) UsageDaily(c echo.Context) error {
 	}
 	return response.OK(c, map[string]any{
 		"from": from.Format("2006-01-02"), "to": to.Format("2006-01-02"),
-		"userId": userID, "series": rows, "totals": totals,
+		"userId": userID, "series": aggregateUsageByDate(rows), "totals": totals,
 	})
 }
 
@@ -382,4 +382,28 @@ func adminRepoError(c echo.Context, err error) error {
 		return response.Fail(c, http.StatusNotFound, 40401, "admin record not found")
 	}
 	return response.Fail(c, http.StatusInternalServerError, 50001, "admin data unavailable")
+}
+
+func aggregateUsageByDate(rows []usage.DailyRow) []usage.DailyRow {
+	byDate := make(map[string]usage.DailyRow, len(rows))
+	order := make([]string, 0, len(rows))
+	for _, row := range rows {
+		item, ok := byDate[row.Date]
+		if !ok {
+			item = usage.DailyRow{Date: row.Date}
+			order = append(order, row.Date)
+		}
+		item.ProjectsCreated += row.ProjectsCreated
+		item.InputTokens += row.InputTokens
+		item.OutputTokens += row.OutputTokens
+		item.ModelRequests += row.ModelRequests
+		item.UploadCount += row.UploadCount
+		item.UploadBytes += row.UploadBytes
+		byDate[row.Date] = item
+	}
+	out := make([]usage.DailyRow, 0, len(order))
+	for _, date := range order {
+		out = append(out, byDate[date])
+	}
+	return out
 }

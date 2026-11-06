@@ -22,6 +22,7 @@ import type {
   TemplateInput,
   TopicInput,
   TopicNode,
+  UsageDailyResult,
   RoleAvatarPresign,
   RoleInput,
   RoleUpdateInput,
@@ -167,10 +168,7 @@ export function createFdeResource(input: FdeResourceInput): Promise<AdminFdeReso
   })
 }
 
-export function updateFdeResource(
-  id: number,
-  input: FdeResourceInput,
-): Promise<AdminFdeResource> {
+export function updateFdeResource(id: number, input: FdeResourceInput): Promise<AdminFdeResource> {
   return request<AdminFdeResource>({
     method: 'put',
     url: `/fde-resources/${id}`,
@@ -284,4 +282,16 @@ export function resumeAdminScheduledTask(id: number): Promise<AdminScheduledTask
 
 export function stopAdminScheduledTask(id: number): Promise<AdminScheduledTask> {
   return request<AdminScheduledTask>({ method: 'post', url: `/scheduled-tasks/${id}/stop` })
+}
+
+export async function getUsageDaily(query: {
+  from: string
+  to: string
+  userId?: number
+}): Promise<UsageDailyResult> {
+  return request<UsageDailyResult>({
+    method: 'get',
+    url: '/usage/daily',
+    params: { from: query.from, to: query.to, userId: query.userId || undefined },
+  })
 }

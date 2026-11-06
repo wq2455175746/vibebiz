@@ -92,7 +92,6 @@ export interface TemplateInput {
   recommendScore: number
 }
 
-
 export interface AdminFdeResource {
   id: number
   name: string
@@ -137,12 +136,47 @@ export interface AdminQuota {
   sandboxMinutesUsed: number
   storageQuotaMb: number
   storageUsedMb: number
+  projectDailyQuota: number
+  llmTokenDailyQuota: number
+  uploadDailyCountQuota: number
+  uploadDailyBytesQuota: number
 }
 
 export interface QuotaUpdateInput {
   llmTokensQuota: number
   sandboxMinutesQuota: number
   storageQuotaMb: number
+  projectDailyQuota: number
+  llmTokenDailyQuota: number
+  uploadDailyCountQuota: number
+  uploadDailyBytesQuota: number
+}
+
+export interface UsageDailyPoint {
+  date: string
+  projectsCreated: number
+  inputTokens: number
+  outputTokens: number
+  modelRequests: number
+  uploadCount: number
+  uploadBytes: number
+}
+
+export interface UsageDailyTotals {
+  projectsCreated: number
+  inputTokens: number
+  outputTokens: number
+  modelRequests: number
+  uploadCount: number
+  uploadBytes: number
+}
+
+export interface UsageDailyResult {
+  from: string
+  to: string
+  userId: number
+  series: UsageDailyPoint[]
+  totals: UsageDailyTotals
 }
 
 export interface AuditEvent {
