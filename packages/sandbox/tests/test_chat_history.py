@@ -6,6 +6,8 @@ import pytest
 
 from app.services.chat_history import ChatHistory
 from app.services.chat_turns import ChatTurnManager, TurnLocked
+from app.services.project_lease import StaleProjectEpoch, read_epoch
+from app.services.project_lock import ProjectLock, ProjectLockBusy
 from app.services.workspace import Workspace
 
 
@@ -35,6 +37,95 @@ class SlowAgent:
                 "numTurns": 1,
             },
         }
+
+
+class GateAgent:
+    mode = "stub"
+
+    def __init__(self) -> None:
+        self.started = asyncio.Event()
+        self.release = asyncio.Event()
+
+    async def run(self, *_args, **_kwargs):
+        self.started.set()
+        await self.release.wait()
+        yield {"type": "agent", "payload": {"type": "result", "subtype": "success"}}
+
+
+def write_lease(project: Path, epoch: int) -> None:
+    (project / ".vibebiz").mkdir(parents=True, exist_ok=True)
+    (project / ".vibebiz" / "lease").write_text(
+        json.dumps({"epoch": epoch, "sandbox": "sandbox-a"}), encoding="utf-8"
+    )
+
+
+def test_turn_holds_project_lock_until_finished(tmp_path):
+    workspace = Workspace(tmp_path / "workspaces")
+    workspace.init_project("p1")
+    history = ChatHistory(workspace)
+    lock = ProjectLock(timeout=0.1)
+    agent = GateAgent()
+    manager = ChatTurnManager(
+        agent, history, FakeVersioning(), project_lock=lock, sandbox_name="sandbox-a"
+    )
+    project_dir = workspace.project_dir("p1")
+
+    async def run() -> None:
+        turn = await manager.start("p1", "hello", workspace)
+        await agent.started.wait()
+        with pytest.raises(ProjectLockBusy):
+            async with lock.acquire(project_dir):
+                pass
+        agent.release.set()
+        await turn.task
+        async with lock.acquire(project_dir):
+            pass
+
+    asyncio.run(run())
+
+
+def test_turn_rejects_stale_epoch_and_releases_lock(tmp_path):
+    workspace = Workspace(tmp_path / "workspaces")
+    project_dir = workspace.init_project("p1")
+    write_lease(project_dir, 5)
+    history = ChatHistory(workspace)
+    lock = ProjectLock(timeout=0.1)
+    manager = ChatTurnManager(
+        GateAgent(), history, FakeVersioning(), project_lock=lock, sandbox_name="sandbox-b"
+    )
+
+    async def run() -> None:
+        with pytest.raises(StaleProjectEpoch):
+            await manager.start("p1", "hello", workspace, epoch=4)
+        async with lock.acquire(project_dir):
+            pass
+        assert await manager.status("p1") == {"active": False, "turnId": None}
+
+    asyncio.run(run())
+
+
+def test_turn_updates_lease_with_newer_epoch(tmp_path):
+    workspace = Workspace(tmp_path / "workspaces")
+    project_dir = workspace.init_project("p1")
+    write_lease(project_dir, 4)
+    history = ChatHistory(workspace)
+    agent = GateAgent()
+    manager = ChatTurnManager(
+        agent,
+        history,
+        FakeVersioning(),
+        project_lock=ProjectLock(timeout=0.1),
+        sandbox_name="sandbox-a",
+    )
+
+    async def run() -> None:
+        turn = await manager.start("p1", "hello", workspace, epoch=5)
+        await agent.started.wait()
+        assert read_epoch(project_dir) == 5
+        agent.release.set()
+        await turn.task
+
+    asyncio.run(run())
 
 
 def test_turn_completes_without_sse_subscriber(tmp_path):

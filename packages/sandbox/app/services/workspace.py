@@ -12,6 +12,7 @@ from app.errors import ConflictError, NotFoundError, TooLargeError, WorkspaceErr
 PROJECT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 IGNORED_PARTS = {
     ".git",
+    ".vibebiz",
     ".agent",
     ".chathistory",
     ".resources",

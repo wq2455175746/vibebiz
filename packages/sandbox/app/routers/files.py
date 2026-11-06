@@ -1,10 +1,13 @@
 from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, Field
 
-from app.errors import WorkspaceError
+from app.errors import NotFoundError, WorkspaceError
 from app.observability import SANDBOX_REQUESTS, get_tracer
 from app.response import envelope
+from app.routers.epoch import epoch_from_request
 from app.services.chat_turns import ChatTurnManager
+from app.services.project_lease import check_epoch
+from app.services.project_lock import ProjectLock
 from app.services.workspace import Workspace
 
 router = APIRouter(prefix="/internal/projects", tags=["files"])
@@ -45,12 +48,21 @@ def read_file(project_id: str, request: Request, path: str = Query(min_length=1)
 async def write_file(project_id: str, body: WriteFileRequest, request: Request) -> dict:
     workspace: Workspace = request.app.state.workspace
     turns: ChatTurnManager = request.app.state.chat_turns
+    lock: ProjectLock = request.app.state.project_lock
+    project_dir = workspace.project_dir(project_id)
+    if not workspace.exists(project_id):
+        raise NotFoundError("project not found")
     tracer = get_tracer()
     with tracer.start_as_current_span("workspace.write") as span:
         span.set_attribute("project.id", project_id)
         span.set_attribute("file.path", body.path)
         try:
-            async with turns.write_guard(project_id):
+            async with turns.write_guard(project_id), lock.acquire(project_dir):
+                check_epoch(
+                    project_dir,
+                    epoch_from_request(request),
+                    request.app.state.settings.sandbox_name,
+                )
                 result = workspace.write_file(project_id, body.path, body.content, body.baseVersion)
         except WorkspaceError as exc:
             SANDBOX_REQUESTS.labels(

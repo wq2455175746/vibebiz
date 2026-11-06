@@ -74,6 +74,8 @@ def create_app(
         app.state.versioning,
         model=settings.agent_model,
         timeout_seconds=settings.chat_turn_timeout_seconds,
+        project_lock=app.state.project_lock,
+        sandbox_name=settings.sandbox_name,
     )
     app.add_middleware(ActiveRequestsMiddleware)
 

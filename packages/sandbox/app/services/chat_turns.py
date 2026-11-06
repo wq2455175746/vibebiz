@@ -9,6 +9,8 @@ from app.errors import WorkspaceError
 from app.observability import get_logger
 from app.services.agent import Agent
 from app.services.chat_history import ChatHistory
+from app.services.project_lease import check_epoch
+from app.services.project_lock import ProjectLock
 from app.services.versioning import Versioning
 from app.services.workspace import Workspace
 
@@ -38,6 +40,7 @@ class Turn:
     context: str = ""
     user_id: int = 0
     task: asyncio.Task | None = None
+    lock_cm: Any = None
     subscribers: set[asyncio.Queue[dict[str, Any] | None]] = field(default_factory=set)
 
 
@@ -165,12 +168,16 @@ class ChatTurnManager:
         versioning: Versioning,
         model: str = "",
         timeout_seconds: int = 600,
+        project_lock: ProjectLock | None = None,
+        sandbox_name: str = "",
     ) -> None:
         self.agent = agent
         self.history = history
         self.versioning = versioning
         self.model = model
         self.timeout_seconds = timeout_seconds
+        self.project_lock = project_lock
+        self.sandbox_name = sandbox_name
         self._active: dict[str, Turn] = {}
         self._lock = asyncio.Lock()
 
@@ -186,27 +193,50 @@ class ChatTurnManager:
         system_prompt: str = "",
         context: str = "",
         user_id: int = 0,
+        epoch: int = 0,
     ) -> Turn:
         async with self._lock:
             if project_id in self._active:
                 raise TurnInProgress("turn in progress")
             turn_id = uuid.uuid4().hex
-            await self.history.append_user(project_id, message, turn_id, references)
-            turn = Turn(
-                id=turn_id,
-                project_id=project_id,
-                message=message,
-                references=references or [],
-                agent_roles=agent_roles or [],
-                team_mode=team_mode,
-                system_prompt=system_prompt,
-                context=context,
-                user_id=user_id,
-                queue=asyncio.Queue(),
-            )
-            turn.subscribers.add(turn.queue)
-            self._active[project_id] = turn
-            turn.task = asyncio.create_task(self._run(turn, workspace, session_id))
+            lock_cm = None
+            if self.project_lock is not None:
+                project_dir = workspace.project_dir(project_id)
+                lock_cm = self.project_lock.acquire(project_dir)
+                await lock_cm.__aenter__()
+                try:
+                    check_epoch(project_dir, epoch, self.sandbox_name)
+                except BaseException:
+                    await lock_cm.__aexit__(None, None, None)
+                    raise
+            turn = None
+            started = False
+            try:
+                await self.history.append_user(project_id, message, turn_id, references)
+                turn = Turn(
+                    id=turn_id,
+                    project_id=project_id,
+                    message=message,
+                    references=references or [],
+                    agent_roles=agent_roles or [],
+                    team_mode=team_mode,
+                    system_prompt=system_prompt,
+                    context=context,
+                    user_id=user_id,
+                    queue=asyncio.Queue(),
+                    lock_cm=lock_cm,
+                )
+                turn.subscribers.add(turn.queue)
+                self._active[project_id] = turn
+                turn.task = asyncio.create_task(self._run(turn, workspace, session_id))
+                started = True
+            except BaseException:
+                if not started:
+                    if turn is not None:
+                        self._active.pop(project_id, None)
+                    if lock_cm is not None:
+                        await lock_cm.__aexit__(None, None, None)
+                raise
             return turn
 
     async def stop(self, project_id: str) -> bool:
@@ -319,6 +349,8 @@ class ChatTurnManager:
                     },
                 )
             self._broadcast(turn, None)
+            if turn.lock_cm is not None:
+                await turn.lock_cm.__aexit__(None, None, None)
             async with self._lock:
                 if self._active.get(turn.project_id) is turn:
                     self._active.pop(turn.project_id, None)

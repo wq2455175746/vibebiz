@@ -42,3 +42,11 @@ def test_corrupt_lease_reads_as_zero(tmp_path):
     (project / ".vibebiz").mkdir(parents=True)
     (project / ".vibebiz" / "lease").write_text("not-json", encoding="utf-8")
     assert read_epoch(project) == 0
+
+
+@pytest.mark.parametrize("payload", ["null", "[]", '"epoch"', "12"])
+def test_non_object_lease_reads_as_zero(tmp_path, payload):
+    project = tmp_path / "p1"
+    (project / ".vibebiz").mkdir(parents=True)
+    (project / ".vibebiz" / "lease").write_text(payload, encoding="utf-8")
+    assert read_epoch(project) == 0

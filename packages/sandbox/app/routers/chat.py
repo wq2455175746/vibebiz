@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from app.errors import NotFoundError, WorkspaceError
 from app.observability import SANDBOX_REQUESTS, SSE_EVENTS, get_logger, get_tracer
 from app.response import envelope
+from app.routers.epoch import epoch_from_request
 from app.services.chat_history import ChatHistory
 from app.services.chat_turns import ChatTurnManager, TurnInProgress, iter_turn_events
 from app.services.events import DONE, sse
@@ -79,6 +80,7 @@ async def chat(project_id: str, body: ChatRequest, request: Request) -> Streamin
             system_prompt=body.systemPrompt,
             context=body.context,
             user_id=body.userId,
+            epoch=epoch_from_request(request),
         )
     except TurnInProgress:
         _count(project_id, "409")

@@ -1,4 +1,6 @@
+import io
 import json
+import tarfile
 from contextlib import asynccontextmanager
 from pathlib import Path
 from types import SimpleNamespace
@@ -18,6 +20,12 @@ def make_client(tmp_path: Path) -> TestClient:
 def init_project(client: TestClient, project_id: str = "p1") -> None:
     response = client.post(f"/internal/projects/{project_id}/init")
     assert response.status_code == 200, response.text
+
+
+def write_lease(tmp_path: Path, project_id: str, epoch: int, sandbox: str = "sandbox-a") -> None:
+    lease = tmp_path / "workspaces" / project_id / ".vibebiz" / "lease"
+    lease.parent.mkdir(parents=True, exist_ok=True)
+    lease.write_text(json.dumps({"epoch": epoch, "sandbox": sandbox}), encoding="utf-8")
 
 
 class RecordingAgent:
@@ -93,6 +101,134 @@ def test_write_conflict(tmp_path):
         json={"path": "index.html", "content": "<h1>stale</h1>", "baseVersion": current["version"]},
     )
     assert stale.status_code == 409
+
+
+def test_file_write_rejects_stale_epoch(tmp_path):
+    client = make_client(tmp_path)
+    init_project(client)
+    write_lease(tmp_path, "p1", 5)
+
+    response = client.put(
+        "/internal/projects/p1/file",
+        headers={"X-Project-Epoch": "4"},
+        json={"path": "index.html", "content": "new"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == 40902
+
+
+def test_file_write_accepts_newer_epoch_and_updates_lease(tmp_path):
+    client = make_client(tmp_path)
+    init_project(client)
+    write_lease(tmp_path, "p1", 4)
+
+    response = client.put(
+        "/internal/projects/p1/file",
+        headers={"X-Project-Epoch": "5"},
+        json={"path": "index.html", "content": "new"},
+    )
+
+    assert response.status_code == 200
+    lease = json.loads((tmp_path / "workspaces" / "p1" / ".vibebiz" / "lease").read_text())
+    assert lease["epoch"] == 5
+
+
+def test_file_write_without_epoch_still_works(tmp_path):
+    client = make_client(tmp_path)
+    init_project(client)
+    write_lease(tmp_path, "p1", 5)
+
+    response = client.put(
+        "/internal/projects/p1/file",
+        json={"path": "index.html", "content": "new"},
+    )
+
+    assert response.status_code == 200
+
+
+def test_file_write_returns_busy_when_project_lock_is_held(tmp_path):
+    client = make_client(tmp_path)
+    init_project(client)
+    client.app.state.project_lock.timeout = 0.1
+    project_dir = client.app.state.workspace.project_dir("p1")
+
+    with client.app.state.project_lock.acquire_sync(project_dir):
+        response = client.put(
+            "/internal/projects/p1/file",
+            json={"path": "index.html", "content": "new"},
+        )
+
+    assert response.status_code == 423
+    assert response.json()["code"] == 42300
+
+
+def test_project_init_rejects_stale_epoch(tmp_path):
+    client = make_client(tmp_path)
+    init_project(client)
+    write_lease(tmp_path, "p1", 5)
+
+    response = client.post(
+        "/internal/projects/p1/init",
+        headers={"X-Project-Epoch": "4"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == 40902
+
+
+def test_archive_import_rejects_stale_epoch(tmp_path):
+    client = make_client(tmp_path)
+    init_project(client)
+    write_lease(tmp_path, "p1", 5)
+
+    response = client.post(
+        "/internal/projects/p1/archive/import",
+        content=b"not-a-real-archive",
+        headers={"X-Project-Epoch": "4"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == 40902
+
+
+def test_invalid_epoch_header_is_rejected(tmp_path):
+    client = make_client(tmp_path)
+    init_project(client)
+
+    response = client.put(
+        "/internal/projects/p1/file",
+        headers={"X-Project-Epoch": "abc"},
+        json={"path": "index.html", "content": "new"},
+    )
+
+    assert response.status_code == 400
+
+
+def test_vibebiz_is_hidden_from_files_stats_archive_and_preview(tmp_path):
+    client = make_client(tmp_path)
+    init_project(client)
+    write_lease(tmp_path, "p1", 5)
+
+    files = client.get("/internal/projects/p1/files").json()["result"]["files"]
+    assert all(not item["path"].startswith(".vibebiz") for item in files)
+
+    stats = client.get("/internal/projects/p1/stats").json()["result"]
+    assert stats["fileCount"] == len([item for item in files if item["type"] == "file"])
+
+    archive = client.get("/internal/projects/p1/archive")
+    with tarfile.open(fileobj=io.BytesIO(archive.content), mode="r:gz") as bundle:
+        assert all(not name.startswith(".vibebiz") for name in bundle.getnames())
+
+    assert client.get("/internal/projects/p1/preview/.vibebiz/lease").status_code != 200
+
+
+def test_init_gitignore_excludes_vibebiz(tmp_path):
+    client = make_client(tmp_path)
+    init_project(client)
+
+    ignore = (tmp_path / "workspaces" / "p1" / ".gitignore").read_text(encoding="utf-8")
+    assert ".vibebiz/" in ignore
 
 
 def test_preview_serves_static_files(tmp_path):

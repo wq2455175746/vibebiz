@@ -20,6 +20,8 @@ def read_epoch(project_dir: Path) -> int:
     path = _lease_path(project_dir)
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            return 0
         return int(payload.get("epoch", 0))
     except (OSError, ValueError, TypeError, json.JSONDecodeError):
         return 0
