@@ -29,6 +29,7 @@ class Settings:
     cp_registry_url: str = ""
     registry_token: str = ""
     heartbeat_interval: float = 5.0
+    sandbox_lock_timeout: float = 2.0
     max_concurrency: int = 8
     clone_test_runner_enabled: bool = True
     clone_test_timeout_seconds: int = 120
@@ -80,6 +81,7 @@ def load_settings() -> Settings:
         cp_registry_url=os.getenv("CP_REGISTRY_URL", "").strip(),
         registry_token=os.getenv("SANDBOX_REGISTRY_TOKEN", "").strip(),
         heartbeat_interval=max(1.0, _seconds("SANDBOX_HEARTBEAT_INTERVAL", 5.0)),
+        sandbox_lock_timeout=max(0.05, _seconds("SANDBOX_LOCK_TIMEOUT", 2.0)),
         max_concurrency=max(1, int(os.getenv("SANDBOX_MAX_CONCURRENCY", "8"))),
         clone_test_runner_enabled=os.getenv("CLONE_TEST_RUNNER_ENABLED", "true").strip().lower()
         not in {"0", "false", "no", "off"},

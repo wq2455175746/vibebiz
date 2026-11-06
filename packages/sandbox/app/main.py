@@ -15,6 +15,7 @@ from app.services.agent import build_agent
 from app.services.chat_history import ChatHistory
 from app.services.chat_turns import ChatTurnManager
 from app.services.clone import CloneService
+from app.services.project_lock import ProjectLock
 from app.services.project_logs import ProjectLogStore
 from app.services.registry import ActiveRequestCounter, ActiveRequestsMiddleware, run_heartbeat
 from app.services.resources import ResourceStore
@@ -53,6 +54,7 @@ def create_app(
     app = FastAPI(title="vibebiz-sandbox", version="0.1.0", lifespan=lifespan)
     app.state.settings = settings
     app.state.active_requests = active_requests
+    app.state.project_lock = ProjectLock(settings.sandbox_lock_timeout)
     app.state.workspace = Workspace(settings.workspaces_dir)
     app.state.versioning = Versioning()
     app.state.agent = build_agent(settings)
