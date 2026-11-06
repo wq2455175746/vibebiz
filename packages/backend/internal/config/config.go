@@ -54,6 +54,10 @@ type Config struct {
 	ModelSecretKey         string
 	NotificationSecretKey  string
 
+	UserTraceEnabled      bool
+	UserTraceDir          string
+	UserTraceSyncInterval time.Duration
+
 	SMTPHost     string
 	SMTPPort     int
 	SMTPUsername string
@@ -110,6 +114,10 @@ func Load(plane string) Config {
 		PublicBaseURL:          getString("PUBLIC_BASE_URL", ""),
 		ModelSecretKey:         getString("MODEL_SECRET_KEY", ""),
 		NotificationSecretKey:  getString("NOTIFICATION_SECRET_KEY", getString("MODEL_SECRET_KEY", "")),
+
+		UserTraceEnabled:      getBool("USER_TRACE_ENABLED", true),
+		UserTraceDir:          getString("USER_TRACE_DIR", "../../data/user-trace"),
+		UserTraceSyncInterval: getDuration("USER_TRACE_SYNC_INTERVAL", 10*time.Minute),
 
 		SMTPHost:     getString("SMTP_HOST", ""),
 		SMTPPort:     getInt("SMTP_PORT", 587),

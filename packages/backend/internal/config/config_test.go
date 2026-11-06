@@ -206,6 +206,40 @@ func TestLoadNotificationChannelConfig(t *testing.T) {
 	}
 }
 
+func TestLoadUserTraceConfig(t *testing.T) {
+	t.Setenv("USER_TRACE_ENABLED", "false")
+	t.Setenv("USER_TRACE_DIR", "/tmp/user-trace")
+	t.Setenv("USER_TRACE_SYNC_INTERVAL", "5m")
+
+	cfg := Load("cp")
+	if cfg.UserTraceEnabled {
+		t.Fatal("user trace enabled = true, want false")
+	}
+	if cfg.UserTraceDir != "/tmp/user-trace" {
+		t.Fatalf("user trace dir = %q", cfg.UserTraceDir)
+	}
+	if cfg.UserTraceSyncInterval != 5*time.Minute {
+		t.Fatalf("user trace interval = %v", cfg.UserTraceSyncInterval)
+	}
+}
+
+func TestLoadUserTraceDefaults(t *testing.T) {
+	t.Setenv("USER_TRACE_ENABLED", "")
+	t.Setenv("USER_TRACE_DIR", "")
+	t.Setenv("USER_TRACE_SYNC_INTERVAL", "")
+
+	cfg := Load("cp")
+	if !cfg.UserTraceEnabled {
+		t.Fatal("user trace enabled = false, want true")
+	}
+	if cfg.UserTraceDir != "../../data/user-trace" {
+		t.Fatalf("user trace dir = %q", cfg.UserTraceDir)
+	}
+	if cfg.UserTraceSyncInterval != 10*time.Minute {
+		t.Fatalf("user trace interval = %v", cfg.UserTraceSyncInterval)
+	}
+}
+
 func TestScheduledTaskDefaults(t *testing.T) {
 	t.Setenv("SCHEDULED_DISPATCH_INTERVAL", "")
 	t.Setenv("SCHEDULED_RUN_TIMEOUT", "")

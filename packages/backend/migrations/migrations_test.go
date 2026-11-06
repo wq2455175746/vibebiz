@@ -46,6 +46,7 @@ func TestInitialSchemaCoversAllBusinessTables(t *testing.T) {
 		"scheduled_task", "chat_conversation", "chat_message", "chat_memory",
 		"rag_knowledge_base", "project_rag", "fde_resource",
 		"project_clone_source", "project_clone_asset",
+		"user_access_log",
 	}
 	var all strings.Builder
 	entries, err := fs.ReadDir(FS, ".")
@@ -216,8 +217,8 @@ func TestGooseCanCollectMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("collect migrations: %v", err)
 	}
-	if len(migs) != 23 {
-		t.Fatalf("collected %d migrations, want 23", len(migs))
+	if len(migs) != 24 {
+		t.Fatalf("collected %d migrations, want 24", len(migs))
 	}
 	for i, mig := range migs {
 		want := int64(i + 1)
@@ -376,6 +377,23 @@ func TestScheduledTaskTopicMigration(t *testing.T) {
 	for _, want := range []string{"'scheduled'", "'定时任务'", "prompt_template", "-- +goose Up", "-- +goose Down"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("scheduled task topic migration missing %q", want)
+		}
+	}
+}
+
+func TestUserAccessLogMigration(t *testing.T) {
+	body, err := fs.ReadFile(FS, "00024_user_access_log.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	for _, want := range []string{
+		"CREATE TABLE `user_access_log`", "event_id", "event_type",
+		"uk_user_access_log_event_id", "idx_user_access_log_user_time",
+		"DROP TABLE IF EXISTS `user_access_log`", "-- +goose Up", "-- +goose Down",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("user access log migration missing %q", want)
 		}
 	}
 }
