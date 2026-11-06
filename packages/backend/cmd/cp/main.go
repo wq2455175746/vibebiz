@@ -131,6 +131,9 @@ func main() {
 		go usertrace.NewSyncer(cfg.UserTraceDir, usertrace.TrimPlane(cfg.Plane), traceRepo, cfg.UserTraceSyncInterval, obs.Logger).Run(traceCtx)
 	}
 	authHandler := &handler.AuthHandler{Service: authService, Account: accountService, UserCookie: userCookie, OpsCookie: opsCookie}
+	if cfg.UserTraceEnabled {
+		authHandler.Trace = traceRecorder
+	}
 	settingsHandler := handler.NewSettingsHandler(accountService, userCookie)
 
 	projectStore, err := store.NewMySQLProjectStore(ctx, db)

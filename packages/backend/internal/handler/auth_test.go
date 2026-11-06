@@ -15,7 +15,16 @@ import (
 	"vibebiz/internal/auth"
 	"vibebiz/internal/dao"
 	"vibebiz/internal/dao/model"
+	"vibebiz/internal/usertrace"
 )
+
+type fakeTraceAppender struct {
+	events []usertrace.Event
+}
+
+func (f *fakeTraceAppender) Append(event usertrace.Event) {
+	f.events = append(f.events, event)
+}
 
 type authUserFinder struct {
 	user         *model.User
@@ -433,6 +442,65 @@ func TestCookieRealmsCannotCross(t *testing.T) {
 	opsCookie := rec.Result().Cookies()[0]
 	if rec := getWithCookie(e, "/cp/api/v1/auth/me", opsCookie); rec.Code != http.StatusUnauthorized {
 		t.Fatalf("ops cookie on user me status = %d, want 401", rec.Code)
+	}
+}
+
+func TestLoginUserRecordsSuccessTrace(t *testing.T) {
+	h, _ := newAuthHandlerForTest(t, &model.User{Base: model.Base{ID: 1}, Username: "wanghg11", Email: "wang@example.com", Status: 1}, []int64{3}, nil)
+	trace := &fakeTraceAppender{}
+	h.Trace = trace
+	e := authRouter(h)
+
+	rec := postLogin(e, "/cp/api/v1/auth/login", `{"identifier":"wanghg11","password":"test-password"}`, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if len(trace.events) != 1 {
+		t.Fatalf("events = %+v", trace.events)
+	}
+	event := trace.events[0]
+	if event.EventType != usertrace.EventLogin || event.LoginResult != "success" {
+		t.Fatalf("event = %+v", event)
+	}
+	if event.UserID != 1 || event.Username != "wanghg11" || event.WorkspaceID != 3 || event.StatusCode != http.StatusOK {
+		t.Fatalf("event = %+v", event)
+	}
+}
+
+func TestLoginUserRecordsFailureTrace(t *testing.T) {
+	h, _ := newAuthHandlerForTest(t, &model.User{Base: model.Base{ID: 1}, Username: "wanghg11", Email: "wang@example.com", Status: 1}, []int64{3}, nil)
+	trace := &fakeTraceAppender{}
+	h.Trace = trace
+	e := authRouter(h)
+
+	rec := postLogin(e, "/cp/api/v1/auth/login", `{"identifier":"wanghg11","password":"wrong"}`, nil)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if len(trace.events) != 1 {
+		t.Fatalf("events = %+v", trace.events)
+	}
+	event := trace.events[0]
+	if event.LoginResult != "failed" || event.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("event = %+v", event)
+	}
+	if event.Username != "wanghg11" || event.ErrorMessage != "invalid credentials" {
+		t.Fatalf("event = %+v", event)
+	}
+}
+
+func TestLoginOpsDoesNotRecordUserTrace(t *testing.T) {
+	h, _ := newAuthHandlerForTest(t, nil, nil, &model.OpsUser{Base: model.Base{ID: 9}, Username: "admin", Email: "admin@example.com", RoleCode: "super_admin", Status: 1})
+	trace := &fakeTraceAppender{}
+	h.Trace = trace
+	e := authRouter(h)
+
+	rec := postLogin(e, "/cp/api/v1/admin/auth/login", `{"identifier":"admin","password":"test-password"}`, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if len(trace.events) != 0 {
+		t.Fatalf("events = %+v, want none", trace.events)
 	}
 }
 
