@@ -18,6 +18,7 @@ export const navItems: NavItem[] = [
   { name: 'scheduled-tasks', label: '定时任务', path: '/scheduled-tasks', icon: 'pi pi-clock' },
   { name: 'quotas', label: '配额', path: '/quotas', icon: 'pi pi-gauge' },
   { name: 'audit', label: '审计日志', path: '/audit', icon: 'pi pi-list' },
+  { name: 'access-logs', label: '访问日志', path: '/access-logs', icon: 'pi pi-eye' },
   { name: 'notifications', label: '消息通知', path: '/notifications', icon: 'pi pi-bell' },
   { name: 'settings', label: '系统设置', path: '/settings', icon: 'pi pi-cog' },
 ]
