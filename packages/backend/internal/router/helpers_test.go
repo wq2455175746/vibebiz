@@ -153,6 +153,38 @@ func (s *routerSessionStore) DeleteByUser(_ context.Context, realm auth.Realm, u
 	return nil
 }
 
+func (s *routerSessionStore) DeleteOthersByUser(_ context.Context, realm auth.Realm, userID int64, keepSessionID string) error {
+	for key, session := range s.items {
+		if session.Realm == realm && session.UserID == userID && session.ID != keepSessionID {
+			delete(s.items, key)
+		}
+	}
+	return nil
+}
+
+type routerOpsFinder struct {
+	user        *model.OpsUser
+	updatedHash string
+}
+
+func (f *routerOpsFinder) FindOpsByIdentifier(_ context.Context, _ string) (*model.OpsUser, error) {
+	return f.user, nil
+}
+
+func (f *routerOpsFinder) FindOpsByID(_ context.Context, _ int64) (*model.OpsUser, error) {
+	return f.user, nil
+}
+
+func (f *routerOpsFinder) TouchOpsLogin(_ context.Context, _ int64, _ string, _ time.Time) error {
+	return nil
+}
+
+func (f *routerOpsFinder) UpdateOpsPassword(_ context.Context, _ int64, hash string) error {
+	f.updatedHash = hash
+	f.user.PasswordHash = &hash
+	return nil
+}
+
 type routerMetaStore struct {
 	items map[string]auth.ProjectMeta
 }
@@ -186,6 +218,7 @@ type routerAuth struct {
 	metas      *routerMetaStore
 	userCookie *http.Cookie
 	opsCookie  *http.Cookie
+	ops        *routerOpsFinder
 }
 
 func cookieForSession(t *testing.T, manager auth.CookieManager, sid string) *http.Cookie {
@@ -207,7 +240,14 @@ func newRouterAuth(t *testing.T) *routerAuth {
 	sessions.items[routerSessionKey(auth.RealmOps, "ops-sid")] = &auth.Session{
 		ID: "ops-sid", Realm: auth.RealmOps, UserID: 9, Username: "admin", Email: "admin@example.com", Role: "super_admin",
 	}
-	service := &auth.Service{Sessions: sessions, UserTTL: time.Hour, OpsTTL: time.Hour, Now: time.Now}
+	hash, err := auth.HashPassword("admin-pass")
+	if err != nil {
+		t.Fatalf("hash ops password: %v", err)
+	}
+	opsFinder := &routerOpsFinder{user: &model.OpsUser{
+		Base: model.Base{ID: 9}, Username: "admin", Email: "admin@example.com", RoleCode: "super_admin", Status: 1, PasswordHash: &hash,
+	}}
+	service := &auth.Service{Ops: opsFinder, Sessions: sessions, UserTTL: time.Hour, OpsTTL: time.Hour, Now: time.Now}
 	userCookie := auth.CookieManager{Name: "vibebiz_user", TTL: time.Hour, Now: time.Now}
 	opsCookie := auth.CookieManager{Name: "vibebiz_ops", TTL: time.Hour, Now: time.Now}
 	return &routerAuth{
@@ -217,6 +257,7 @@ func newRouterAuth(t *testing.T) *routerAuth {
 		metas:      newRouterMetaStore(),
 		userCookie: cookieForSession(t, userCookie, "user-sid"),
 		opsCookie:  cookieForSession(t, opsCookie, "ops-sid"),
+		ops:        opsFinder,
 	}
 }
 
@@ -240,7 +281,7 @@ func newCP(t *testing.T, projects store.ProjectStore) (*echo.Echo, *observabilit
 	obs := newProvider(t, "cp")
 	authState := newRouterAuth(t)
 	e := server.New(config.Config{Plane: "cp", ServiceName: "vibebiz-cp"}, obs)
-	RegisterControl(e, admin.NewMemoryRepository(), projects, staticProvisioner{id: 1}, obs, authState.authn, authState.handler, &handler.SettingsHandler{}, &handler.StorageHandler{}, authState.metas, newNotificationHandler(t), nil, newModelHandler(t), newRoleHandler(t), nil, 0, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	RegisterControl(e, admin.NewMemoryRepository(), projects, staticProvisioner{id: 1}, obs, authState.authn, authState.handler, &handler.SettingsHandler{}, &handler.StorageHandler{}, authState.metas, newNotificationHandler(t), nil, newModelHandler(t), newRoleHandler(t), nil, 0, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	return e, obs, authState
 }
 

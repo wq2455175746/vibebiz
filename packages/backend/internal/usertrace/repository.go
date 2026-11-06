@@ -26,6 +26,24 @@ type Query struct {
 	PageSize  int
 }
 
+type IPStatsQuery struct {
+	From   *time.Time
+	To     *time.Time
+	UserID int64
+	Limit  int
+}
+
+type IPStat struct {
+	IP       string `json:"ip"`
+	Requests int64  `json:"requests"`
+}
+
+type IPStats struct {
+	Items         []IPStat `json:"items"`
+	TotalRequests int64    `json:"totalRequests"`
+	UniqueIPs     int64    `json:"uniqueIps"`
+}
+
 type Log struct {
 	ID           string    `json:"id"`
 	EventType    string    `json:"eventType"`
@@ -60,6 +78,7 @@ type Page struct {
 
 type Queryer interface {
 	List(ctx context.Context, query Query) (Page, error)
+	IPStats(ctx context.Context, query IPStatsQuery) (IPStats, error)
 }
 
 type MySQLRepository struct {
@@ -195,9 +214,55 @@ func (r *MySQLRepository) List(ctx context.Context, query Query) (Page, error) {
 	return Page{Items: items, Total: total, Page: query.Page, PageSize: query.PageSize}, nil
 }
 
+func (r *MySQLRepository) IPStats(ctx context.Context, query IPStatsQuery) (IPStats, error) {
+	query = normalizeIPStatsQuery(query)
+	scope := func(db *gorm.DB) *gorm.DB {
+		tx := db.Model(&model.UserAccessLog{}).
+			Where("event_type = ?", EventRequest).
+			Where("ip <> ?", "")
+		if query.From != nil {
+			tx = tx.Where("event_at >= ?", *query.From)
+		}
+		if query.To != nil {
+			tx = tx.Where("event_at < ?", *query.To)
+		}
+		if query.UserID > 0 {
+			tx = tx.Where("user_id = ?", query.UserID)
+		}
+		return tx
+	}
+
+	var totals struct {
+		TotalRequests int64 `gorm:"column:total_requests"`
+		UniqueIPs     int64 `gorm:"column:unique_ips"`
+	}
+	if err := r.db.WithContext(ctx).Scopes(scope).
+		Select("COUNT(*) AS total_requests, COUNT(DISTINCT ip) AS unique_ips").
+		Scan(&totals).Error; err != nil {
+		return IPStats{}, fmt.Errorf("count user access log by ip: %w", err)
+	}
+
+	var rows []IPStat
+	if err := r.db.WithContext(ctx).Scopes(scope).
+		Select("ip, COUNT(*) AS requests").
+		Group("ip").
+		Order("requests DESC").
+		Order("ip ASC").
+		Limit(query.Limit).
+		Scan(&rows).Error; err != nil {
+		return IPStats{}, fmt.Errorf("aggregate user access log by ip: %w", err)
+	}
+	if rows == nil {
+		rows = []IPStat{}
+	}
+	return IPStats{Items: rows, TotalRequests: totals.TotalRequests, UniqueIPs: totals.UniqueIPs}, nil
+}
+
 const (
-	defaultPageSize = 10
-	maxPageSize     = 100
+	defaultPageSize    = 10
+	maxPageSize        = 100
+	defaultIPStatsSize = 10
+	maxIPStatsSize     = 50
 )
 
 func normalizeQuery(query Query) Query {
@@ -210,6 +275,16 @@ func normalizeQuery(query Query) Query {
 	}
 	if query.PageSize > maxPageSize {
 		query.PageSize = maxPageSize
+	}
+	return query
+}
+
+func normalizeIPStatsQuery(query IPStatsQuery) IPStatsQuery {
+	if query.Limit <= 0 {
+		query.Limit = defaultIPStatsSize
+	}
+	if query.Limit > maxIPStatsSize {
+		query.Limit = maxIPStatsSize
 	}
 	return query
 }

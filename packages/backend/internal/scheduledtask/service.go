@@ -261,6 +261,11 @@ type ImmediateEnqueuer interface {
 	EnqueueNow(ctx context.Context, taskID int64) error
 }
 
+type UsageGuard interface {
+	CheckProjectCreate(ctx context.Context, userID int64) error
+	RecordProjectCreate(ctx context.Context, userID int64) error
+}
+
 type Service struct {
 	Repo        Repository
 	Projects    store.ProjectStore
@@ -269,14 +274,15 @@ type Service struct {
 	Sandbox     StopChatClient
 	Flags       Flags
 	Immediate   ImmediateEnqueuer
+	Usage       UsageGuard
 	Now         func() time.Time
 	NewID       func() string
 }
 
-func NewService(repo Repository, projects store.ProjectStore, initializer ProjectInitializer, metas MetaStore, sandbox StopChatClient, flags Flags) *Service {
+func NewService(repo Repository, projects store.ProjectStore, initializer ProjectInitializer, metas MetaStore, sandbox StopChatClient, flags Flags, usageGuard UsageGuard) *Service {
 	return &Service{
 		Repo: repo, Projects: projects, Initializer: initializer, Metas: metas,
-		Sandbox: sandbox, Flags: flags, Now: time.Now, NewID: func() string { return uuid.NewString() },
+		Sandbox: sandbox, Flags: flags, Usage: usageGuard, Now: time.Now, NewID: func() string { return uuid.NewString() },
 	}
 }
 
@@ -321,6 +327,11 @@ func (s *Service) Create(ctx context.Context, input CreateInput, userID, workspa
 	topic, err := s.Repo.TopicByCode(ctx, TopicCodeScheduled)
 	if err != nil || topic.Status != 1 {
 		return Task{}, ErrInvalid
+	}
+	if s.Usage != nil {
+		if err := s.Usage.CheckProjectCreate(ctx, userID); err != nil {
+			return Task{}, err
+		}
 	}
 	now := s.Now().UTC()
 	next, err := NextRun(schedule, now)
@@ -374,6 +385,9 @@ func (s *Service) Create(ctx context.Context, input CreateInput, userID, workspa
 	if err := s.Repo.Create(ctx, item); err != nil {
 		cleanup()
 		return Task{}, err
+	}
+	if s.Usage != nil {
+		_ = s.Usage.RecordProjectCreate(ctx, userID)
 	}
 	if s.Immediate != nil {
 		if err := s.Immediate.EnqueueNow(ctx, item.ID); err != nil {

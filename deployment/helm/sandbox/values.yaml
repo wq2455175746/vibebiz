@@ -13,6 +13,7 @@ service:
 
 config:
   workspacesDir: /data/workspaces
+  skillsRoot: /data/skills
   sandboxPort: "8000"
   advertiseScheme: http
   advertisePort: "8000"
@@ -42,6 +43,13 @@ persistence:
   size: 20Gi
   storageClassName: ""
   mountPath: /data/workspaces
+
+skillsPersistence:
+  existingClaim: ""
+  accessMode: ReadWriteMany
+  size: 20Gi
+  storageClassName: ""
+  mountPath: /data/skills
 
 podAnnotations: {}
 podSecurityContext:

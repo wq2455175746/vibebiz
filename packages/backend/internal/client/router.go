@@ -149,12 +149,12 @@ func (r *Router) ChatStatus(ctx context.Context, id string) (ChatStatus, error) 
 	return sandbox.ChatStatus(ctx, id)
 }
 
-func (r *Router) ListSkills(ctx context.Context, id string) ([]SkillInfo, error) {
+func (r *Router) ListSkills(ctx context.Context, id string, userID int64) ([]SkillInfo, error) {
 	sandbox, err := r.client(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	return sandbox.ListSkills(ctx, id)
+	return sandbox.ListSkills(ctx, id, userID)
 }
 
 func (r *Router) Chat(ctx context.Context, id string, payload []byte) (io.ReadCloser, error) {

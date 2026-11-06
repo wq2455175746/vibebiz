@@ -11,6 +11,7 @@ import ProjectsView from '@/views/ProjectsView.vue'
 import QuotasView from '@/views/QuotasView.vue'
 import SandboxesView from '@/views/SandboxesView.vue'
 import ScheduledTasksView from '@/views/ScheduledTasksView.vue'
+import SkillsView from '@/views/SkillsView.vue'
 import SettingsView from '@/views/SettingsView.vue'
 import TemplatesView from '@/views/TemplatesView.vue'
 import TopicsView from '@/views/TopicsView.vue'
@@ -27,6 +28,7 @@ export const childRoutes: RouteRecordRaw[] = [
     meta: { title: '沙箱节点' },
   },
   { path: 'models', name: 'models', component: ModelsView, meta: { title: '模型管理' } },
+  { path: 'skills', name: 'skills', component: SkillsView, meta: { title: '技能' } },
   { path: 'roles', name: 'roles', component: RolesView, meta: { title: '角色管理' } },
   {
     path: 'fde-resources',

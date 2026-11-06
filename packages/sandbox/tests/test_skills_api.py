@@ -31,8 +31,9 @@ def test_lists_project_skills(tmp_path, monkeypatch):
     response = client.get("/internal/projects/p1/skills")
 
     assert response.status_code == 200
-    assert response.json()["result"]["skills"] == [
-        {"name": "demo", "description": "demo skill", "source": "project"}
+    skills = response.json()["result"]["skills"]
+    assert [(item["name"], item["description"], item["source"]) for item in skills] == [
+        ("demo", "demo skill", "project")
     ]
 
 

@@ -36,6 +36,7 @@ class Turn:
     team_mode: bool = False
     system_prompt: str = ""
     context: str = ""
+    user_id: int = 0
     task: asyncio.Task | None = None
     subscribers: set[asyncio.Queue[dict[str, Any] | None]] = field(default_factory=set)
 
@@ -184,6 +185,7 @@ class ChatTurnManager:
         team_mode: bool = False,
         system_prompt: str = "",
         context: str = "",
+        user_id: int = 0,
     ) -> Turn:
         async with self._lock:
             if project_id in self._active:
@@ -199,6 +201,7 @@ class ChatTurnManager:
                 team_mode=team_mode,
                 system_prompt=system_prompt,
                 context=context,
+                user_id=user_id,
                 queue=asyncio.Queue(),
             )
             turn.subscribers.add(turn.queue)
@@ -245,6 +248,7 @@ class ChatTurnManager:
                     turn.team_mode,
                     system_prompt=turn.system_prompt,
                     context=turn.context,
+                    user_id=turn.user_id,
                 ):
                     collector.consume(event)
                     self._log_event(turn, event)

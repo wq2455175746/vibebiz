@@ -29,6 +29,7 @@ def build_options(
     agent_roles: list[dict[str, Any]] | None = None,
     team_mode: bool = False,
     system_prompt_text: str = "",
+    user_id: int = 0,
 ) -> ClaudeAgentOptions:
     env: dict[str, str] = {}
     if settings.anthropic_base_url:
@@ -37,6 +38,18 @@ def build_options(
         env["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
     if settings.anthropic_auth_token:
         env["ANTHROPIC_AUTH_TOKEN"] = settings.anthropic_auth_token
+    if user_id > 0:
+        try:
+            from app.services.skill_store import prepare_agent_config, resolve_skills_root
+
+            home, config = prepare_agent_config(resolve_skills_root(settings), user_id)
+            env["HOME"] = str(home)
+            env["CLAUDE_CONFIG_DIR"] = str(config)
+        except OSError:
+            logger.warning(
+                "skills.config.unavailable",
+                extra={"user_id": user_id, "status": "fallback"},
+            )
 
     skills: list[str] | str | None = None
     if settings.agent_skills and settings.agent_skills != "none":
@@ -105,6 +118,7 @@ class ClaudeAgent:
         team_mode: bool = False,
         system_prompt: str = "",
         context: str = "",
+        user_id: int = 0,
     ) -> AsyncIterator[dict]:
         tracer = get_tracer()
         with tracer.start_as_current_span("agent.run") as span:
@@ -131,6 +145,7 @@ class ClaudeAgent:
                     team_mode,
                     system_prompt,
                     context,
+                    user_id=user_id,
                 ):
                     yield event
                 status = "success"
@@ -169,6 +184,7 @@ class ClaudeAgent:
         team_mode: bool = False,
         system_prompt: str = "",
         context: str = "",
+        user_id: int = 0,
     ) -> AsyncIterator[dict]:
         project_dir = workspace.project_dir(project_id)
         session = session_id or self._sessions.get(project_id)
@@ -183,6 +199,7 @@ class ClaudeAgent:
                 team_mode,
                 system_prompt,
                 context,
+                user_id=user_id,
             ):
                 if event["payload"]["type"] != "system":
                     produced = True
@@ -199,6 +216,7 @@ class ClaudeAgent:
                     team_mode,
                     system_prompt,
                     context,
+                    user_id=user_id,
                 ):
                     yield event
                 return
@@ -214,11 +232,18 @@ class ClaudeAgent:
         team_mode: bool,
         system_prompt: str,
         context: str,
+        user_id: int = 0,
     ) -> AsyncIterator[dict]:
         if context:
             message = f"最近对话上下文：\n{context}\n\n当前任务：\n{message}"
         options = build_options(
-            self.settings, project_dir, session, agent_roles, team_mode, system_prompt
+            self.settings,
+            project_dir,
+            session,
+            agent_roles,
+            team_mode,
+            system_prompt,
+            user_id=user_id,
         )
         async for sdk_message in query(prompt=message, options=options):
             if isinstance(sdk_message, ResultMessage) and sdk_message.session_id:

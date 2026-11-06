@@ -147,6 +147,24 @@ func TestChatEnqueuesStorageSyncOnReadError(t *testing.T) {
 
 type captureChat struct{ payload []byte }
 
+func TestChatInjectsUserID(t *testing.T) {
+	fake := &captureChat{}
+	h := NewChatHandler(fake, nil)
+	e := echo.New()
+	routeWithSession(e, http.MethodPost, "/dp/api/v1/projects/:id/chat", h.Chat, sessionForTest(1))
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/dp/api/v1/projects/p1/chat", strings.NewReader(`{"message":"hi"}`))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	if !strings.Contains(string(fake.payload), `"userId":7`) {
+		t.Fatalf("payload = %s", fake.payload)
+	}
+}
+
 func (c *captureChat) Chat(_ context.Context, _ string, payload []byte) (io.ReadCloser, error) {
 	c.payload = append([]byte(nil), payload...)
 	return io.NopCloser(strings.NewReader("data: [DONE]\n\n")), nil

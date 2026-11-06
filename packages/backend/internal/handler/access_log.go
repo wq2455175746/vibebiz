@@ -40,6 +40,24 @@ func (h *AccessLogHandler) List(c echo.Context) error {
 	})
 }
 
+func (h *AccessLogHandler) IPStats(c echo.Context) error {
+	limit, _ := strconv.Atoi(c.QueryParam("limit"))
+	userID, _ := strconv.ParseInt(c.QueryParam("userId"), 10, 64)
+	if userID < 0 {
+		userID = 0
+	}
+	stats, err := h.Repo.IPStats(c.Request().Context(), usertrace.IPStatsQuery{
+		From:   parseAccessLogTime(c.QueryParam("from"), false),
+		To:     parseAccessLogTime(c.QueryParam("to"), true),
+		UserID: userID,
+		Limit:  limit,
+	})
+	if err != nil {
+		return response.Fail(c, http.StatusInternalServerError, 50001, "ip stats unavailable")
+	}
+	return response.OK(c, stats)
+}
+
 func parseAccessLogTime(raw string, endOfDay bool) *time.Time {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {

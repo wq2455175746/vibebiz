@@ -6,6 +6,7 @@ metadata:
     {{- include "sandbox.labels" . | nindent 4 }}
 data:
   WORKSPACES_DIR: {{ .Values.config.workspacesDir | quote }}
+  SKILLS_ROOT: {{ .Values.config.skillsRoot | quote }}
   SANDBOX_PORT: {{ .Values.config.sandboxPort | quote }}
   SANDBOX_ADVERTISE_SCHEME: {{ .Values.config.advertiseScheme | quote }}
   SANDBOX_ADVERTISE_PORT: {{ .Values.config.advertisePort | quote }}

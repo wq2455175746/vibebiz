@@ -179,6 +179,14 @@ func main() {
 		harnessImporter = harnesssvc.NewService(s3Presigner, sandboxRouter, cfg.EnterpriseHarnessS3Key)
 	}
 	registryHandler := handler.NewSandboxRegistryHandler(registryRepo, cfg.SandboxRegistryToken, obs)
+	skillRouter := client.NewSkillRouter(client.BaseURLSelectorFunc(func(ctx context.Context) (string, error) {
+		instance, err := selector.Select(ctx)
+		if err != nil {
+			return "", err
+		}
+		return instance.BaseURL(), nil
+	}), obs)
+	skillManager := handler.NewSkillManager(skillRouter, adminRepo, obs)
 	var resourceS3 resource.S3
 	if s3Presigner != nil {
 		resourceS3 = s3Presigner
@@ -249,7 +257,7 @@ func main() {
 	scheduledRepo := scheduledtask.NewMySQLRepository(db)
 	scheduledFlags := scheduledtask.NewRedisFlags(redisClient, redisPrefix)
 	scheduledService := scheduledtask.NewService(
-		scheduledRepo, projectStore, provisioner, metas, sandboxRouter, scheduledFlags,
+		scheduledRepo, projectStore, provisioner, metas, sandboxRouter, scheduledFlags, usageService,
 	)
 	scheduledParser := scheduledtask.NewSandboxParser(selector, obs)
 	webBase := ""
@@ -305,7 +313,7 @@ func main() {
 	templateHandler := handler.NewTemplateHandler(templateService, projectStore, provisioner, sandboxRouter)
 	templateHandler.Metas = metas
 
-	router.RegisterControl(e, adminRepo, projectStore, provisioner, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler, registryHandler, modelHandler, roleHandler, avatarPresigner, cfg.S3PresignExpiry(), sandboxRouter, templateHandler, harnessImporter, stageStore, sandboxRouter, notificationChannelHandler, fdeResourceHandler, publishHandler, cloneHandler, usageService, accessLogHandler)
+	router.RegisterControl(e, adminRepo, projectStore, provisioner, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler, registryHandler, modelHandler, roleHandler, avatarPresigner, cfg.S3PresignExpiry(), sandboxRouter, templateHandler, harnessImporter, stageStore, sandboxRouter, notificationChannelHandler, fdeResourceHandler, publishHandler, cloneHandler, usageService, accessLogHandler, skillManager)
 	router.RegisterScheduledTasks(e, scheduledHandler, authn)
 	router.RegisterChatHistory(e, handler.NewChatHistoryHandler(sandboxRouter, projectStore), authn)
 

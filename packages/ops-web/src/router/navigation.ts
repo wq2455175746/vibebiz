@@ -11,6 +11,7 @@ export const navItems: NavItem[] = [
   { name: 'projects', label: '项目', path: '/projects', icon: 'pi pi-folder' },
   { name: 'sandboxes', label: '沙箱节点', path: '/sandboxes', icon: 'pi pi-server' },
   { name: 'models', label: '模型管理', path: '/models', icon: 'pi pi-box' },
+  { name: 'skills', label: '技能', path: '/skills', icon: 'pi pi-sparkles' },
   { name: 'roles', label: '角色管理', path: '/roles', icon: 'pi pi-user' },
   { name: 'fde-resources', label: 'FDE 资源', path: '/fde-resources', icon: 'pi pi-id-card' },
   { name: 'topics', label: '类别管理', path: '/topics', icon: 'pi pi-sitemap' },

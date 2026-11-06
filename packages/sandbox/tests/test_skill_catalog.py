@@ -82,7 +82,9 @@ def test_parses_quotes_and_block_description(tmp_path):
 
     items = list_skills(make_settings(tmp_path), tmp_path / "p", home=home)
 
-    assert items == [{"name": "block-skill", "description": "line one line two", "source": "user"}]
+    assert [(item["name"], item["description"], item["source"]) for item in items] == [
+        ("block-skill", "line one line two", "user")
+    ]
 
 
 def test_skips_symlink_escaping_root(tmp_path):
@@ -94,3 +96,31 @@ def test_skips_symlink_escaping_root(tmp_path):
     (skills / "escape").symlink_to(outside / "escape", target_is_directory=True)
 
     assert list_skills(make_settings(tmp_path), tmp_path / "p", home=home) == []
+
+
+def test_reads_public_and_user_skills(tmp_path):
+    root = tmp_path / "skills"
+    project = tmp_path / "project"
+    write_skill(root / "public", "public-one", "public-one", "from public")
+    write_skill(root / "users/7/.claude/skills", "user-one", "user-one", "from user")
+    settings = Settings(workspaces_dir=tmp_path / "workspaces", skills_root=root)
+
+    items = list_skills(settings, project, user_id=7, home=tmp_path / "home")
+
+    assert [(item["name"], item["source"]) for item in items] == [
+        ("public-one", "public"),
+        ("user-one", "user"),
+    ]
+
+
+def test_user_skill_wins_over_public(tmp_path):
+    root = tmp_path / "skills"
+    write_skill(root / "public", "same", "same", "public version")
+    write_skill(root / "users/7/.claude/skills", "same", "same", "user version")
+    settings = Settings(workspaces_dir=tmp_path / "workspaces", skills_root=root)
+
+    items = list_skills(settings, tmp_path / "p", user_id=7)
+
+    assert len(items) == 1
+    assert items[0]["description"] == "user version"
+    assert items[0]["source"] == "user"

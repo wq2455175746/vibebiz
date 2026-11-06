@@ -30,3 +30,11 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- printf "%s-workspaces" (include "sandbox.fullname" .) -}}
 {{- end -}}
 {{- end -}}
+
+{{- define "sandbox.skillsClaim" -}}
+{{- if .Values.skillsPersistence.existingClaim -}}
+{{- .Values.skillsPersistence.existingClaim -}}
+{{- else -}}
+{{- printf "%s-skills" (include "sandbox.fullname" .) -}}
+{{- end -}}
+{{- end -}}

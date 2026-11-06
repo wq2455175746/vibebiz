@@ -8,7 +8,7 @@ from opentelemetry.sdk.trace import TracerProvider
 
 from app.config import Settings, load_settings
 from app.errors import WorkspaceError
-from app.observability import configure_observability
+from app.observability import configure_observability, get_logger
 from app.response import envelope
 from app.routers import chat, clone, files, logs, preview, projects, resources, skills, tasks
 from app.services.agent import build_agent
@@ -18,6 +18,7 @@ from app.services.clone import CloneService
 from app.services.project_logs import ProjectLogStore
 from app.services.registry import ActiveRequestCounter, ActiveRequestsMiddleware, run_heartbeat
 from app.services.resources import ResourceStore
+from app.services.skill_store import ensure_layout, resolve_skills_root
 from app.services.versioning import Versioning
 from app.services.workspace import Workspace
 
@@ -31,6 +32,13 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
+        try:
+            ensure_layout(resolve_skills_root(settings))
+        except OSError as exc:
+            get_logger().error(
+                "skills.root.unavailable",
+                extra={"status": "disabled", "error": str(exc)},
+            )
         heartbeat = None
         if settings.cp_registry_url:
             heartbeat = asyncio.create_task(run_heartbeat(settings, active_requests))

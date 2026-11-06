@@ -14,6 +14,7 @@ const sourceLabel: Record<SkillInfo['source'], string> = {
   user: '用户',
   project: '项目',
   plugin: '插件',
+  public: '公共',
 }
 
 async function load() {

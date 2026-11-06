@@ -110,6 +110,41 @@ func (s *RedisStore) DeleteByUser(ctx context.Context, realm Realm, userID int64
 	return nil
 }
 
+func (s *RedisStore) DeleteOthersByUser(ctx context.Context, realm Realm, userID int64, keepSessionID string) error {
+	pattern := s.prefix + ":session:" + string(realm) + ":*"
+	var cursor uint64
+	for {
+		keys, next, err := s.client.Scan(ctx, cursor, pattern, 100).Result()
+		if err != nil {
+			return fmt.Errorf("scan sessions: %w", err)
+		}
+		for _, key := range keys {
+			payload, err := s.client.Get(ctx, key).Bytes()
+			if errors.Is(err, redis.Nil) {
+				continue
+			}
+			if err != nil {
+				return fmt.Errorf("get session: %w", err)
+			}
+			var session Session
+			if err := json.Unmarshal(payload, &session); err != nil {
+				continue
+			}
+			if session.UserID != userID || session.ID == keepSessionID {
+				continue
+			}
+			if err := s.client.Del(ctx, key).Err(); err != nil {
+				return fmt.Errorf("delete session: %w", err)
+			}
+		}
+		if next == 0 {
+			break
+		}
+		cursor = next
+	}
+	return nil
+}
+
 func (s *RedisStore) key(realm Realm, id string) string {
 	return s.prefix + ":session:" + string(realm) + ":" + id
 }

@@ -300,3 +300,15 @@ def test_serialize_result_includes_usage_and_model_usage():
 
     assert event["payload"]["usage"]["input_tokens"] == 10
     assert event["payload"]["modelUsage"]["m"]["inputTokens"] == 10
+
+
+def test_build_options_sets_user_skill_config(tmp_path):
+    root = tmp_path / "skills"
+    settings_with_skills = Settings(
+        workspaces_dir=tmp_path / "workspaces",
+        skills_root=root,
+        agent_mode="claude",
+    )
+    options = build_options(settings_with_skills, tmp_path / "project", None, user_id=7)
+    assert options.env["CLAUDE_CONFIG_DIR"] == str(root / "users/7/.claude")
+    assert options.env["HOME"] == "/tmp/vibebiz-sandbox-home/7"

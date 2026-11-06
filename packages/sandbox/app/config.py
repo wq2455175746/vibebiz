@@ -7,6 +7,7 @@ from pathlib import Path
 @dataclass(frozen=True)
 class Settings:
     workspaces_dir: Path
+    skills_root: Path | None = None
     agent_mode: str = "stub"
     llm_api_key: str = ""
     llm_base_url: str = "https://api.deepseek.com"
@@ -42,6 +43,7 @@ def _seconds(name: str, default: float) -> float:
 
 def load_settings() -> Settings:
     root = Path(os.getenv("WORKSPACES_DIR", "./data/workspaces"))
+    skills_root = Path(os.getenv("SKILLS_ROOT", str(root.parent / "skills"))).resolve()
     advertise_port = int(
         os.getenv("SANDBOX_ADVERTISE_PORT", "") or os.getenv("SANDBOX_PORT", "8000")
     )
@@ -50,6 +52,7 @@ def load_settings() -> Settings:
     )
     return Settings(
         workspaces_dir=root.resolve(),
+        skills_root=skills_root,
         agent_mode=os.getenv("AGENT_MODE", "stub").strip().lower(),
         llm_api_key=os.getenv("LLM_API_KEY", ""),
         llm_base_url=os.getenv("LLM_BASE_URL", "https://api.deepseek.com"),

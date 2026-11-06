@@ -68,6 +68,17 @@ func TestMySQLRepositoryUsageMissingReturnsZero(t *testing.T) {
 	}
 }
 
+func TestUsageIncrementRowUsesUsageTimezoneDate(t *testing.T) {
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		t.Fatal(err)
+	}
+	row := newUsageIncrementRow(1, time.Date(2026, 11, 6, 0, 0, 0, 0, loc), Usage{ProjectsCreated: 1})
+	if row.UsageDate != "2026-11-06" {
+		t.Fatalf("usage date = %q, want 2026-11-06", row.UsageDate)
+	}
+}
+
 func TestMySQLRepositoryIncrement(t *testing.T) {
 	db, mock := newUsageMockDB(t)
 	repo := NewMySQLRepository(db)

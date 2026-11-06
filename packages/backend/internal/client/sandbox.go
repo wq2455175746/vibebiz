@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -93,6 +94,7 @@ type SkillInfo struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Source      string `json:"source"`
+	UpdatedAt   string `json:"updatedAt,omitempty"`
 }
 
 type Sandbox struct {
@@ -337,8 +339,16 @@ func (s *Sandbox) ChatStatus(ctx context.Context, id string) (ChatStatus, error)
 	return status, nil
 }
 
-func (s *Sandbox) ListSkills(ctx context.Context, id string) ([]SkillInfo, error) {
-	raw, err := s.doJSON(ctx, "list_skills", id, http.MethodGet, "/internal/projects/"+url.PathEscape(id)+"/skills", nil)
+func (s *Sandbox) ListSkills(ctx context.Context, id string, userID int64) ([]SkillInfo, error) {
+	q := url.Values{}
+	if userID > 0 {
+		q.Set("userId", strconv.FormatInt(userID, 10))
+	}
+	path := "/internal/projects/" + url.PathEscape(id) + "/skills"
+	if len(q) > 0 {
+		path += "?" + q.Encode()
+	}
+	raw, err := s.doJSON(ctx, "list_skills", id, http.MethodGet, path, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -349,6 +359,83 @@ func (s *Sandbox) ListSkills(ctx context.Context, id string) ([]SkillInfo, error
 		return nil, err
 	}
 	return payload.Skills, nil
+}
+
+func (s *Sandbox) ListStoredSkills(ctx context.Context, scope string, userID int64) ([]SkillInfo, error) {
+	q := url.Values{}
+	q.Set("scope", scope)
+	if userID > 0 {
+		q.Set("userId", strconv.FormatInt(userID, 10))
+	}
+	raw, err := s.doJSON(ctx, "list_stored_skills", "", http.MethodGet, "/internal/skills?"+q.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	var payload struct {
+		Skills []SkillInfo `json:"skills"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, err
+	}
+	return payload.Skills, nil
+}
+
+func (s *Sandbox) UploadSkill(ctx context.Context, scope string, userID int64, filename string, source io.Reader, _ int64, overwrite bool) (SkillInfo, error) {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	_ = writer.WriteField("scope", scope)
+	if userID > 0 {
+		_ = writer.WriteField("userId", strconv.FormatInt(userID, 10))
+	}
+	_ = writer.WriteField("overwrite", strconv.FormatBool(overwrite))
+	part, err := writer.CreateFormFile("file", filename)
+	if err != nil {
+		return SkillInfo{}, err
+	}
+	if _, err := io.Copy(part, source); err != nil {
+		return SkillInfo{}, err
+	}
+	if err := writer.Close(); err != nil {
+		return SkillInfo{}, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.baseURL+"/internal/skills/upload", &body)
+	if err != nil {
+		return SkillInfo{}, err
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	resp, err := s.http.Do(req)
+	if err != nil {
+		return SkillInfo{}, err
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return SkillInfo{}, err
+	}
+	var env envelope
+	_ = json.Unmarshal(raw, &env)
+	if resp.StatusCode >= http.StatusBadRequest {
+		return SkillInfo{}, &APIError{Status: resp.StatusCode, Code: env.Code, Message: env.Message}
+	}
+	var item SkillInfo
+	if err := json.Unmarshal(env.Result, &item); err != nil {
+		return SkillInfo{}, err
+	}
+	return item, nil
+}
+
+func (s *Sandbox) DeleteSkill(ctx context.Context, scope string, userID int64, name string) error {
+	q := url.Values{}
+	if userID > 0 {
+		q.Set("userId", strconv.FormatInt(userID, 10))
+	}
+	path := "/internal/skills/" + url.PathEscape(scope) + "/" + url.PathEscape(name)
+	if len(q) > 0 {
+		path += "?" + q.Encode()
+	}
+	_, err := s.doJSON(ctx, "delete_skill", "", http.MethodDelete, path, nil)
+	return err
 }
 
 func (s *Sandbox) Chat(ctx context.Context, id string, payload []byte) (out io.ReadCloser, err error) {

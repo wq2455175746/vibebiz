@@ -23,3 +23,14 @@ export async function logout(): Promise<void> {
     url: '/auth/logout',
   })
 }
+
+export function changePassword(
+  oldPassword: string,
+  newPassword: string,
+): Promise<{ changed: boolean }> {
+  return request<{ changed: boolean }>({
+    method: 'put',
+    url: '/auth/password',
+    data: { oldPassword, newPassword },
+  })
+}

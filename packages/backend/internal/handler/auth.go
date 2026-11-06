@@ -190,6 +190,35 @@ func (h *AuthHandler) LogoutOps(c echo.Context) error {
 	return response.OK(c, map[string]any{"loggedOut": true})
 }
 
+func (h *AuthHandler) ChangeOpsPassword(c echo.Context) error {
+	session, ok := auth.SessionFrom(c)
+	if !ok {
+		return response.Fail(c, http.StatusUnauthorized, 40101, "unauthorized")
+	}
+	var req struct {
+		OldPassword string `json:"oldPassword"`
+		NewPassword string `json:"newPassword"`
+	}
+	if err := c.Bind(&req); err != nil || req.OldPassword == "" || len(req.NewPassword) < 8 || len(req.NewPassword) > 72 {
+		return response.Fail(c, http.StatusBadRequest, 40001, "invalid password")
+	}
+	err := h.Service.ChangeOpsPassword(c.Request().Context(), session, req.OldPassword, req.NewPassword)
+	switch {
+	case err == nil:
+		return response.OK(c, map[string]any{"changed": true})
+	case errors.Is(err, auth.ErrInvalidOldPassword):
+		return response.Fail(c, http.StatusBadRequest, 40002, "current password incorrect")
+	case errors.Is(err, auth.ErrPasswordUnchanged):
+		return response.Fail(c, http.StatusBadRequest, 40001, "new password must differ from current password")
+	case errors.Is(err, auth.ErrAccountDisabled):
+		return response.Fail(c, http.StatusForbidden, 40301, "account disabled")
+	case errors.Is(err, auth.ErrSessionNotFound):
+		return response.Fail(c, http.StatusUnauthorized, 40101, "unauthorized")
+	default:
+		return response.Fail(c, http.StatusInternalServerError, 50001, "update password failed")
+	}
+}
+
 func (h *AuthHandler) current(c echo.Context, realm auth.Realm, cookies auth.CookieManager) (*auth.Session, error) {
 	identity, err := cookies.Read(c)
 	if err != nil {

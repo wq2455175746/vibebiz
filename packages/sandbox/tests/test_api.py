@@ -36,6 +36,7 @@ class RecordingAgent:
         team_mode=False,
         system_prompt="",
         context="",
+        user_id=0,
     ):
         self.calls.append(
             {
@@ -44,6 +45,7 @@ class RecordingAgent:
                 "session_id": session_id,
                 "agent_roles": agent_roles,
                 "team_mode": team_mode,
+                "user_id": user_id,
             }
         )
         yield {"type": "agent", "payload": {"type": "result", "subtype": "success"}}
@@ -333,7 +335,7 @@ def test_chat_passes_agent_roles_and_team_mode_through_turn_to_agent(tmp_path):
     with client.stream(
         "POST",
         "/internal/projects/p1/chat",
-        json={"message": "组队实现页面", "agentRoles": agent_roles, "teamMode": True},
+        json={"message": "组队实现页面", "agentRoles": agent_roles, "teamMode": True, "userId": 7},
     ) as response:
         assert response.status_code == 200
         body = "".join(response.iter_text())
@@ -344,6 +346,7 @@ def test_chat_passes_agent_roles_and_team_mode_through_turn_to_agent(tmp_path):
     assert turns[0].team_mode is True
 
     assert len(recorder.calls) == 1
+    assert recorder.calls[0]["user_id"] == 7
     assert recorder.calls[0]["agent_roles"] == agent_roles
     assert recorder.calls[0]["team_mode"] is True
 

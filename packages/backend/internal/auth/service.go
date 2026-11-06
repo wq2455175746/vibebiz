@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"vibebiz/internal/dao"
@@ -17,6 +18,8 @@ var (
 	ErrAccountDisabled        = errors.New("account disabled")
 	ErrNoWorkspace            = errors.New("no workspace available")
 	ErrWorkspaceNotAccessible = errors.New("workspace not accessible")
+	ErrInvalidOldPassword     = errors.New("invalid old password")
+	ErrPasswordUnchanged      = errors.New("password unchanged")
 )
 
 type UserFinder interface {
@@ -27,7 +30,9 @@ type UserFinder interface {
 
 type OpsFinder interface {
 	FindOpsByIdentifier(ctx context.Context, identifier string) (*model.OpsUser, error)
+	FindOpsByID(ctx context.Context, id int64) (*model.OpsUser, error)
 	TouchOpsLogin(ctx context.Context, id int64, ip string, at time.Time) error
+	UpdateOpsPassword(ctx context.Context, id int64, hash string) error
 }
 
 type Service struct {
@@ -129,6 +134,44 @@ func (s *Service) LoginOps(ctx context.Context, identifier, password, ip string)
 	}
 	_ = s.Ops.TouchOpsLogin(ctx, user.ID, ip, now)
 	return session, nil
+}
+
+func (s *Service) ChangeOpsPassword(ctx context.Context, session *Session, oldPassword, newPassword string) error {
+	if session == nil || session.Realm != RealmOps || session.UserID <= 0 {
+		return ErrSessionNotFound
+	}
+	user, err := s.Ops.FindOpsByID(ctx, session.UserID)
+	if err != nil {
+		if errors.Is(err, dao.ErrNotFound) {
+			return ErrInvalidOldPassword
+		}
+		return fmt.Errorf("find ops user: %w", err)
+	}
+	if user == nil || user.PasswordHash == nil {
+		return ErrInvalidOldPassword
+	}
+	if user.Status != 1 {
+		return ErrAccountDisabled
+	}
+	if !VerifyPassword(*user.PasswordHash, oldPassword) {
+		return ErrInvalidOldPassword
+	}
+	if oldPassword == newPassword {
+		return ErrPasswordUnchanged
+	}
+	hash, err := HashPassword(newPassword)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+	if err := s.Ops.UpdateOpsPassword(ctx, user.ID, hash); err != nil {
+		return fmt.Errorf("update ops password: %w", err)
+	}
+	if revoker, ok := s.Sessions.(SessionOthersRevoker); ok {
+		if err := revoker.DeleteOthersByUser(ctx, RealmOps, user.ID, session.ID); err != nil {
+			slog.Default().Error("revoke other ops sessions failed", "user_id", user.ID, "error", err)
+		}
+	}
+	return nil
 }
 
 func (s *Service) SwitchWorkspace(ctx context.Context, sid string, workspaceID int64) (*Session, error) {

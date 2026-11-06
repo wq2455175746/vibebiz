@@ -1,0 +1,17 @@
+{{- if not .Values.skillsPersistence.existingClaim }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "sandbox.skillsClaim" . }}
+  labels:
+    {{- include "sandbox.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.skillsPersistence.accessMode }}
+  {{- with .Values.skillsPersistence.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.skillsPersistence.size }}
+{{- end }}

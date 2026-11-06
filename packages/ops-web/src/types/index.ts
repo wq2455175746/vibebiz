@@ -21,6 +21,15 @@ export interface AdminUser {
   createdAt: string
 }
 
+export type SkillScope = 'public' | 'user'
+
+export interface AdminSkill {
+  name: string
+  description: string
+  source: SkillScope
+  updatedAt?: string
+}
+
 export interface AdminUserDetail {
   id: string
   username: string
@@ -207,6 +216,17 @@ export interface AuditEvent {
   action: string
   target: string
   createdAt: string
+}
+
+export interface IPStat {
+  ip: string
+  requests: number
+}
+
+export interface IPStats {
+  items: IPStat[]
+  totalRequests: number
+  uniqueIps: number
 }
 
 export interface AccessLog {

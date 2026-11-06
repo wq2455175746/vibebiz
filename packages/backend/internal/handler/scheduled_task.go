@@ -11,6 +11,7 @@ import (
 	"vibebiz/internal/client"
 	"vibebiz/internal/response"
 	"vibebiz/internal/scheduledtask"
+	"vibebiz/internal/usage"
 )
 
 type ScheduledTaskHandler struct {
@@ -247,6 +248,11 @@ func scheduledTaskID(c echo.Context) (int64, error) {
 }
 
 func scheduledTaskError(c echo.Context, err error) error {
+	var exceeded *usage.QuotaExceededError
+	if errors.As(err, &exceeded) {
+		return response.FailWithResult(c, http.StatusTooManyRequests, quotaCode(exceeded.QuotaType), "daily quota exceeded",
+			map[string]any{"quotaType": exceeded.QuotaType, "used": exceeded.Used, "limit": exceeded.Limit})
+	}
 	switch {
 	case errors.Is(err, scheduledtask.ErrNotFound):
 		return response.Fail(c, http.StatusNotFound, 40401, "scheduled task not found")

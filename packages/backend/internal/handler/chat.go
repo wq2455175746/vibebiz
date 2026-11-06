@@ -87,6 +87,7 @@ func (h *ChatHandler) Chat(c echo.Context) error {
 	}
 
 	payload = h.withAgentRoles(ctx, projectID, payload)
+	payload = withUserID(payload, session.UserID)
 
 	stream, err := h.Sandbox.Chat(ctx, projectID, payload)
 	if err != nil {
@@ -218,6 +219,19 @@ type usageEvent struct {
 	InputTokens   int64  `json:"inputTokens"`
 	OutputTokens  int64  `json:"outputTokens"`
 	ModelRequests int64  `json:"modelRequests"`
+}
+
+func withUserID(payload []byte, userID int64) []byte {
+	var body map[string]any
+	if err := json.Unmarshal(payload, &body); err != nil {
+		return payload
+	}
+	body["userId"] = userID
+	out, err := json.Marshal(body)
+	if err != nil {
+		return payload
+	}
+	return out
 }
 
 func parseUsageEvent(line string) (usageEvent, bool) {

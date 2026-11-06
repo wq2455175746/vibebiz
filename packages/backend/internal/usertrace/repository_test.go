@@ -77,6 +77,56 @@ func TestMySQLRepositoryList(t *testing.T) {
 	}
 }
 
+func TestMySQLRepositoryIPStats(t *testing.T) {
+	db, mock := newTraceMockDB(t)
+	repo := NewMySQLRepository(db)
+	from := time.Date(2026, 11, 1, 0, 0, 0, 0, time.Local)
+	to := time.Date(2026, 11, 7, 0, 0, 0, 0, time.Local)
+
+	mock.ExpectQuery("SELECT COUNT\\(\\*\\) AS total_requests, COUNT\\(DISTINCT ip\\) AS unique_ips FROM `user_access_log` WHERE event_type = \\? AND ip <> \\? AND event_at >= \\? AND event_at < \\? AND user_id = \\?").
+		WithArgs(EventRequest, "", from, to, int64(7)).
+		WillReturnRows(sqlmock.NewRows([]string{"total_requests", "unique_ips"}).AddRow(12, 2))
+	mock.ExpectQuery("SELECT ip, COUNT\\(\\*\\) AS requests FROM `user_access_log` WHERE event_type = \\? AND ip <> \\? AND event_at >= \\? AND event_at < \\? AND user_id = \\? GROUP BY `ip` ORDER BY requests DESC,ip ASC LIMIT \\?").
+		WithArgs(EventRequest, "", from, to, int64(7), 10).
+		WillReturnRows(sqlmock.NewRows([]string{"ip", "requests"}).
+			AddRow("1.2.3.4", 9).
+			AddRow("5.6.7.8", 3))
+
+	stats, err := repo.IPStats(context.Background(), IPStatsQuery{From: &from, To: &to, UserID: 7})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.TotalRequests != 12 || stats.UniqueIPs != 2 || len(stats.Items) != 2 {
+		t.Fatalf("stats = %+v", stats)
+	}
+	if stats.Items[0].IP != "1.2.3.4" || stats.Items[0].Requests != 9 {
+		t.Fatalf("first item = %+v", stats.Items[0])
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestNormalizeIPStatsQuery(t *testing.T) {
+	tests := []struct {
+		name string
+		in   int
+		want int
+	}{
+		{name: "default", in: 0, want: 10},
+		{name: "negative", in: -1, want: 10},
+		{name: "max", in: 100, want: 50},
+		{name: "valid", in: 20, want: 20},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := normalizeIPStatsQuery(IPStatsQuery{Limit: tt.in}).Limit; got != tt.want {
+				t.Fatalf("limit = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestToModelUserIDMapping(t *testing.T) {
 	at := time.Date(2026, 11, 6, 10, 0, 0, 0, time.UTC)
 

@@ -57,16 +57,27 @@ func (f *fakeUserFinder) TouchUserLogin(_ context.Context, id int64, ip string, 
 type fakeOpsFinder struct {
 	user           *model.OpsUser
 	findErr        error
+	findByIDErr    error
+	updateErr      error
 	touchedID      int64
 	touchedIP      string
 	touchedAt      time.Time
 	touchErr       error
 	touchCallCount int
+	updatedID      int64
+	updatedHash    string
 }
 
 func (f *fakeOpsFinder) FindOpsByIdentifier(_ context.Context, _ string) (*model.OpsUser, error) {
 	if f.findErr != nil {
 		return nil, f.findErr
+	}
+	return f.user, nil
+}
+
+func (f *fakeOpsFinder) FindOpsByID(_ context.Context, _ int64) (*model.OpsUser, error) {
+	if f.findByIDErr != nil {
+		return nil, f.findByIDErr
 	}
 	return f.user, nil
 }
@@ -79,10 +90,21 @@ func (f *fakeOpsFinder) TouchOpsLogin(_ context.Context, id int64, ip string, at
 	return f.touchErr
 }
 
+func (f *fakeOpsFinder) UpdateOpsPassword(_ context.Context, id int64, hash string) error {
+	if f.updateErr != nil {
+		return f.updateErr
+	}
+	f.updatedID = id
+	f.updatedHash = hash
+	return nil
+}
+
 type fakeSessionStore struct {
-	items   map[string]*Session
-	err     error
-	deleted []string
+	items       map[string]*Session
+	err         error
+	deleted     []string
+	othersCalls int
+	othersKeep  string
 }
 
 func newFakeSessionStore() *fakeSessionStore {
@@ -130,6 +152,17 @@ func (f *fakeSessionStore) Delete(_ context.Context, realm Realm, id string) err
 	}
 	f.deleted = append(f.deleted, sessionKey(realm, id))
 	delete(f.items, sessionKey(realm, id))
+	return nil
+}
+
+func (f *fakeSessionStore) DeleteOthersByUser(_ context.Context, realm Realm, userID int64, keepSessionID string) error {
+	f.othersCalls++
+	f.othersKeep = keepSessionID
+	for key, session := range f.items {
+		if session.Realm == realm && session.UserID == userID && session.ID != keepSessionID {
+			delete(f.items, key)
+		}
+	}
 	return nil
 }
 
@@ -291,6 +324,72 @@ func TestLoginOpsDisabled(t *testing.T) {
 	svc := &Service{Ops: ops, Sessions: newFakeSessionStore(), Now: time.Now}
 	if _, err := svc.LoginOps(context.Background(), "admin", "secret-pass", ""); !errors.Is(err, ErrAccountDisabled) {
 		t.Fatalf("err = %v, want ErrAccountDisabled", err)
+	}
+}
+
+func TestChangeOpsPassword(t *testing.T) {
+	hash, err := HashPassword("secret-pass")
+	if err != nil {
+		t.Fatalf("hash: %v", err)
+	}
+	ops := &fakeOpsFinder{user: &model.OpsUser{Base: model.Base{ID: 9}, Username: "admin", Status: 1, PasswordHash: &hash}}
+	sessions := newFakeSessionStore()
+	current := &Session{ID: "ops-current", Realm: RealmOps, UserID: 9, Username: "admin"}
+	other := &Session{ID: "ops-other", Realm: RealmOps, UserID: 9, Username: "admin"}
+	_ = sessions.Create(context.Background(), current, time.Hour)
+	_ = sessions.Create(context.Background(), other, time.Hour)
+	svc := &Service{Ops: ops, Sessions: sessions, Now: time.Now}
+
+	if err := svc.ChangeOpsPassword(context.Background(), current, "secret-pass", "new-secret"); err != nil {
+		t.Fatalf("change password: %v", err)
+	}
+	if ops.updatedID != 9 || !VerifyPassword(ops.updatedHash, "new-secret") {
+		t.Fatalf("updated = %d %q", ops.updatedID, ops.updatedHash)
+	}
+	if sessions.othersCalls != 1 || sessions.othersKeep != current.ID {
+		t.Fatalf("revoke calls = %d keep = %q", sessions.othersCalls, sessions.othersKeep)
+	}
+	if _, err := sessions.Get(context.Background(), RealmOps, current.ID); err != nil {
+		t.Fatalf("current session removed: %v", err)
+	}
+	if _, err := sessions.Get(context.Background(), RealmOps, other.ID); !errors.Is(err, ErrSessionNotFound) {
+		t.Fatalf("other session err = %v, want ErrSessionNotFound", err)
+	}
+}
+
+func TestChangeOpsPasswordWrongOldPassword(t *testing.T) {
+	hash, _ := HashPassword("secret-pass")
+	ops := &fakeOpsFinder{user: &model.OpsUser{Base: model.Base{ID: 9}, Username: "admin", Status: 1, PasswordHash: &hash}}
+	svc := &Service{Ops: ops, Sessions: newFakeSessionStore(), Now: time.Now}
+	session := &Session{ID: "ops-current", Realm: RealmOps, UserID: 9}
+
+	if err := svc.ChangeOpsPassword(context.Background(), session, "wrong", "new-secret"); !errors.Is(err, ErrInvalidOldPassword) {
+		t.Fatalf("err = %v, want ErrInvalidOldPassword", err)
+	}
+	if ops.updatedID != 0 {
+		t.Fatal("password should not be updated")
+	}
+}
+
+func TestChangeOpsPasswordDisabled(t *testing.T) {
+	hash, _ := HashPassword("secret-pass")
+	ops := &fakeOpsFinder{user: &model.OpsUser{Base: model.Base{ID: 9}, Username: "admin", Status: 0, PasswordHash: &hash}}
+	svc := &Service{Ops: ops, Sessions: newFakeSessionStore(), Now: time.Now}
+	session := &Session{ID: "ops-current", Realm: RealmOps, UserID: 9}
+
+	if err := svc.ChangeOpsPassword(context.Background(), session, "secret-pass", "new-secret"); !errors.Is(err, ErrAccountDisabled) {
+		t.Fatalf("err = %v, want ErrAccountDisabled", err)
+	}
+}
+
+func TestChangeOpsPasswordUnchanged(t *testing.T) {
+	hash, _ := HashPassword("secret-pass")
+	ops := &fakeOpsFinder{user: &model.OpsUser{Base: model.Base{ID: 9}, Username: "admin", Status: 1, PasswordHash: &hash}}
+	svc := &Service{Ops: ops, Sessions: newFakeSessionStore(), Now: time.Now}
+	session := &Session{ID: "ops-current", Realm: RealmOps, UserID: 9}
+
+	if err := svc.ChangeOpsPassword(context.Background(), session, "secret-pass", "secret-pass"); !errors.Is(err, ErrPasswordUnchanged) {
+		t.Fatalf("err = %v, want ErrPasswordUnchanged", err)
 	}
 }
 

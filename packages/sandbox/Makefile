@@ -2,6 +2,7 @@ SHELL := /bin/bash
 
 -include .env
 WORKSPACES_DIR ?= ../../data/workspaces
+SKILLS_ROOT ?= ../../data/skills
 SANDBOX_PORT ?= 8000
 SANDBOX_NAME ?=
 SANDBOX_ADVERTISE_SCHEME ?= http
@@ -51,7 +52,7 @@ install:
 
 dev: init
 	@test -x $(PY) || (echo "sandbox venv missing, run: make install"; exit 1)
-	@mkdir -p "$(WORKSPACES_DIR)"
+	@mkdir -p "$(WORKSPACES_DIR)" "$(SKILLS_ROOT)"
 	@WORKSPACES_DIR="$(WORKSPACES_DIR)" $(PY) -m uvicorn app.main:app --reload --host 127.0.0.1 --no-access-log --port $(SANDBOX_PORT)
 
 test:

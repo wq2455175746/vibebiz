@@ -1,6 +1,6 @@
 import type { EChartsOption } from 'echarts'
 
-import type { UsageDailyPoint } from '@/types'
+import type { IPStat, UsageDailyPoint } from '@/types'
 
 const BLUE = '#2563eb'
 const BLACK = '#111111'
@@ -132,6 +132,32 @@ export function buildRequestsOption(points: UsageDailyPoint[]): EChartsOption {
         itemStyle: { color: BLUE },
       },
     ],
+  }
+}
+
+export function buildIPStatsOption(items: IPStat[]): EChartsOption {
+  return {
+    grid: { left: 130, right: 36, top: 12, bottom: 28 },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    xAxis: { type: 'value', minInterval: 1, ...baseAxis },
+    yAxis: {
+      type: 'category',
+      inverse: true,
+      data: items.map((item) => item.ip),
+      axisLine: { lineStyle: { color: LIGHT_GRAY } },
+      axisLabel: { color: GRAY, fontSize: 11, width: 110, overflow: 'truncate' },
+      splitLine: { show: false },
+    },
+    series: [
+      {
+        name: '请求数',
+        type: 'bar',
+        data: items.map((item) => item.requests),
+        itemStyle: { color: BLUE },
+        barMaxWidth: 18,
+      },
+    ],
+    animation: false,
   }
 }
 

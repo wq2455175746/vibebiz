@@ -61,7 +61,16 @@ func (f *authOpsFinder) FindOpsByIdentifier(_ context.Context, _ string) (*model
 	return f.user, nil
 }
 
+func (f *authOpsFinder) FindOpsByID(_ context.Context, _ int64) (*model.OpsUser, error) {
+	return f.user, nil
+}
+
 func (f *authOpsFinder) TouchOpsLogin(_ context.Context, _ int64, _ string, _ time.Time) error {
+	return nil
+}
+
+func (f *authOpsFinder) UpdateOpsPassword(_ context.Context, _ int64, hash string) error {
+	f.user.PasswordHash = &hash
 	return nil
 }
 

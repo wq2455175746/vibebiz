@@ -79,10 +79,15 @@ spec:
           volumeMounts:
             - name: workspaces
               mountPath: {{ .Values.persistence.mountPath }}
+            - name: skills
+              mountPath: {{ .Values.skillsPersistence.mountPath }}
       volumes:
         - name: workspaces
           persistentVolumeClaim:
             claimName: {{ include "sandbox.workspaceClaim" . }}
+        - name: skills
+          persistentVolumeClaim:
+            claimName: {{ include "sandbox.skillsClaim" . }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

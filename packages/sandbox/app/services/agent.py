@@ -25,6 +25,7 @@ class Agent(Protocol):
         team_mode: bool = False,
         system_prompt: str = "",
         context: str = "",
+        user_id: int = 0,
     ) -> AsyncIterator[dict]: ...
 
 
@@ -54,6 +55,7 @@ class StubAgent:
         team_mode: bool = False,
         system_prompt: str = "",
         context: str = "",
+        user_id: int = 0,
     ) -> AsyncIterator[dict]:
         tracer = get_tracer()
         with tracer.start_as_current_span("agent.run") as span:
@@ -74,6 +76,7 @@ class StubAgent:
                     team_mode,
                     system_prompt,
                     context,
+                    user_id=user_id,
                 ):
                     yield event
                 status = "success"
@@ -108,6 +111,7 @@ class StubAgent:
         team_mode: bool = False,
         system_prompt: str = "",
         context: str = "",
+        user_id: int = 0,
     ) -> AsyncIterator[dict]:
         session = session_id or str(uuid.uuid4())
         prompt = message.strip()

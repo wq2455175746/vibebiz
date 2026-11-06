@@ -15,7 +15,7 @@ import (
 	"vibebiz/internal/usage"
 )
 
-func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.ProjectStore, provisioner handler.ProjectInitializer, obs *observability.Provider, authn *auth.Authenticator, authHandler *handler.AuthHandler, settingsHandler *handler.SettingsHandler, storageHandler *handler.StorageHandler, metas auth.ProjectMetaStore, notifications *handler.NotificationHandler, registry *handler.SandboxRegistryHandler, models *handler.ModelHandler, roles *handler.RoleHandler, coverSigner handler.CoverURLSigner, coverExpiry time.Duration, adminSandbox handler.AdminSandbox, templates *handler.TemplateHandler, harness handler.HarnessImporter, stageStore projectstage.Store, stageSandbox handler.StageSandbox, notificationChannels *handler.NotificationChannelHandler, fdeResources *handler.FdeResourceHandler, publishApp *handler.PublishHandler, cloneHandler *handler.CloneHandler, usageService *usage.Service, accessLogs *handler.AccessLogHandler) {
+func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.ProjectStore, provisioner handler.ProjectInitializer, obs *observability.Provider, authn *auth.Authenticator, authHandler *handler.AuthHandler, settingsHandler *handler.SettingsHandler, storageHandler *handler.StorageHandler, metas auth.ProjectMetaStore, notifications *handler.NotificationHandler, registry *handler.SandboxRegistryHandler, models *handler.ModelHandler, roles *handler.RoleHandler, coverSigner handler.CoverURLSigner, coverExpiry time.Duration, adminSandbox handler.AdminSandbox, templates *handler.TemplateHandler, harness handler.HarnessImporter, stageStore projectstage.Store, stageSandbox handler.StageSandbox, notificationChannels *handler.NotificationChannelHandler, fdeResources *handler.FdeResourceHandler, publishApp *handler.PublishHandler, cloneHandler *handler.CloneHandler, usageService *usage.Service, accessLogs *handler.AccessLogHandler, skillManager *handler.SkillManager) {
 	var roleStore handler.AgentRoleStore
 	if roles != nil {
 		roleStore = roles.Service
@@ -61,6 +61,11 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 
 	meAPI := api.Group("/me", authn.RequireUser)
 	meAPI.GET("/profile", settingsHandler.GetProfile)
+	if skillManager != nil {
+		meAPI.GET("/skills", skillManager.ListMine)
+		meAPI.POST("/skills", skillManager.UploadMine)
+		meAPI.DELETE("/skills/:name", skillManager.DeleteMine)
+	}
 	if publishApp != nil {
 		meAPI.GET("/published-projects", publishApp.ListPublished)
 	}
@@ -135,7 +140,13 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 		auditLogger = obs.Logger
 	}
 	adminProtected.Use(admin.AuditMiddleware(repo, auditLogger))
+	adminProtected.PUT("/auth/password", authHandler.ChangeOpsPassword)
 	adminProtected.GET("/overview", adminHandler.Overview)
+	if skillManager != nil {
+		adminProtected.GET("/skills", skillManager.AdminList)
+		adminProtected.POST("/skills", skillManager.AdminUpload)
+		adminProtected.DELETE("/skills/:name", skillManager.AdminDelete)
+	}
 	adminProtected.GET("/users", adminHandler.Users)
 	adminProtected.GET("/users/:id", adminHandler.UserDetail)
 	adminProtected.PUT("/users/:id/status", adminHandler.UpdateUserStatus)
@@ -152,6 +163,7 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 	adminProtected.GET("/audit", adminHandler.Audit)
 	if accessLogs != nil {
 		adminProtected.GET("/access-logs", accessLogs.List)
+		adminProtected.GET("/access-logs/ip-stats", accessLogs.IPStats)
 	}
 	if models != nil {
 		adminProtected.GET("/models", models.List)

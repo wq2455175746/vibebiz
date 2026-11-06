@@ -10,10 +10,12 @@ import type {
   AdminQuota,
   AdminScheduledTask,
   AdminSandbox,
+  AdminSkill,
   AdminUser,
   AdminUserDetail,
   AuditEvent,
   FdeResourceInput,
+  IPStats,
   ModelInput,
   Overview,
   PageQuery,
@@ -22,6 +24,7 @@ import type {
   AdminTemplateInput,
   ProjectFile,
   QuotaUpdateInput,
+  SkillScope,
   TemplateInput,
   TopicInput,
   TopicNode,
@@ -249,6 +252,21 @@ export async function getAccessLogs(query: AccessLogQuery = {}): Promise<PageRes
   return toPage<AccessLog>(result, 'logs')
 }
 
+export async function getIPStats(
+  query: { from?: string; to?: string; userId?: number; limit?: number } = {},
+): Promise<IPStats> {
+  const result = await request<IPStats>({
+    method: 'get',
+    url: '/access-logs/ip-stats',
+    params: query,
+  })
+  return {
+    items: result.items ?? [],
+    totalRequests: Number(result.totalRequests ?? 0),
+    uniqueIps: Number(result.uniqueIps ?? 0),
+  }
+}
+
 export async function getModels(): Promise<AdminLLMModel[]> {
   const result = await request<AdminLLMModel[] | { models: AdminLLMModel[] }>({
     method: 'get',
@@ -332,5 +350,50 @@ export async function getUsageDaily(query: {
     method: 'get',
     url: '/usage/daily',
     params: { from: query.from, to: query.to, userId: query.userId || undefined },
+  })
+}
+
+export async function getSkills(query: {
+  scope: SkillScope
+  userId?: number
+  keyword?: string
+}): Promise<AdminSkill[]> {
+  const result = await request<{ skills: AdminSkill[] }>({
+    method: 'get',
+    url: '/skills',
+    params: {
+      scope: query.scope,
+      userId: query.userId || undefined,
+      keyword: query.keyword || undefined,
+    },
+  })
+  return result.skills ?? []
+}
+
+export async function uploadSkill(input: {
+  scope: SkillScope
+  userId?: number
+  file: File
+  overwrite: boolean
+}): Promise<AdminSkill> {
+  const form = new FormData()
+  form.set('scope', input.scope)
+  if (input.userId) {
+    form.set('userId', String(input.userId))
+  }
+  form.set('overwrite', String(input.overwrite))
+  form.set('file', input.file)
+  return request<AdminSkill>({ method: 'post', url: '/skills', data: form })
+}
+
+export async function deleteSkill(input: {
+  scope: SkillScope
+  userId?: number
+  name: string
+}): Promise<void> {
+  await request<{ deleted: boolean }>({
+    method: 'delete',
+    url: `/skills/${encodeURIComponent(input.name)}`,
+    params: { scope: input.scope, userId: input.userId || undefined },
   })
 }

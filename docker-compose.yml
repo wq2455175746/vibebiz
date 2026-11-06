@@ -23,6 +23,7 @@ services:
       - ./packages/sandbox/.env
     environment:
       WORKSPACES_DIR: /data/workspaces
+      SKILLS_ROOT: /data/skills
       SANDBOX_NAME: sandbox
       SANDBOX_ADVERTISE_HOST: sandbox
       SANDBOX_ADVERTISE_PORT: 8000
@@ -42,6 +43,7 @@ services:
       OTEL_TRACES_SAMPLER: ${OTEL_TRACES_SAMPLER:-parentbased_always_on}
     volumes:
       - workspaces:/data/workspaces
+      - ./data/skills:/data/skills
       - ./logs/sandbox:/app/logs
     depends_on:
       logs-init:

@@ -14,14 +14,22 @@ import (
 )
 
 type fakeAccessLogRepo struct {
-	query usertrace.Query
-	page  usertrace.Page
-	err   error
+	query   usertrace.Query
+	page    usertrace.Page
+	err     error
+	ipQuery usertrace.IPStatsQuery
+	ipStats usertrace.IPStats
+	ipErr   error
 }
 
 func (f *fakeAccessLogRepo) List(_ context.Context, query usertrace.Query) (usertrace.Page, error) {
 	f.query = query
 	return f.page, f.err
+}
+
+func (f *fakeAccessLogRepo) IPStats(_ context.Context, query usertrace.IPStatsQuery) (usertrace.IPStats, error) {
+	f.ipQuery = query
+	return f.ipStats, f.ipErr
 }
 
 func TestAccessLogListParsesFilters(t *testing.T) {
@@ -63,6 +71,47 @@ func TestAccessLogListParsesFilters(t *testing.T) {
 		t.Fatal(err)
 	}
 	if env.Code != 0 || env.Result.Total != 1 || len(env.Result.Logs) != 1 || env.Result.Logs[0].Path != "/cp/api/v1/projects" {
+		t.Fatalf("response = %+v", env)
+	}
+}
+
+func TestAccessLogIPStatsParsesFilters(t *testing.T) {
+	repo := &fakeAccessLogRepo{ipStats: usertrace.IPStats{
+		Items:         []usertrace.IPStat{{IP: "1.2.3.4", Requests: 9}},
+		TotalRequests: 9,
+		UniqueIPs:     1,
+	}}
+	h := NewAccessLogHandler(repo)
+	e := echo.New()
+	e.GET("/cp/api/v1/admin/access-logs/ip-stats", h.IPStats)
+
+	req := httptest.NewRequest(http.MethodGet, "/cp/api/v1/admin/access-logs/ip-stats?from=2026-11-01&to=2026-11-06&userId=7&limit=20", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if repo.ipQuery.UserID != 7 || repo.ipQuery.Limit != 20 {
+		t.Fatalf("query = %+v", repo.ipQuery)
+	}
+	wantFrom := time.Date(2026, 11, 1, 0, 0, 0, 0, time.Local)
+	wantTo := time.Date(2026, 11, 7, 0, 0, 0, 0, time.Local)
+	if repo.ipQuery.From == nil || !repo.ipQuery.From.Equal(wantFrom) {
+		t.Fatalf("from = %v, want %v", repo.ipQuery.From, wantFrom)
+	}
+	if repo.ipQuery.To == nil || !repo.ipQuery.To.Equal(wantTo) {
+		t.Fatalf("to = %v, want %v", repo.ipQuery.To, wantTo)
+	}
+
+	var env struct {
+		Code   int               `json:"code"`
+		Result usertrace.IPStats `json:"result"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatal(err)
+	}
+	if env.Code != 0 || env.Result.TotalRequests != 9 || env.Result.UniqueIPs != 1 || len(env.Result.Items) != 1 || env.Result.Items[0].IP != "1.2.3.4" {
 		t.Fatalf("response = %+v", env)
 	}
 }

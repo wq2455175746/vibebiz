@@ -15,18 +15,21 @@ import (
 type fakeSkillClient struct {
 	skills []client.SkillInfo
 	err    error
+	userID int64
 }
 
-func (f fakeSkillClient) ListSkills(context.Context, string) ([]client.SkillInfo, error) {
+func (f *fakeSkillClient) ListSkills(_ context.Context, _ string, userID int64) ([]client.SkillInfo, error) {
+	f.userID = userID
 	return f.skills, f.err
 }
 
 func TestSkillList(t *testing.T) {
-	h := NewSkillHandler(fakeSkillClient{skills: []client.SkillInfo{
+	fake := &fakeSkillClient{skills: []client.SkillInfo{
 		{Name: "demo", Description: "demo skill", Source: "project"},
-	}}, nil)
+	}}
+	h := NewSkillHandler(fake, nil)
 	e := echo.New()
-	e.GET("/dp/api/v1/projects/:id/skills", h.List)
+	routeWithSession(e, http.MethodGet, "/dp/api/v1/projects/:id/skills", h.List, sessionForTest(1))
 
 	req := httptest.NewRequest(http.MethodGet, "/dp/api/v1/projects/p1/skills", nil)
 	rec := httptest.NewRecorder()
@@ -45,5 +48,8 @@ func TestSkillList(t *testing.T) {
 	}
 	if len(env.Result.Skills) != 1 || env.Result.Skills[0].Name != "demo" {
 		t.Fatalf("result = %+v", env.Result.Skills)
+	}
+	if fake.userID != 7 {
+		t.Fatalf("user id = %d", fake.userID)
 	}
 }

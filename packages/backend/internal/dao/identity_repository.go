@@ -47,6 +47,37 @@ func (r *IdentityRepository) FindOpsByIdentifier(ctx context.Context, identifier
 	return &user, nil
 }
 
+func (r *IdentityRepository) FindOpsByID(ctx context.Context, id int64) (*model.OpsUser, error) {
+	var user model.OpsUser
+	err := r.db.WithContext(ctx).Where("id = ?", id).First(&user).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("find ops user: %w", err)
+	}
+	return &user, nil
+}
+
+func (r *IdentityRepository) UpdateOpsPassword(ctx context.Context, id int64, hash string) error {
+	result := r.db.WithContext(ctx).Model(&model.OpsUser{}).
+		Where("id = ?", id).
+		Update("password_hash", hash)
+	if result.Error != nil {
+		return fmt.Errorf("update ops password: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		var count int64
+		if err := r.db.WithContext(ctx).Model(&model.OpsUser{}).Where("id = ?", id).Count(&count).Error; err != nil {
+			return fmt.Errorf("check ops user: %w", err)
+		}
+		if count == 0 {
+			return ErrNotFound
+		}
+	}
+	return nil
+}
+
 func (r *IdentityRepository) WorkspaceIDs(ctx context.Context, userID int64) ([]int64, error) {
 	ids := make([]int64, 0)
 	err := r.db.WithContext(ctx).

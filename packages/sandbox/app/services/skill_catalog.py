@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from datetime import UTC, datetime
 from pathlib import Path
 
 from app.config import Settings
@@ -13,6 +14,7 @@ MAX_READ_BYTES = 16 * 1024
 def list_skills(
     settings: Settings,
     project_dir: Path,
+    user_id: int = 0,
     home: Path | None = None,
 ) -> list[dict[str, str]]:
     allowed = _allowed_names(settings.agent_skills)
@@ -20,9 +22,9 @@ def list_skills(
         return []
 
     found: dict[str, dict[str, str]] = {}
-    for source, root in _roots(settings, project_dir, home or Path.home()):
-        for skill_file in _skill_files(root):
-            item = _read_skill(skill_file, source)
+    for source, root in _roots(settings, project_dir, home or Path.home(), user_id):
+        for skill_file in iter_skill_files(root):
+            item = read_skill(skill_file, source)
             if item is None:
                 continue
             if allowed is not None and item["name"] not in allowed:
@@ -46,9 +48,14 @@ def _roots(
     settings: Settings,
     project_dir: Path,
     home: Path,
+    user_id: int,
 ) -> Iterable[tuple[str, Path]]:
     yield "project", project_dir / ".claude" / "skills"
-    yield "user", home / ".claude" / "skills"
+    if user_id > 0:
+        yield "user", _skills_root(settings) / "users" / str(user_id) / ".claude" / "skills"
+    else:
+        yield "user", home / ".claude" / "skills"
+    yield "public", _skills_root(settings) / "public"
     for raw in settings.agent_plugins.split(","):
         path = raw.strip()
         if not path:
@@ -58,7 +65,13 @@ def _roots(
         yield "plugin", plugin / "skills"
 
 
-def _skill_files(root: Path) -> Iterable[Path]:
+def _skills_root(settings: Settings) -> Path:
+    if settings.skills_root is not None:
+        return settings.skills_root.resolve()
+    return (settings.workspaces_dir.parent / "skills").resolve()
+
+
+def iter_skill_files(root: Path) -> Iterable[Path]:
     try:
         resolved_root = root.resolve()
     except OSError:
@@ -80,7 +93,7 @@ def _skill_files(root: Path) -> Iterable[Path]:
             yield resolved
 
 
-def _read_skill(path: Path, source: str) -> dict[str, str] | None:
+def read_skill(path: Path, source: str) -> dict[str, str] | None:
     try:
         text = path.read_text(encoding="utf-8", errors="replace")[:MAX_READ_BYTES]
     except OSError:
@@ -95,7 +108,16 @@ def _read_skill(path: Path, source: str) -> dict[str, str] | None:
     if len(description) > MAX_DESCRIPTION:
         description = f"{description[: MAX_DESCRIPTION - 3]}..."
 
-    return {"name": name, "description": description, "source": source}
+    try:
+        updated_at = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC).isoformat()
+    except OSError:
+        updated_at = ""
+    return {
+        "name": name,
+        "description": description,
+        "source": source,
+        "updatedAt": updated_at,
+    }
 
 
 def _parse_frontmatter(text: str) -> dict[str, str]:

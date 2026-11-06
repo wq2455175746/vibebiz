@@ -9,6 +9,7 @@ import (
 	"vibebiz/internal/auth"
 	daomodel "vibebiz/internal/dao/model"
 	"vibebiz/internal/store"
+	"vibebiz/internal/usage"
 )
 
 type fakeRepo struct {
@@ -122,6 +123,23 @@ func (f *fakeImmediate) EnqueueNow(_ context.Context, taskID int64) error {
 	return f.err
 }
 
+type fakeUsageGuard struct {
+	checkErr       error
+	checkedUserID  int64
+	recordedUserID int64
+	recordErr      error
+}
+
+func (f *fakeUsageGuard) CheckProjectCreate(_ context.Context, userID int64) error {
+	f.checkedUserID = userID
+	return f.checkErr
+}
+
+func (f *fakeUsageGuard) RecordProjectCreate(_ context.Context, userID int64) error {
+	f.recordedUserID = userID
+	return f.recordErr
+}
+
 type fakeMetas struct {
 	set map[string]auth.ProjectMeta
 }
@@ -146,7 +164,7 @@ func newServiceFixture(t *testing.T) (*Service, *fakeRepo, *store.MemoryProjectS
 	}}}
 	projects := store.NewMemoryProjectStore()
 	metas := &fakeMetas{}
-	service := NewService(repo, projects, &fakeInitializer{id: 77}, metas, nil, nil)
+	service := NewService(repo, projects, &fakeInitializer{id: 77}, metas, nil, nil, nil)
 	service.Now = func() time.Time { return time.Date(2026, 10, 30, 0, 0, 0, 0, time.UTC) }
 	service.NewID = func() string { return "task-project-1" }
 	return service, repo, projects, metas
@@ -184,6 +202,44 @@ func TestCreateScheduledTaskCreatesProject(t *testing.T) {
 	}
 	if view.RunCount != 1 {
 		t.Fatalf("run count = %d", view.RunCount)
+	}
+}
+
+func TestCreateScheduledTaskChecksAndRecordsQuota(t *testing.T) {
+	service, _, _, _ := newServiceFixture(t)
+	usageGuard := &fakeUsageGuard{}
+	service.Usage = usageGuard
+
+	if _, err := service.Create(context.Background(), CreateInput{
+		Name: "每日检查", Description: "检查依赖", ScheduleType: ScheduleDaily,
+		Time: "09:00", Timezone: "Asia/Shanghai", Source: SourceManual,
+	}, 7, 5); err != nil {
+		t.Fatal(err)
+	}
+	if usageGuard.checkedUserID != 7 || usageGuard.recordedUserID != 7 {
+		t.Fatalf("usage guard = %+v", usageGuard)
+	}
+}
+
+func TestCreateScheduledTaskRejectsQuotaExceeded(t *testing.T) {
+	service, repo, projects, _ := newServiceFixture(t)
+	service.Usage = &fakeUsageGuard{checkErr: &usage.QuotaExceededError{
+		QuotaType: "project", Used: 1, Limit: 1,
+	}}
+
+	_, err := service.Create(context.Background(), CreateInput{
+		Name: "每日检查", Description: "检查依赖", ScheduleType: ScheduleDaily,
+		Time: "09:00", Timezone: "Asia/Shanghai", Source: SourceManual,
+	}, 7, 5)
+	var exceeded *usage.QuotaExceededError
+	if !errors.As(err, &exceeded) {
+		t.Fatalf("err = %v, want QuotaExceededError", err)
+	}
+	if _, err := projects.Get(context.Background(), "task-project-1"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("project should not be created: %v", err)
+	}
+	if len(repo.items) != 0 {
+		t.Fatalf("task should not be created: %+v", repo.items)
 	}
 }
 

@@ -18,3 +18,26 @@ export function validateNewPassword(password: string, confirm: string): string {
   }
   return ''
 }
+
+export function validatePasswordChange(
+  oldPassword: string,
+  newPassword: string,
+  confirm: string,
+): string {
+  if (!oldPassword) {
+    return '请输入当前密码'
+  }
+  if (newPassword.length < 8) {
+    return '新密码至少 8 位'
+  }
+  if (newPassword.length > 72) {
+    return '新密码不能超过 72 位'
+  }
+  if (newPassword !== confirm) {
+    return '两次密码不一致'
+  }
+  if (newPassword === oldPassword) {
+    return '新密码不能与当前密码相同'
+  }
+  return ''
+}

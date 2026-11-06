@@ -10,6 +10,7 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_INDEX_URL=${PIP_INDEX_URL} \
     WORKSPACES_DIR=/data/workspaces \
+    SKILLS_ROOT=/data/skills \
     HOME=/home/appuser
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -34,8 +35,8 @@ COPY . .
 
 RUN groupadd -r -g 10001 appuser \
     && useradd -r -u 10001 -g appuser -m appuser \
-    && mkdir -p /home/appuser /data/workspaces \
-    && chown -R appuser:appuser /home/appuser /app /data/workspaces \
+    && mkdir -p /home/appuser /data/workspaces /data/skills \
+    && chown -R appuser:appuser /home/appuser /app /data/workspaces /data/skills \
     && chmod 0700 /home/appuser
 
 USER appuser

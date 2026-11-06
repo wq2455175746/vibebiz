@@ -1,7 +1,49 @@
 <script setup lang="ts">
+import Button from 'primevue/button'
+import Password from 'primevue/password'
+import { ref } from 'vue'
+
+import { changePassword } from '@/api/auth'
+import { ApiError } from '@/api/client'
 import { useOpsStore } from '@/stores/ops'
+import { validatePasswordChange } from '@/utils/userAdmin'
 
 const ops = useOpsStore()
+
+const oldPassword = ref('')
+const newPassword = ref('')
+const confirmPassword = ref('')
+const passwordError = ref('')
+const passwordNotice = ref('')
+const savingPassword = ref(false)
+
+async function submitPassword() {
+  passwordError.value = validatePasswordChange(
+    oldPassword.value,
+    newPassword.value,
+    confirmPassword.value,
+  )
+  passwordNotice.value = ''
+  if (passwordError.value) {
+    return
+  }
+  savingPassword.value = true
+  try {
+    await changePassword(oldPassword.value, newPassword.value)
+    oldPassword.value = ''
+    newPassword.value = ''
+    confirmPassword.value = ''
+    passwordNotice.value = '密码已更新，其他设备已退出登录'
+  } catch (err) {
+    if (err instanceof ApiError && err.code === 40002) {
+      passwordError.value = '当前密码不正确'
+    } else {
+      passwordError.value = err instanceof Error ? err.message : '修改密码失败'
+    }
+  } finally {
+    savingPassword.value = false
+  }
+}
 
 const services = [
   { label: 'CP 控制面', value: 'vibebiz-dev.com:8080', note: '业务前缀 /cp/api/v1' },
@@ -42,12 +84,56 @@ const security = [
     <header class="page-head">
       <div>
         <h1>系统设置</h1>
-        <p class="page-desc">静态只读运行信息，不在本页修改配置。</p>
+        <p class="page-desc">管理当前运营账号密码，运行信息保持只读。</p>
       </div>
-      <span class="tag">只读</span>
+      <span class="tag">本地</span>
     </header>
 
     <div class="settings-grid">
+      <section class="setting-card">
+        <h2>账号安全</h2>
+        <form class="password-form" @submit.prevent="submitPassword">
+          <label class="password-field">
+            <span>当前密码</span>
+            <Password
+              v-model="oldPassword"
+              toggle-mask
+              :feedback="false"
+              autocomplete="current-password"
+              :disabled="savingPassword"
+            />
+          </label>
+          <label class="password-field">
+            <span>新密码</span>
+            <Password
+              v-model="newPassword"
+              toggle-mask
+              :feedback="false"
+              autocomplete="new-password"
+              :disabled="savingPassword"
+            />
+          </label>
+          <label class="password-field">
+            <span>确认新密码</span>
+            <Password
+              v-model="confirmPassword"
+              toggle-mask
+              :feedback="false"
+              autocomplete="new-password"
+              :disabled="savingPassword"
+            />
+          </label>
+          <p class="setting-note">
+            新密码 8-72 位；修改成功后当前会话保留，其他设备会退出登录。
+          </p>
+          <p v-if="passwordError" class="error-text" role="alert">{{ passwordError }}</p>
+          <p v-if="passwordNotice" class="password-notice" role="status">{{ passwordNotice }}</p>
+          <div class="password-actions">
+            <Button type="submit" label="修改密码" :loading="savingPassword" />
+          </div>
+        </form>
+      </section>
+
       <section class="setting-card">
         <h2>服务与端口</h2>
         <div class="setting-list">
@@ -113,6 +199,38 @@ const security = [
 .setting-list {
   display: flex;
   flex-direction: column;
+}
+
+.password-form {
+  display: grid;
+  gap: 14px;
+  max-width: 420px;
+  padding: 16px 20px 20px;
+}
+
+.password-field {
+  display: grid;
+  gap: 6px;
+}
+
+.password-field > span {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.password-field :deep(.p-password),
+.password-field :deep(.p-password-input) {
+  width: 100%;
+}
+
+.password-notice {
+  color: var(--blue);
+  font-size: 13px;
+}
+
+.password-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .setting-row {

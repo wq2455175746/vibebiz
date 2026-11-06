@@ -89,6 +89,10 @@ func auditAction(method, route string) (string, string) {
 		return "notification.publish", "notification"
 	case "/cp/api/v1/admin/notifications/:id/unpublish":
 		return "notification.unpublish", "notification"
+	case "/cp/api/v1/admin/skills":
+		return "skill.upload", "skill"
+	case "/cp/api/v1/admin/skills/:name":
+		return "skill.delete", "skill"
 	}
 	resourceType := "admin"
 	if strings.Contains(route, "notifications") {

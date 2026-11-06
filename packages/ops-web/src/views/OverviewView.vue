@@ -2,12 +2,20 @@
 import { computed, onMounted, ref } from 'vue'
 import Select from 'primevue/select'
 
-import { getOverview, getProjects, getUsageDaily, getUsers } from '@/api/admin'
+import { getIPStats, getOverview, getProjects, getUsageDaily, getUsers } from '@/api/admin'
 import DataTable from '@/components/DataTable.vue'
 import UsageTrendChart from '@/components/UsageTrendChart.vue'
-import type { AdminProject, AdminUser, Overview, TableColumn, UsageDailyResult } from '@/types'
+import type {
+  AdminProject,
+  AdminUser,
+  IPStats,
+  Overview,
+  TableColumn,
+  UsageDailyResult,
+} from '@/types'
 import { formatDateTime, formatNumber } from '@/utils/format'
 import {
+  buildIPStatsOption,
   buildProjectsOption,
   buildRequestsOption,
   buildTokensOption,
@@ -20,11 +28,14 @@ const overview = ref<Overview | null>(null)
 const projects = ref<AdminProject[]>([])
 const users = ref<AdminUser[]>([])
 const usage = ref<UsageDailyResult | null>(null)
+const ipStats = ref<IPStats | null>(null)
 const loading = ref(true)
 const usageLoading = ref(true)
+const ipStatsLoading = ref(true)
 const overviewError = ref('')
 const projectsError = ref('')
 const usageError = ref('')
+const ipStatsError = ref('')
 const rangeDays = ref(30)
 const selectedUserId = ref<number | null>(null)
 
@@ -46,6 +57,7 @@ const projectsOption = computed(() => buildProjectsOption(points.value))
 const tokensOption = computed(() => buildTokensOption(points.value))
 const requestsOption = computed(() => buildRequestsOption(points.value))
 const uploadsOption = computed(() => buildUploadsOption(points.value))
+const ipStatsOption = computed(() => buildIPStatsOption(ipStats.value?.items ?? []))
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : '加载失败'
@@ -78,6 +90,28 @@ async function loadUsage() {
   }
 }
 
+async function loadIPStats() {
+  ipStatsLoading.value = true
+  ipStatsError.value = ''
+  const days = dateRangeForDays(rangeDays.value)
+  try {
+    ipStats.value = await getIPStats({
+      from: days[0],
+      to: days[days.length - 1],
+      userId: selectedUserId.value ?? undefined,
+      limit: 10,
+    })
+  } catch (error) {
+    ipStatsError.value = message(error)
+  } finally {
+    ipStatsLoading.value = false
+  }
+}
+
+async function loadCharts() {
+  await Promise.all([loadUsage(), loadIPStats()])
+}
+
 async function load() {
   loading.value = true
   overviewError.value = ''
@@ -101,7 +135,7 @@ async function load() {
     users.value = usersResult.value.items
   }
   loading.value = false
-  await loadUsage()
+  await loadCharts()
 }
 
 function selectRange(days: number) {
@@ -109,12 +143,12 @@ function selectRange(days: number) {
     return
   }
   rangeDays.value = days
-  void loadUsage()
+  void loadCharts()
 }
 
 function selectUser(value: number | null) {
   selectedUserId.value = value
-  void loadUsage()
+  void loadCharts()
 }
 
 onMounted(load)
@@ -220,6 +254,20 @@ onMounted(load)
         </article>
       </div>
       <p v-if="usageLoading" class="muted small">正在加载使用趋势...</p>
+
+      <article class="chart-card chart-card-wide">
+        <div class="chart-head">
+          <h3>访问 IP Top 10</h3>
+          <span class="muted small">
+            总请求 {{ formatNumber(ipStats?.totalRequests ?? 0) }} / 共
+            {{ formatNumber(ipStats?.uniqueIps ?? 0) }} 个 IP
+          </span>
+        </div>
+        <p v-if="ipStatsError" class="error-text inline-error">{{ ipStatsError }}</p>
+        <p v-else-if="ipStatsLoading" class="muted small">正在加载 IP 统计...</p>
+        <p v-else-if="!ipStats?.items.length" class="muted small">暂无访问记录</p>
+        <UsageTrendChart v-else :option="ipStatsOption" height="320px" />
+      </article>
     </section>
 
     <section class="section">
@@ -291,6 +339,10 @@ onMounted(load)
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 12px;
+}
+
+.chart-card-wide {
+  margin-top: 16px;
 }
 
 .chart-head {

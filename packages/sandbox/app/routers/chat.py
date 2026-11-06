@@ -40,6 +40,7 @@ class ChatRequest(BaseModel):
     teamMode: bool = False
     systemPrompt: str = ""
     context: str = ""
+    userId: int = 0
 
 
 def _count(project_id: str, status: str) -> None:
@@ -77,6 +78,7 @@ async def chat(project_id: str, body: ChatRequest, request: Request) -> Streamin
             body.teamMode,
             system_prompt=body.systemPrompt,
             context=body.context,
+            user_id=body.userId,
         )
     except TurnInProgress:
         _count(project_id, "409")

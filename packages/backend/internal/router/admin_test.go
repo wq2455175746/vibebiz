@@ -163,6 +163,49 @@ func TestAdminUserDetailAndPassword(t *testing.T) {
 	}
 }
 
+func TestAdminChangesOwnPassword(t *testing.T) {
+	e, _, authState := newCP(t, store.NewMemoryProjectStore())
+	authState.sessions.items[routerSessionKey(auth.RealmOps, "ops-other")] = &auth.Session{
+		ID: "ops-other", Realm: auth.RealmOps, UserID: 9, Username: "admin",
+	}
+
+	rec := serveWithAuthBody(e, http.MethodPut, "/cp/api/v1/admin/auth/password", authState.userCookie, `{"oldPassword":"admin-pass","newPassword":"new-password"}`)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("user cookie status = %d, want 401", rec.Code)
+	}
+
+	rec = serveWithAuthBody(e, http.MethodPut, "/cp/api/v1/admin/auth/password", authState.opsCookie, `{"oldPassword":"admin-pass","newPassword":"short"}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("short password status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+
+	rec = serveWithAuthBody(e, http.MethodPut, "/cp/api/v1/admin/auth/password", authState.opsCookie, `{"oldPassword":"wrong","newPassword":"new-password"}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("wrong old password status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var failure envelope
+	if err := json.Unmarshal(rec.Body.Bytes(), &failure); err != nil {
+		t.Fatalf("decode failure: %v", err)
+	}
+	if failure.Code != 40002 {
+		t.Fatalf("failure code = %d, want 40002", failure.Code)
+	}
+
+	rec = serveWithAuthBody(e, http.MethodPut, "/cp/api/v1/admin/auth/password", authState.opsCookie, `{"oldPassword":"admin-pass","newPassword":"new-password"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("change password status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if !auth.VerifyPassword(authState.ops.updatedHash, "new-password") {
+		t.Fatal("password hash not updated")
+	}
+	if _, ok := authState.sessions.items[routerSessionKey(auth.RealmOps, "ops-sid")]; !ok {
+		t.Fatal("current session should remain")
+	}
+	if _, ok := authState.sessions.items[routerSessionKey(auth.RealmOps, "ops-other")]; ok {
+		t.Fatal("other session should be revoked")
+	}
+}
+
 func TestAdminUpdatesQuota(t *testing.T) {
 	e, _, authState := newCP(t, store.NewMemoryProjectStore())
 

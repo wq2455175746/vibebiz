@@ -75,6 +75,55 @@ func TestFindOpsByIdentifierNotFound(t *testing.T) {
 	}
 }
 
+func TestFindOpsByID(t *testing.T) {
+	db, mock := newMockDB(t)
+	repo := NewIdentityRepository(db)
+
+	mock.ExpectQuery("SELECT \\* FROM `ops_user` WHERE id = \\? AND `ops_user`\\.`deleted_at` IS NULL ORDER BY `ops_user`\\.`id` LIMIT \\?").
+		WithArgs(int64(9), 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "status"}).
+			AddRow(9, "admin", 1))
+
+	user, err := repo.FindOpsByID(context.Background(), 9)
+	if err != nil {
+		t.Fatalf("find: %v", err)
+	}
+	if user.ID != 9 || user.Username != "admin" {
+		t.Fatalf("ops user = %+v", user)
+	}
+}
+
+func TestFindOpsByIDNotFound(t *testing.T) {
+	db, mock := newMockDB(t)
+	repo := NewIdentityRepository(db)
+
+	mock.ExpectQuery("SELECT \\* FROM `ops_user` WHERE").
+		WithArgs(int64(99), 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}))
+
+	if _, err := repo.FindOpsByID(context.Background(), 99); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestUpdateOpsPassword(t *testing.T) {
+	db, mock := newMockDB(t)
+	repo := NewIdentityRepository(db)
+
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE `ops_user` SET .*WHERE id = \\?").
+		WithArgs("new-hash", sqlmock.AnyArg(), int64(9)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	if err := repo.UpdateOpsPassword(context.Background(), 9, "new-hash"); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestWorkspaceIDs(t *testing.T) {
 	db, mock := newMockDB(t)
 	repo := NewIdentityRepository(db)

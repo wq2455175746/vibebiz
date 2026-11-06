@@ -68,10 +68,21 @@ func (r *MySQLRepository) Usage(ctx context.Context, userID int64, date time.Tim
 	}, nil
 }
 
-func (r *MySQLRepository) Increment(ctx context.Context, userID int64, date time.Time, delta Usage) error {
-	row := &model.UserUsageDaily{
+type usageIncrementRow struct {
+	UserID          int64  `gorm:"column:user_id"`
+	UsageDate       string `gorm:"column:usage_date;type:date"`
+	ProjectsCreated int64  `gorm:"column:projects_created"`
+	InputTokens     int64  `gorm:"column:input_tokens"`
+	OutputTokens    int64  `gorm:"column:output_tokens"`
+	ModelRequests   int64  `gorm:"column:model_requests"`
+	UploadCount     int64  `gorm:"column:upload_count"`
+	UploadBytes     int64  `gorm:"column:upload_bytes"`
+}
+
+func newUsageIncrementRow(userID int64, date time.Time, delta Usage) *usageIncrementRow {
+	return &usageIncrementRow{
 		UserID:          userID,
-		UsageDate:       date,
+		UsageDate:       date.Format("2006-01-02"),
 		ProjectsCreated: delta.ProjectsCreated,
 		InputTokens:     delta.InputTokens,
 		OutputTokens:    delta.OutputTokens,
@@ -79,7 +90,11 @@ func (r *MySQLRepository) Increment(ctx context.Context, userID int64, date time
 		UploadCount:     delta.UploadCount,
 		UploadBytes:     delta.UploadBytes,
 	}
-	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
+}
+
+func (r *MySQLRepository) Increment(ctx context.Context, userID int64, date time.Time, delta Usage) error {
+	row := newUsageIncrementRow(userID, date, delta)
+	return r.db.WithContext(ctx).Table("user_usage_daily").Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "user_id"}, {Name: "usage_date"}},
 		DoUpdates: clause.Assignments(map[string]any{
 			"projects_created": gorm.Expr("projects_created + ?", delta.ProjectsCreated),

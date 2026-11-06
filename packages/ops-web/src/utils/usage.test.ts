@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildProjectsOption, dateRange, dateRangeForDays, fillUsageSeries } from './usage'
+import {
+  buildIPStatsOption,
+  buildProjectsOption,
+  dateRange,
+  dateRangeForDays,
+  fillUsageSeries,
+} from './usage'
 
 describe('dateRange', () => {
   it('returns inclusive dates', () => {
@@ -47,6 +53,20 @@ describe('fillUsageSeries', () => {
     expect(filled[0].projectsCreated).toBe(0)
     expect(filled[1].projectsCreated).toBe(3)
     expect(filled[1].uploadBytes).toBe(300)
+  })
+})
+
+describe('buildIPStatsOption', () => {
+  it('uses ip categories and request values', () => {
+    const option = buildIPStatsOption([
+      { ip: '1.2.3.4', requests: 9 },
+      { ip: '5.6.7.8', requests: 3 },
+    ])
+    const yAxis = option.yAxis as { data: string[]; inverse: boolean }
+    const series = option.series as Array<{ data: number[] }>
+    expect(yAxis.data).toEqual(['1.2.3.4', '5.6.7.8'])
+    expect(yAxis.inverse).toBe(true)
+    expect(series[0].data).toEqual([9, 3])
   })
 })
 
