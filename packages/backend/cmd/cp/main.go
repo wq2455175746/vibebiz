@@ -126,13 +126,17 @@ func main() {
 	accessLogHandler := handler.NewAccessLogHandler(traceRepo)
 	var traceRecorder *usertrace.Recorder
 	if cfg.UserTraceEnabled {
-		traceRecorder = usertrace.NewRecorder(cfg.UserTraceDir, usertrace.TrimPlane(cfg.Plane), obs.Logger)
-		traceCtx, traceCancel := context.WithCancel(ctx)
-		defer traceCancel()
-		go usertrace.NewSyncer(cfg.UserTraceDir, usertrace.TrimPlane(cfg.Plane), traceRepo, cfg.UserTraceSyncInterval, obs.Logger).Run(traceCtx)
+		if err := os.MkdirAll(cfg.UserTraceDir, 0o755); err != nil {
+			obs.Logger.Error("user trace dir unavailable; tracing disabled", "dir", cfg.UserTraceDir, "error", err)
+		} else {
+			traceRecorder = usertrace.NewRecorder(cfg.UserTraceDir, usertrace.TrimPlane(cfg.Plane), obs.Logger)
+			traceCtx, traceCancel := context.WithCancel(ctx)
+			defer traceCancel()
+			go usertrace.NewSyncer(cfg.UserTraceDir, usertrace.TrimPlane(cfg.Plane), traceRepo, cfg.UserTraceSyncInterval, obs.Logger).Run(traceCtx)
+		}
 	}
 	authHandler := &handler.AuthHandler{Service: authService, Account: accountService, UserCookie: userCookie, OpsCookie: opsCookie}
-	if cfg.UserTraceEnabled {
+	if traceRecorder != nil {
 		authHandler.Trace = traceRecorder
 	}
 	settingsHandler := handler.NewSettingsHandler(accountService, userCookie)
@@ -281,7 +285,7 @@ func main() {
 	defer asynqWorker.Shutdown()
 
 	e := server.New(cfg, obs)
-	if cfg.UserTraceEnabled {
+	if traceRecorder != nil {
 		e.Use(usertrace.Middleware(traceRecorder, obs.Logger))
 	}
 	e.Use(requestCounter.Middleware())

@@ -47,6 +47,7 @@ services:
       WORKSPACES_DIR: /data/workspaces
       PUBLISH_DIR: /data/published
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
+      USER_TRACE_DIR: /app/logs/user-trace
     volumes:
       - ./logs/backend:/app/logs
       - ./workspaces:/data/workspaces:ro

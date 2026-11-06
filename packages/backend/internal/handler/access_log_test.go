@@ -35,7 +35,7 @@ func TestAccessLogListParsesFilters(t *testing.T) {
 	e := echo.New()
 	e.GET("/cp/api/v1/admin/access-logs", h.List)
 
-	req := httptest.NewRequest(http.MethodGet, "/cp/api/v1/admin/access-logs?page=2&pageSize=20&keyword=wang&eventType=request&from=2026-11-01&to=2026-11-06", nil)
+	req := httptest.NewRequest(http.MethodGet, "/cp/api/v1/admin/access-logs?page=2&pageSize=20&keyword=wang&eventType=request&from=2026-11-01T00:00:00Z&to=2026-11-06T00:00:00Z", nil)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -48,7 +48,7 @@ func TestAccessLogListParsesFilters(t *testing.T) {
 	if repo.query.From == nil || repo.query.To == nil {
 		t.Fatalf("time range = %+v", repo.query)
 	}
-	if repo.query.To.Sub(*repo.query.From) != 6*24*time.Hour {
+	if repo.query.To.Sub(*repo.query.From) != 5*24*time.Hour {
 		t.Fatalf("time range = %v - %v", repo.query.From, repo.query.To)
 	}
 
@@ -64,5 +64,31 @@ func TestAccessLogListParsesFilters(t *testing.T) {
 	}
 	if env.Code != 0 || env.Result.Total != 1 || len(env.Result.Logs) != 1 || env.Result.Logs[0].Path != "/cp/api/v1/projects" {
 		t.Fatalf("response = %+v", env)
+	}
+}
+
+func TestAccessLogListDateOnlyUsesLocalDay(t *testing.T) {
+	repo := &fakeAccessLogRepo{}
+	h := NewAccessLogHandler(repo)
+	e := echo.New()
+	e.GET("/cp/api/v1/admin/access-logs", h.List)
+
+	req := httptest.NewRequest(http.MethodGet, "/cp/api/v1/admin/access-logs?from=2026-11-01&to=2026-11-06", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if repo.query.From == nil || repo.query.To == nil {
+		t.Fatalf("time range = %+v", repo.query)
+	}
+	wantFrom := time.Date(2026, 11, 1, 0, 0, 0, 0, time.Local)
+	wantTo := time.Date(2026, 11, 7, 0, 0, 0, 0, time.Local)
+	if !repo.query.From.Equal(wantFrom) {
+		t.Fatalf("from = %v, want %v", repo.query.From, wantFrom)
+	}
+	if !repo.query.To.Equal(wantTo) {
+		t.Fatalf("to = %v, want %v", repo.query.To, wantTo)
 	}
 }

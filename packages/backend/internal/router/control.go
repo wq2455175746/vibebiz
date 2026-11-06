@@ -47,8 +47,8 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 		api.POST("/templates/:id/use", templates.Use, authn.RequireUser)
 	}
 	api.POST("/auth/login", authHandler.LoginUser)
-	api.GET("/auth/me", authHandler.MeUser)
-	api.POST("/auth/logout", authHandler.LogoutUser)
+	api.GET("/auth/me", authHandler.MeUser, authHandler.AttachUserSession)
+	api.POST("/auth/logout", authHandler.LogoutUser, authHandler.AttachUserSession)
 	api.PUT("/auth/workspace", authHandler.SwitchWorkspace, authn.RequireUser)
 
 	meAPI := api.Group("/me", authn.RequireUser)

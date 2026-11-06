@@ -55,8 +55,13 @@ func (h *AuthHandler) LoginUser(c echo.Context) error {
 		h.recordLogin(c, req.Identifier, session, "failed", failure, time.Since(start))
 		return response.Fail(c, failure.status, failure.code, failure.message)
 	}
-	h.recordLogin(c, req.Identifier, session, "success", loginFailure{status: http.StatusOK}, time.Since(start))
-	return h.meResult(c, session)
+	handlerErr := h.meResult(c, session)
+	status := c.Response().Status
+	if handlerErr != nil {
+		status = http.StatusInternalServerError
+	}
+	h.recordLogin(c, req.Identifier, session, "success", loginFailure{status: status}, time.Since(start))
+	return handlerErr
 }
 
 func (h *AuthHandler) recordLogin(c echo.Context, identifier string, session *auth.Session, result string, failure loginFailure, elapsed time.Duration) {
@@ -105,6 +110,20 @@ func sessionWorkspaceID(session *auth.Session) int64 {
 		return 0
 	}
 	return session.CurrentWorkspaceID
+}
+
+func (h *AuthHandler) AttachUserSession(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		if _, ok := auth.SessionFrom(c); ok {
+			return next(c)
+		}
+		if identity, err := h.UserCookie.Read(c); err == nil {
+			if session, err := h.Service.Current(c.Request().Context(), auth.RealmUser, identity.SID); err == nil && session.Realm == auth.RealmUser {
+				auth.SetSession(c, session)
+			}
+		}
+		return next(c)
+	}
 }
 
 func (h *AuthHandler) MeUser(c echo.Context) error {

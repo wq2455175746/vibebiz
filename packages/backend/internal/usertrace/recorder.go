@@ -44,14 +44,7 @@ func (r *Recorder) Append(event Event) {
 	if event.EventID == "" {
 		event.EventID = r.newID()
 	}
-	event.DeviceID = normalizeDeviceID(event.DeviceID)
-	event.UserAgent = truncate(event.UserAgent, 512)
-	event.Referer = truncate(event.Referer, 1024)
-	event.RequestPath = truncate(event.RequestPath, 512)
-	event.RequestQuery = truncate(event.RequestQuery, 1024)
-	event.Route = truncate(event.Route, 255)
-	event.ErrorMessage = truncate(event.ErrorMessage, 255)
-	event.Username = truncate(event.Username, 64)
+	event = clampEvent(event)
 	if event.DeviceType == "" || event.OS == "" || event.Browser == "" {
 		device := ParseUserAgent(event.UserAgent)
 		if event.DeviceType == "" {

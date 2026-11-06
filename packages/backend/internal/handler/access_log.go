@@ -49,12 +49,12 @@ func parseAccessLogTime(raw string, endOfDay bool) *time.Time {
 		value := parsed.UTC()
 		return &value
 	}
-	parsed, err := time.Parse("2006-01-02", raw)
+	parsed, err := time.ParseInLocation("2006-01-02", raw, time.Local)
 	if err != nil {
 		return nil
 	}
 	if endOfDay {
-		parsed = parsed.Add(24 * time.Hour)
+		parsed = parsed.AddDate(0, 0, 1)
 	}
 	return &parsed
 }

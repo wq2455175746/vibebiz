@@ -170,8 +170,8 @@ func decodeAuthEnvelope(t *testing.T, rec *httptest.ResponseRecorder) authEnvelo
 func authRouter(h *AuthHandler) *echo.Echo {
 	e := echo.New()
 	e.POST("/cp/api/v1/auth/login", h.LoginUser)
-	e.GET("/cp/api/v1/auth/me", h.MeUser)
-	e.POST("/cp/api/v1/auth/logout", h.LogoutUser)
+	e.GET("/cp/api/v1/auth/me", h.MeUser, h.AttachUserSession)
+	e.POST("/cp/api/v1/auth/logout", h.LogoutUser, h.AttachUserSession)
 	e.PUT("/cp/api/v1/auth/workspace", h.SwitchWorkspace, func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			session, err := h.current(c, auth.RealmUser, h.UserCookie)
@@ -309,6 +309,29 @@ func TestMeUser(t *testing.T) {
 	}
 	if user.ID != 1 || user.Username != "wanghg11" || user.Email != "wang@example.com" || user.CurrentWorkspaceID != 3 {
 		t.Fatalf("user = %+v", user)
+	}
+}
+
+func TestMeUserRecordsTraceEventWithCookie(t *testing.T) {
+	h, _ := newAuthHandlerForTest(t, &model.User{Base: model.Base{ID: 1}, Username: "wanghg11", Email: "wang@example.com", Status: 1}, []int64{3}, nil)
+	cookie, _ := loginUser(t, h)
+	trace := &fakeTraceAppender{}
+	h.Trace = trace
+
+	e := echo.New()
+	e.Use(usertrace.Middleware(trace, nil))
+	e.GET("/cp/api/v1/auth/me", h.MeUser, h.AttachUserSession)
+
+	rec := getWithCookie(e, "/cp/api/v1/auth/me", cookie)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if len(trace.events) != 1 {
+		t.Fatalf("events = %+v, want one", trace.events)
+	}
+	event := trace.events[0]
+	if event.EventType != usertrace.EventRequest || event.UserID != 1 || event.WorkspaceID != 3 {
+		t.Fatalf("event = %+v", event)
 	}
 }
 

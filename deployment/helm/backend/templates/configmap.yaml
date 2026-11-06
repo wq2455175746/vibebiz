@@ -34,6 +34,7 @@ data:
   SMTP_PORT: {{ .Values.config.smtpPort | quote }}
   SMTP_FROM: {{ .Values.config.smtpFrom | quote }}
   SMTP_SECURITY: {{ .Values.config.smtpSecurity | quote }}
+  USER_TRACE_DIR: {{ .Values.config.userTraceDir | quote }}
   OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.config.otelExporterOtlpEndpoint | quote }}
   OTEL_EXPORTER_OTLP_PROTOCOL: {{ .Values.config.otelExporterOtlpProtocol | quote }}
   OTEL_RESOURCE_ATTRIBUTES: {{ .Values.config.otelResourceAttributes | quote }}

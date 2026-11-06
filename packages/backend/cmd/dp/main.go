@@ -137,14 +137,18 @@ func main() {
 	traceRepo := usertrace.NewMySQLRepository(db)
 	var traceRecorder *usertrace.Recorder
 	if cfg.UserTraceEnabled {
-		traceRecorder = usertrace.NewRecorder(cfg.UserTraceDir, usertrace.TrimPlane(cfg.Plane), obs.Logger)
-		traceCtx, traceCancel := context.WithCancel(ctx)
-		defer traceCancel()
-		go usertrace.NewSyncer(cfg.UserTraceDir, usertrace.TrimPlane(cfg.Plane), traceRepo, cfg.UserTraceSyncInterval, obs.Logger).Run(traceCtx)
+		if err := os.MkdirAll(cfg.UserTraceDir, 0o755); err != nil {
+			obs.Logger.Error("user trace dir unavailable; tracing disabled", "dir", cfg.UserTraceDir, "error", err)
+		} else {
+			traceRecorder = usertrace.NewRecorder(cfg.UserTraceDir, usertrace.TrimPlane(cfg.Plane), obs.Logger)
+			traceCtx, traceCancel := context.WithCancel(ctx)
+			defer traceCancel()
+			go usertrace.NewSyncer(cfg.UserTraceDir, usertrace.TrimPlane(cfg.Plane), traceRepo, cfg.UserTraceSyncInterval, obs.Logger).Run(traceCtx)
+		}
 	}
 
 	e := server.New(cfg, obs)
-	if cfg.UserTraceEnabled {
+	if traceRecorder != nil {
 		e.Use(usertrace.Middleware(traceRecorder, obs.Logger))
 	}
 	router.RegisterData(e, sandbox, obs, authn, metas, resourceHandler, roleResolver, coverHandler, storageSyncer, cloneHandler)

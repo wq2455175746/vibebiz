@@ -88,6 +88,7 @@ func (r *MySQLRepository) Write(ctx context.Context, events []Event) error {
 }
 
 func toModel(event Event) model.UserAccessLog {
+	event = clampEvent(event)
 	var userID *int64
 	if event.UserID > 0 {
 		id := event.UserID
