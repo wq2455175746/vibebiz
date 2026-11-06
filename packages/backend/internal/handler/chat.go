@@ -16,9 +16,11 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"vibebiz/internal/agentrole"
+	"vibebiz/internal/auth"
 	"vibebiz/internal/observability"
 	"vibebiz/internal/response"
 	"vibebiz/internal/role"
+	"vibebiz/internal/usage"
 )
 
 type ChatClient interface {
@@ -33,11 +35,17 @@ type StorageSyncer interface {
 	Enqueue(projectID string)
 }
 
+type ChatUsageRecorder interface {
+	CheckChat(ctx context.Context, userID int64) error
+	RecordChatUsage(ctx context.Context, userID, inputTokens, outputTokens, modelRequests int64) error
+}
+
 type ChatHandler struct {
 	Sandbox ChatClient
 	Roles   ProjectRoleResolver
 	Obs     *observability.Provider
 	Storage StorageSyncer
+	Usage   ChatUsageRecorder
 }
 
 func NewChatHandler(sandbox ChatClient, obs *observability.Provider) *ChatHandler {
@@ -55,6 +63,20 @@ func (h *ChatHandler) Chat(c echo.Context) error {
 
 	projectID := c.Param("id")
 	ctx := c.Request().Context()
+	session, ok := auth.SessionFrom(c)
+	if !ok {
+		return response.Fail(c, http.StatusUnauthorized, 40101, "unauthorized")
+	}
+	if h.Usage != nil {
+		if err := h.Usage.CheckChat(ctx, session.UserID); err != nil {
+			var exceeded *usage.QuotaExceededError
+			if errors.As(err, &exceeded) {
+				return response.FailWithResult(c, http.StatusTooManyRequests, quotaCode(exceeded.QuotaType), "daily quota exceeded",
+					map[string]any{"quotaType": exceeded.QuotaType, "used": exceeded.Used, "limit": exceeded.Limit})
+			}
+			return response.Fail(c, http.StatusServiceUnavailable, 50304, "quota check failed")
+		}
+	}
 	var span trace.Span
 	if h.Obs != nil {
 		ctx, span = h.Obs.Tracer.Start(ctx, "chat.stream",
@@ -90,6 +112,13 @@ func (h *ChatHandler) Chat(c echo.Context) error {
 	for {
 		line, readErr := reader.ReadString('\n')
 		if len(line) > 0 {
+			if strings.HasPrefix(line, "data:") {
+				if event, ok := parseUsageEvent(line); ok && h.Usage != nil {
+					if err := h.Usage.RecordChatUsage(ctx, session.UserID, event.InputTokens, event.OutputTokens, event.ModelRequests); err != nil && h.Obs != nil {
+						h.Obs.Log(ctx, slog.LevelWarn, "chat.usage", "project_id", projectID, "status", "record_error", "error", err.Error())
+					}
+				}
+			}
 			if h.Obs != nil && strings.HasPrefix(line, "data:") {
 				eventType := sseEventType(line)
 				h.Obs.RecordSSEEvent(projectID, eventType)
@@ -182,4 +211,23 @@ func sseEventType(line string) string {
 		return "unknown"
 	}
 	return event.Type
+}
+
+type usageEvent struct {
+	Type          string `json:"type"`
+	InputTokens   int64  `json:"inputTokens"`
+	OutputTokens  int64  `json:"outputTokens"`
+	ModelRequests int64  `json:"modelRequests"`
+}
+
+func parseUsageEvent(line string) (usageEvent, bool) {
+	payload := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+	if payload == "" || payload == "[DONE]" {
+		return usageEvent{}, false
+	}
+	var event usageEvent
+	if err := json.Unmarshal([]byte(payload), &event); err != nil || event.Type != "usage" {
+		return usageEvent{}, false
+	}
+	return event, true
 }

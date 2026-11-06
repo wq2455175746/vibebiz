@@ -14,8 +14,10 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"vibebiz/internal/agentrole"
+	"vibebiz/internal/auth"
 	"vibebiz/internal/observability"
 	"vibebiz/internal/role"
+	"vibebiz/internal/usage"
 )
 
 type fakeChat struct {
@@ -64,7 +66,7 @@ func TestChatRecordsReadError(t *testing.T) {
 
 	h := NewChatHandler(&errorChat{body: "data: {\"type\":\"agent\"}\n\n"}, obs)
 	e := echo.New()
-	e.POST("/dp/api/v1/projects/:id/chat", h.Chat)
+	e.POST("/dp/api/v1/projects/:id/chat", withChatSession(h.Chat))
 
 	req := httptest.NewRequest(http.MethodPost, "/dp/api/v1/projects/p1/chat", strings.NewReader(`{"message":"hi"}`))
 	rec := httptest.NewRecorder()
@@ -82,7 +84,7 @@ func TestChatRecordsReadError(t *testing.T) {
 func TestChatStreamsSSE(t *testing.T) {
 	h := NewChatHandler(&fakeChat{body: "data: {\"type\":\"agent\"}\n\ndata: [DONE]\n\n"}, nil)
 	e := echo.New()
-	e.POST("/dp/api/v1/projects/:id/chat", h.Chat)
+	e.POST("/dp/api/v1/projects/:id/chat", withChatSession(h.Chat))
 
 	req := httptest.NewRequest(http.MethodPost, "/dp/api/v1/projects/p1/chat", strings.NewReader(`{"message":"hi"}`))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
@@ -122,7 +124,7 @@ func TestChatEnqueuesStorageSyncOnSuccess(t *testing.T) {
 	h := NewChatHandler(&fakeChat{body: "data: [DONE]\n\n"}, nil)
 	h.Storage = syncer
 	e := echo.New()
-	e.POST("/dp/api/v1/projects/:id/chat", h.Chat)
+	e.POST("/dp/api/v1/projects/:id/chat", withChatSession(h.Chat))
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/dp/api/v1/projects/p1/chat", strings.NewReader(`{"message":"hi"}`)))
 	if len(syncer.ids) != 1 || syncer.ids[0] != "p1" {
@@ -135,7 +137,7 @@ func TestChatEnqueuesStorageSyncOnReadError(t *testing.T) {
 	h := NewChatHandler(&errorChat{body: "data: {\"type\":\"agent\"}\n\n"}, nil)
 	h.Storage = syncer
 	e := echo.New()
-	e.POST("/dp/api/v1/projects/:id/chat", h.Chat)
+	e.POST("/dp/api/v1/projects/:id/chat", withChatSession(h.Chat))
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/dp/api/v1/projects/p1/chat", strings.NewReader(`{"message":"hi"}`)))
 	if len(syncer.ids) != 1 || syncer.ids[0] != "p1" {
@@ -158,7 +160,7 @@ func TestChatInjectsProjectRolesAndOverridesClientPayload(t *testing.T) {
 		Description: "code", SystemPrompt: "role prompt",
 	}}}}
 	e := echo.New()
-	e.POST("/dp/api/v1/projects/:id/chat", h.Chat)
+	e.POST("/dp/api/v1/projects/:id/chat", withChatSession(h.Chat))
 	req := httptest.NewRequest(http.MethodPost, "/dp/api/v1/projects/p1/chat",
 		strings.NewReader(`{"message":"hi","agentRoles":[{"systemPrompt":"hacked"}]}`))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
@@ -175,7 +177,7 @@ func TestChatInjectsProjectRolesAndOverridesClientPayload(t *testing.T) {
 func serveRoleChat(t *testing.T, h *ChatHandler, body string) (*echo.Echo, *httptest.ResponseRecorder) {
 	t.Helper()
 	e := echo.New()
-	e.POST("/dp/api/v1/projects/:id/chat", h.Chat)
+	e.POST("/dp/api/v1/projects/:id/chat", withChatSession(h.Chat))
 	req := httptest.NewRequest(http.MethodPost, "/dp/api/v1/projects/p1/chat", strings.NewReader(body))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
@@ -228,5 +230,81 @@ func TestChatHandlesNullBody(t *testing.T) {
 	}
 	if !strings.Contains(string(chat.payload), `"roleCode":"alex"`) {
 		t.Fatalf("roles not injected: %s", chat.payload)
+	}
+}
+
+func withChatSession(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		c.Set("auth.session", &auth.Session{ID: "sid", Realm: auth.RealmUser, UserID: 7, Username: "u"})
+		return next(c)
+	}
+}
+
+type fakeChatUsage struct {
+	checkErr error
+	recorded bool
+	input    int64
+	output   int64
+	requests int64
+}
+
+func (f *fakeChatUsage) CheckChat(context.Context, int64) error { return f.checkErr }
+
+func (f *fakeChatUsage) RecordChatUsage(_ context.Context, _ int64, input, output, requests int64) error {
+	f.recorded = true
+	f.input, f.output, f.requests = input, output, requests
+	return nil
+}
+
+func TestChatRejectsDailyTokenQuota(t *testing.T) {
+	h := NewChatHandler(&fakeChat{body: "data: [DONE]\n\n"}, nil)
+	h.Usage = &fakeChatUsage{checkErr: &usage.QuotaExceededError{QuotaType: "token", Used: 100, Limit: 100}}
+	e := echo.New()
+	e.POST("/dp/api/v1/projects/:id/chat", withChatSession(h.Chat))
+
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/dp/api/v1/projects/p1/chat", strings.NewReader(`{"message":"hi"}`)))
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"code":42902`) {
+		t.Fatalf("body = %s", rec.Body.String())
+	}
+}
+
+func TestChatRecordsUsageEvent(t *testing.T) {
+	recorder := &fakeChatUsage{}
+	h := NewChatHandler(&fakeChat{body: "data: {\"type\":\"usage\",\"inputTokens\":10,\"outputTokens\":5,\"modelRequests\":2}\n\ndata: [DONE]\n\n"}, nil)
+	h.Usage = recorder
+	e := echo.New()
+	e.POST("/dp/api/v1/projects/:id/chat", withChatSession(h.Chat))
+
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/dp/api/v1/projects/p1/chat", strings.NewReader(`{"message":"hi"}`)))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if !recorder.recorded || recorder.input != 10 || recorder.output != 5 || recorder.requests != 2 {
+		t.Fatalf("recorded = %+v", recorder)
+	}
+}
+
+func TestChatIgnoresAgentPayloadUsage(t *testing.T) {
+	recorder := &fakeChatUsage{}
+	h := NewChatHandler(&fakeChat{body: "data: {\"type\":\"agent\",\"payload\":{\"type\":\"result\",\"inputTokens\":10}}\n\ndata: [DONE]\n\n"}, nil)
+	h.Usage = recorder
+	e := echo.New()
+	e.POST("/dp/api/v1/projects/:id/chat", withChatSession(h.Chat))
+
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/dp/api/v1/projects/p1/chat", strings.NewReader(`{"message":"hi"}`)))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	if recorder.recorded {
+		t.Fatal("agent payload usage should not be recorded")
 	}
 }

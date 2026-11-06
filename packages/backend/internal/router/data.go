@@ -18,11 +18,12 @@ type DataSandbox interface {
 	handler.PreviewClient
 }
 
-func RegisterData(e *echo.Echo, sandbox DataSandbox, obs *observability.Provider, authn *auth.Authenticator, metas auth.ProjectMetaStore, resources *handler.ResourceHandler, roles handler.ProjectRoleResolver, covers *handler.CoverHandler, storageSyncer handler.StorageSyncer, cloneHandler *handler.CloneHandler) {
+func RegisterData(e *echo.Echo, sandbox DataSandbox, obs *observability.Provider, authn *auth.Authenticator, metas auth.ProjectMetaStore, resources *handler.ResourceHandler, roles handler.ProjectRoleResolver, covers *handler.CoverHandler, storageSyncer handler.StorageSyncer, cloneHandler *handler.CloneHandler, chatUsage handler.ChatUsageRecorder) {
 	files := handler.NewFileHandler(sandbox, obs)
 	chat := handler.NewChatHandler(sandbox, obs)
 	chat.Roles = roles
 	chat.Storage = storageSyncer
+	chat.Usage = chatUsage
 	stopChat := handler.NewChatStopHandler(sandbox, obs)
 	chatStatus := handler.NewChatStatusHandler(sandbox, obs)
 	chatLogs := handler.NewChatLogsHandler(sandbox, obs)

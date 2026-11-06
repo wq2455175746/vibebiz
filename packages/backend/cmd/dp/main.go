@@ -28,6 +28,7 @@ import (
 	"vibebiz/internal/server"
 	"vibebiz/internal/storagesync"
 	"vibebiz/internal/store"
+	"vibebiz/internal/usage"
 )
 
 const redisPrefix = "vibebiz"
@@ -108,6 +109,12 @@ func main() {
 			coverS3 = presigner
 		}
 	}
+	usageLoc, err := time.LoadLocation(cfg.UsageTimezone)
+	if err != nil {
+		obs.Logger.Warn("invalid usage timezone, falling back to UTC", "value", cfg.UsageTimezone)
+		usageLoc = time.UTC
+	}
+	usageService := usage.NewService(usage.NewMySQLRepository(db), usageLoc)
 	resourceService := resource.NewService(dao.NewProjectResourceRepository(db), resourceS3, sandbox)
 	resourceService.Expiry = cfg.S3PresignExpiry()
 	resourceHandler := handler.NewResourceHandler(resourceService, obs)
@@ -134,7 +141,7 @@ func main() {
 	coverHandler := handler.NewCoverHandler(projectStore, coverS3, cfg.S3PresignExpiry())
 
 	e := server.New(cfg, obs)
-	router.RegisterData(e, sandbox, obs, authn, metas, resourceHandler, roleResolver, coverHandler, storageSyncer, cloneHandler)
+	router.RegisterData(e, sandbox, obs, authn, metas, resourceHandler, roleResolver, coverHandler, storageSyncer, cloneHandler, usageService)
 
 	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
 	go func() {
