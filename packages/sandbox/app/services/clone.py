@@ -7,6 +7,7 @@ import sys
 import tempfile
 import time
 import zipfile
+from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlparse
@@ -208,6 +209,12 @@ class CloneService:
             output_bytes, _ = await asyncio.wait_for(
                 process.communicate(), timeout=self.timeout_seconds
             )
+        except asyncio.CancelledError:
+            with suppress(ProcessLookupError):
+                process.kill()
+            with suppress(ProcessLookupError):
+                await process.wait()
+            raise
         except TimeoutError:
             timed_out = True
             process.kill()

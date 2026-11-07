@@ -1,5 +1,6 @@
 import asyncio
 import json
+import sys
 import zipfile
 from pathlib import Path
 
@@ -110,6 +111,49 @@ def test_run_tests_fails_and_writes_report(tmp_path):
     assert result["exitCode"] != 0
     report = (project / "docs" / "clone" / "test-report.md").read_text(encoding="utf-8")
     assert "失败" in report
+
+
+def test_run_tests_cancellation_kills_subprocess(tmp_path, monkeypatch):
+    workspace, project = make_workspace(tmp_path)
+    service = CloneService(workspace, timeout_seconds=30)
+    create_subprocess = asyncio.create_subprocess_exec
+    processes = []
+
+    async def capture(*args, **kwargs):
+        process = await create_subprocess(*args, **kwargs)
+        processes.append(process)
+        return process
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", capture)
+    monkeypatch.setattr(
+        service,
+        "_detect_command",
+        lambda _project, _tests_dir: (
+            [sys.executable, "-c", "import time; time.sleep(5)"],
+            project,
+        ),
+    )
+
+    async def scenario() -> tuple[int | None, bool]:
+        process = None
+        try:
+            task = asyncio.create_task(service.run_tests("p1"))
+            while not processes:
+                await asyncio.sleep(0.01)
+            process = processes[0]
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            return process.returncode, (project / "docs" / "clone" / "test-report.md").exists()
+        finally:
+            if process is not None and process.returncode is None:
+                process.kill()
+                await process.wait()
+
+    returncode, report_written = asyncio.run(scenario())
+
+    assert returncode is not None
+    assert report_written is False
 
 
 def test_run_tests_skips_without_tests(tmp_path):
