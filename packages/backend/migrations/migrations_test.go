@@ -46,7 +46,7 @@ func TestInitialSchemaCoversAllBusinessTables(t *testing.T) {
 		"scheduled_task", "chat_conversation", "chat_message", "chat_memory",
 		"rag_knowledge_base", "project_rag", "fde_resource",
 		"project_clone_source", "project_clone_asset",
-		"user_usage_daily", "user_access_log",
+		"user_usage_daily", "user_access_log", "project_leases",
 	}
 	var all strings.Builder
 	entries, err := fs.ReadDir(FS, ".")
@@ -217,8 +217,8 @@ func TestGooseCanCollectMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("collect migrations: %v", err)
 	}
-	if len(migs) != 26 {
-		t.Fatalf("collected %d migrations, want 26", len(migs))
+	if len(migs) != 27 {
+		t.Fatalf("collected %d migrations, want 27", len(migs))
 	}
 	for i, mig := range migs {
 		want := int64(i + 1)
@@ -431,6 +431,23 @@ func TestUserUsageDailyMigration(t *testing.T) {
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("usage migration missing %q", want)
+		}
+	}
+}
+
+func TestProjectLeasesMigration(t *testing.T) {
+	body, err := fs.ReadFile(FS, "00027_project_leases.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	for _, want := range []string{
+		"CREATE TABLE `project_leases`", "lease_until", "epoch",
+		"PRIMARY KEY (`project_id`)", "DROP TABLE IF EXISTS `project_leases`",
+		"-- +goose Up", "-- +goose Down",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("project leases migration missing %q", want)
 		}
 	}
 }
