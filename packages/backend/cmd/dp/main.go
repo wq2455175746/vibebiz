@@ -88,8 +88,9 @@ func main() {
 
 	registryRepo := sandboxregistry.NewMySQLRepository(db)
 	selector := sandboxregistry.NewSelector(registryRepo, cfg.SandboxHeartbeatTTL, time.Now)
-	resolver := sandboxregistry.NewResolver(registryRepo, selector, cfg.SandboxHeartbeatTTL, time.Now)
+	resolver := sandboxregistry.NewResolver(registryRepo, selector, cfg.SandboxLeaseTTL, time.Now)
 	sandbox := client.NewRouter(resolver, obs)
+	sandbox.SetLeaseRenewer(resolver, cfg.SandboxLeaseRenewInterval)
 
 	var resourceS3 resource.S3
 	var coverS3 handler.CoverS3

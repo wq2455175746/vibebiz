@@ -20,6 +20,8 @@ data:
   SANDBOX_HEARTBEAT_TTL: {{ .Values.config.sandboxHeartbeatTTL | quote }}
   SANDBOX_HEALTH_INTERVAL: {{ .Values.config.sandboxHealthInterval | quote }}
   SANDBOX_HEALTH_TIMEOUT: {{ .Values.config.sandboxHealthTimeout | quote }}
+  SANDBOX_LEASE_TTL: {{ .Values.config.sandboxLeaseTTL | quote }}
+  SANDBOX_LEASE_RENEW_INTERVAL: {{ .Values.config.sandboxLeaseRenewInterval | quote }}
   ASYNQ_REDIS_DB: {{ .Values.config.asynqRedisDB | quote }}
   ASYNQ_CONCURRENCY: {{ .Values.config.asynqConcurrency | quote }}
   COOKIE_SECURE: {{ .Values.config.cookieSecure | quote }}

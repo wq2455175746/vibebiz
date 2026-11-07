@@ -45,6 +45,8 @@ config:
   sandboxHeartbeatTTL: 15s
   sandboxHealthInterval: 10s
   sandboxHealthTimeout: 2s
+  sandboxLeaseTTL: 30s
+  sandboxLeaseRenewInterval: 10s
   asynqRedisDB: "1"
   asynqConcurrency: "4"
   cookieSecure: "true"

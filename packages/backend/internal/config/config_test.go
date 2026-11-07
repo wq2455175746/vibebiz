@@ -165,6 +165,26 @@ func TestLoadSandboxRegistryDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadSandboxLease(t *testing.T) {
+	t.Setenv("SANDBOX_LEASE_TTL", "45s")
+	t.Setenv("SANDBOX_LEASE_RENEW_INTERVAL", "15s")
+
+	cfg := Load("dp")
+	if cfg.SandboxLeaseTTL != 45*time.Second || cfg.SandboxLeaseRenewInterval != 15*time.Second {
+		t.Fatalf("lease config = %v / %v", cfg.SandboxLeaseTTL, cfg.SandboxLeaseRenewInterval)
+	}
+}
+
+func TestLoadSandboxLeaseDefaults(t *testing.T) {
+	t.Setenv("SANDBOX_LEASE_TTL", "")
+	t.Setenv("SANDBOX_LEASE_RENEW_INTERVAL", "")
+
+	cfg := Load("dp")
+	if cfg.SandboxLeaseTTL != 30*time.Second || cfg.SandboxLeaseRenewInterval != 10*time.Second {
+		t.Fatalf("lease defaults = %v / %v", cfg.SandboxLeaseTTL, cfg.SandboxLeaseRenewInterval)
+	}
+}
+
 func TestLoadModelSecretKey(t *testing.T) {
 	t.Setenv("MODEL_SECRET_KEY", "abc")
 	if cfg := Load("cp"); cfg.ModelSecretKey != "abc" {

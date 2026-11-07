@@ -30,6 +30,8 @@ type Config struct {
 	SandboxHeartbeatTTL       time.Duration
 	SandboxHealthInterval     time.Duration
 	SandboxHealthTimeout      time.Duration
+	SandboxLeaseTTL           time.Duration
+	SandboxLeaseRenewInterval time.Duration
 	AsynqRedisDB              int
 	AsynqConcurrency          int
 	ScheduledDispatchInterval time.Duration
@@ -92,6 +94,8 @@ func Load(plane string) Config {
 		SandboxHeartbeatTTL:       getDuration("SANDBOX_HEARTBEAT_TTL", 15*time.Second),
 		SandboxHealthInterval:     getDuration("SANDBOX_HEALTH_INTERVAL", 10*time.Second),
 		SandboxHealthTimeout:      getDuration("SANDBOX_HEALTH_TIMEOUT", 2*time.Second),
+		SandboxLeaseTTL:           getDuration("SANDBOX_LEASE_TTL", 30*time.Second),
+		SandboxLeaseRenewInterval: getDuration("SANDBOX_LEASE_RENEW_INTERVAL", 10*time.Second),
 		AsynqRedisDB:              getInt("ASYNQ_REDIS_DB", 1),
 		AsynqConcurrency:          getInt("ASYNQ_CONCURRENCY", 4),
 		ScheduledDispatchInterval: getDuration("SCHEDULED_DISPATCH_INTERVAL", 30*time.Second),
