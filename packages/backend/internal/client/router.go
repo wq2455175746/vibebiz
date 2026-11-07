@@ -4,31 +4,62 @@ import (
 	"context"
 	"io"
 	"sync"
+	"time"
 
 	"vibebiz/internal/observability"
 	"vibebiz/internal/resource"
+	"vibebiz/internal/sandboxregistry"
 )
 
 type ProjectResolver interface {
 	ResolveBaseURL(ctx context.Context, projectID string) (string, error)
 }
 
+type Route = sandboxregistry.Route
+
+type RouteResolver interface {
+	ResolveRoute(ctx context.Context, projectID string) (Route, error)
+}
+
+type RouteRenewer interface {
+	Renew(ctx context.Context, projectID string, epoch int64) error
+}
+
+var (
+	_ RouteResolver = (*sandboxregistry.Resolver)(nil)
+	_ RouteRenewer  = (*sandboxregistry.Resolver)(nil)
+)
+
+type epochKey struct{}
+
+func WithProjectEpoch(ctx context.Context, epoch int64) context.Context {
+	return context.WithValue(ctx, epochKey{}, epoch)
+}
+
+func projectEpoch(ctx context.Context) int64 {
+	value, _ := ctx.Value(epochKey{}).(int64)
+	return value
+}
+
 type Router struct {
-	resolver  ProjectResolver
-	obs       *observability.Provider
-	clients   sync.Map
-	newClient func(baseURL string, obs *observability.Provider) *Sandbox
+	resolver      ProjectResolver
+	obs           *observability.Provider
+	clients       sync.Map
+	newClient     func(baseURL string, obs *observability.Provider) *Sandbox
+	renewer       RouteRenewer
+	renewInterval time.Duration
 }
 
 func NewRouter(resolver ProjectResolver, obs *observability.Provider) *Router {
 	return &Router{resolver: resolver, obs: obs, newClient: NewSandbox}
 }
 
-func (r *Router) client(ctx context.Context, projectID string) (*Sandbox, error) {
-	baseURL, err := r.resolver.ResolveBaseURL(ctx, projectID)
-	if err != nil {
-		return nil, err
-	}
+func (r *Router) SetLeaseRenewer(renewer RouteRenewer, interval time.Duration) {
+	r.renewer = renewer
+	r.renewInterval = interval
+}
+
+func (r *Router) sandboxFor(baseURL string) (*Sandbox, error) {
 	if value, ok := r.clients.Load(baseURL); ok {
 		return value.(*Sandbox), nil
 	}
@@ -37,8 +68,30 @@ func (r *Router) client(ctx context.Context, projectID string) (*Sandbox, error)
 	return actual.(*Sandbox), nil
 }
 
+func (r *Router) route(ctx context.Context, projectID string) (context.Context, *Sandbox, Route, error) {
+	var route Route
+	if resolver, ok := r.resolver.(RouteResolver); ok {
+		got, err := resolver.ResolveRoute(ctx, projectID)
+		if err != nil {
+			return ctx, nil, Route{}, err
+		}
+		route = got
+	} else {
+		baseURL, err := r.resolver.ResolveBaseURL(ctx, projectID)
+		if err != nil {
+			return ctx, nil, Route{}, err
+		}
+		route = Route{BaseURL: baseURL}
+	}
+	sandbox, err := r.sandboxFor(route.BaseURL)
+	if err != nil {
+		return ctx, nil, Route{}, err
+	}
+	return WithProjectEpoch(ctx, route.Epoch), sandbox, route, nil
+}
+
 func (r *Router) ListFiles(ctx context.Context, id string) ([]FileEntry, error) {
-	sandbox, err := r.client(ctx, id)
+	ctx, sandbox, _, err := r.route(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +99,7 @@ func (r *Router) ListFiles(ctx context.Context, id string) ([]FileEntry, error) 
 }
 
 func (r *Router) ReadFile(ctx context.Context, id, path string) (*FileContent, error) {
-	sandbox, err := r.client(ctx, id)
+	ctx, sandbox, _, err := r.route(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +107,7 @@ func (r *Router) ReadFile(ctx context.Context, id, path string) (*FileContent, e
 }
 
 func (r *Router) WriteFile(ctx context.Context, id, path, content, baseVersion string) (*WriteResult, error) {
-	sandbox, err := r.client(ctx, id)
+	ctx, sandbox, _, err := r.route(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +115,7 @@ func (r *Router) WriteFile(ctx context.Context, id, path, content, baseVersion s
 }
 
 func (r *Router) WriteResource(ctx context.Context, projectID string, meta resource.ResourceMeta, body io.Reader, size int64) error {
-	sandbox, err := r.client(ctx, projectID)
+	ctx, sandbox, _, err := r.route(ctx, projectID)
 	if err != nil {
 		return err
 	}
@@ -70,7 +123,7 @@ func (r *Router) WriteResource(ctx context.Context, projectID string, meta resou
 }
 
 func (r *Router) InitClone(ctx context.Context, projectID string, setup CloneSetup) error {
-	sandbox, err := r.client(ctx, projectID)
+	ctx, sandbox, _, err := r.route(ctx, projectID)
 	if err != nil {
 		return err
 	}
@@ -78,7 +131,7 @@ func (r *Router) InitClone(ctx context.Context, projectID string, setup CloneSet
 }
 
 func (r *Router) RunCloneTests(ctx context.Context, projectID string) (CloneTestResult, error) {
-	sandbox, err := r.client(ctx, projectID)
+	ctx, sandbox, _, err := r.route(ctx, projectID)
 	if err != nil {
 		return CloneTestResult{}, err
 	}
@@ -86,7 +139,7 @@ func (r *Router) RunCloneTests(ctx context.Context, projectID string) (CloneTest
 }
 
 func (r *Router) DeleteResource(ctx context.Context, projectID, resourceID string) error {
-	sandbox, err := r.client(ctx, projectID)
+	ctx, sandbox, _, err := r.route(ctx, projectID)
 	if err != nil {
 		return err
 	}
@@ -94,7 +147,7 @@ func (r *Router) DeleteResource(ctx context.Context, projectID, resourceID strin
 }
 
 func (r *Router) ProjectStats(ctx context.Context, id string) (ProjectStats, error) {
-	sandbox, err := r.client(ctx, id)
+	ctx, sandbox, _, err := r.route(ctx, id)
 	if err != nil {
 		return ProjectStats{}, err
 	}
@@ -102,7 +155,7 @@ func (r *Router) ProjectStats(ctx context.Context, id string) (ProjectStats, err
 }
 
 func (r *Router) ExportArchive(ctx context.Context, id string) ([]byte, error) {
-	sandbox, err := r.client(ctx, id)
+	ctx, sandbox, _, err := r.route(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +163,7 @@ func (r *Router) ExportArchive(ctx context.Context, id string) ([]byte, error) {
 }
 
 func (r *Router) ImportArchive(ctx context.Context, id string, data []byte) error {
-	sandbox, err := r.client(ctx, id)
+	ctx, sandbox, _, err := r.route(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -118,7 +171,7 @@ func (r *Router) ImportArchive(ctx context.Context, id string, data []byte) erro
 }
 
 func (r *Router) ReadChatHistory(ctx context.Context, id string, limit int) (ChatHistoryTail, error) {
-	sandbox, err := r.client(ctx, id)
+	ctx, sandbox, _, err := r.route(ctx, id)
 	if err != nil {
 		return ChatHistoryTail{}, err
 	}
@@ -126,7 +179,7 @@ func (r *Router) ReadChatHistory(ctx context.Context, id string, limit int) (Cha
 }
 
 func (r *Router) StopChat(ctx context.Context, id string) error {
-	sandbox, err := r.client(ctx, id)
+	ctx, sandbox, _, err := r.route(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -134,7 +187,7 @@ func (r *Router) StopChat(ctx context.Context, id string) error {
 }
 
 func (r *Router) ChatLogs(ctx context.Context, id string, limit int) ([]ChatLog, error) {
-	sandbox, err := r.client(ctx, id)
+	ctx, sandbox, _, err := r.route(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +195,7 @@ func (r *Router) ChatLogs(ctx context.Context, id string, limit int) ([]ChatLog,
 }
 
 func (r *Router) ChatStatus(ctx context.Context, id string) (ChatStatus, error) {
-	sandbox, err := r.client(ctx, id)
+	ctx, sandbox, _, err := r.route(ctx, id)
 	if err != nil {
 		return ChatStatus{}, err
 	}
@@ -150,7 +203,7 @@ func (r *Router) ChatStatus(ctx context.Context, id string) (ChatStatus, error) 
 }
 
 func (r *Router) ListSkills(ctx context.Context, id string, userID int64) ([]SkillInfo, error) {
-	sandbox, err := r.client(ctx, id)
+	ctx, sandbox, _, err := r.route(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -158,15 +211,19 @@ func (r *Router) ListSkills(ctx context.Context, id string, userID int64) ([]Ski
 }
 
 func (r *Router) Chat(ctx context.Context, id string, payload []byte) (io.ReadCloser, error) {
-	sandbox, err := r.client(ctx, id)
+	ctx, sandbox, route, err := r.route(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	return sandbox.Chat(ctx, id, payload)
+	stream, err := sandbox.Chat(ctx, id, payload)
+	if err != nil {
+		return nil, err
+	}
+	return r.wrapLeaseStream(ctx, id, route.Epoch, stream), nil
 }
 
 func (r *Router) PreviewURL(ctx context.Context, id string) (string, error) {
-	sandbox, err := r.client(ctx, id)
+	_, sandbox, _, err := r.route(ctx, id)
 	if err != nil {
 		return "", err
 	}

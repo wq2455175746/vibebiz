@@ -100,18 +100,26 @@ type SkillInfo struct {
 type Sandbox struct {
 	baseURL string
 	http    *http.Client
+	stream  *http.Client
 	obs     *observability.Provider
 }
 
 func NewSandbox(baseURL string, obs *observability.Provider) *Sandbox {
-	client := &http.Client{Timeout: 10 * time.Minute}
+	transport := http.DefaultTransport
 	if obs != nil {
-		client.Transport = otelhttp.NewTransport(http.DefaultTransport)
+		transport = otelhttp.NewTransport(http.DefaultTransport)
 	}
 	return &Sandbox{
 		baseURL: strings.TrimRight(baseURL, "/"),
-		http:    client,
+		http:    &http.Client{Transport: transport, Timeout: 10 * time.Minute},
+		stream:  &http.Client{Transport: transport},
 		obs:     obs,
+	}
+}
+
+func applyEpoch(req *http.Request, ctx context.Context) {
+	if epoch := projectEpoch(ctx); epoch > 0 {
+		req.Header.Set("X-Project-Epoch", strconv.FormatInt(epoch, 10))
 	}
 }
 
@@ -191,6 +199,7 @@ func (s *Sandbox) WriteResource(ctx context.Context, projectID string, meta reso
 	req.Header.Set("X-Resource-Size", strconv.FormatInt(size, 10))
 	req.Header.Set("X-Resource-Kind", meta.Kind)
 	req.Header.Set("X-Resource-Purpose", meta.Purpose)
+	applyEpoch(req, ctx)
 
 	resp, err := s.http.Do(req)
 	if err != nil {
@@ -259,6 +268,7 @@ func (s *Sandbox) ImportArchive(ctx context.Context, id string, data []byte) err
 	}
 	req.Header.Set("Content-Type", "application/gzip")
 	req.ContentLength = int64(len(data))
+	applyEpoch(req, ctx)
 	resp, err := s.http.Do(req)
 	if err != nil {
 		return err
@@ -452,8 +462,9 @@ func (s *Sandbox) Chat(ctx context.Context, id string, payload []byte) (out io.R
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
+	applyEpoch(req, ctx)
 
-	resp, err := s.http.Do(req)
+	resp, err := s.stream.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -496,6 +507,7 @@ func (s *Sandbox) doJSON(ctx context.Context, operation, projectID, method, path
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	applyEpoch(req, ctx)
 
 	resp, err := s.http.Do(req)
 	if err != nil {

@@ -3,25 +3,10 @@ package sandboxregistry
 import (
 	"context"
 	"fmt"
-
-	"vibebiz/internal/client"
-	"vibebiz/internal/observability"
 )
 
 type Initializer interface {
 	InitProject(ctx context.Context, baseURL, projectID string) error
-}
-
-type HTTPInitializer struct {
-	obs *observability.Provider
-}
-
-func NewHTTPInitializer(obs *observability.Provider) *HTTPInitializer {
-	return &HTTPInitializer{obs: obs}
-}
-
-func (h *HTTPInitializer) InitProject(ctx context.Context, baseURL, projectID string) error {
-	return client.NewSandbox(baseURL, h.obs).InitProject(ctx, projectID)
 }
 
 type Provisioner struct {
