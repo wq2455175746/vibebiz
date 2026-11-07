@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from claude_agent_sdk import (
@@ -11,7 +12,11 @@ from claude_agent_sdk import (
 
 from app.config import Settings, load_settings
 from app.services.agent import build_agent
-from app.services.claude_agent import build_options, serialize_sdk_message
+from app.services.claude_agent import (
+    build_agent_settings,
+    build_options,
+    serialize_sdk_message,
+)
 
 
 def settings(tmp_path: Path) -> Settings:
@@ -21,6 +26,7 @@ def settings(tmp_path: Path) -> Settings:
         anthropic_base_url="http://127.0.0.1:4000",
         anthropic_auth_token="test-token",
         agent_model="deepseek-flash",
+        agent_network_restricted=True,
     )
 
 
@@ -312,3 +318,86 @@ def test_build_options_sets_user_skill_config(tmp_path):
     options = build_options(settings_with_skills, tmp_path / "project", None, user_id=7)
     assert options.env["CLAUDE_CONFIG_DIR"] == str(root / "users/7/.claude")
     assert options.env["HOME"] == "/tmp/vibebiz-sandbox-home/7"
+
+
+def test_build_options_isolates_anonymous_sessions(tmp_path):
+    options = build_options(settings(tmp_path), tmp_path / "project", None)
+
+    assert options.env["HOME"] == "/tmp/vibebiz-sandbox-home/anonymous"
+    assert options.env["CLAUDE_CONFIG_DIR"] == "/tmp/vibebiz-sandbox-home/anonymous/.claude"
+
+
+def test_build_options_restricts_sandbox_reads_and_network(tmp_path):
+    project = tmp_path / "workspaces" / "p1"
+    project.mkdir(parents=True)
+    options = build_options(settings(tmp_path), project, None)
+
+    assert options.setting_sources == ["user"]
+    assert options.disallowed_tools == ["WebFetch", "WebSearch"]
+    assert options.strict_mcp_config is True
+    assert options.env["CLAUDE_CODE_SUBPROCESS_ENV_SCRUB"] == "1"
+    payload = json.loads(options.settings)
+    sandbox = payload["sandbox"]
+    assert sandbox["enabled"] is True
+    assert sandbox["failIfUnavailable"] is True
+    assert sandbox["allowUnsandboxedCommands"] is False
+    assert str(project.resolve()) in sandbox["filesystem"]["allowRead"]
+    assert str((tmp_path / "workspaces").resolve()) in sandbox["filesystem"]["denyRead"]
+    assert sandbox["network"]["allowedDomains"] == []
+    credentials = {item["name"] for item in sandbox["credentials"]["envVars"]}
+    assert "ANTHROPIC_API_KEY" in credentials
+    assert payload["permissions"]["blockReadsOutsideWorkingDirectories"] is True
+    assert payload["permissions"]["blockWritesOutsideWorkingDirectories"] is True
+
+
+def test_build_agent_settings_allows_own_skills_only(tmp_path):
+    root = tmp_path / "skills"
+    config = root / "users" / "7" / ".claude"
+    project = tmp_path / "workspaces" / "p1"
+    payload = json.loads(build_agent_settings(settings(tmp_path), project, config, root))
+    filesystem = payload["sandbox"]["filesystem"]
+    assert str(config.resolve()) in filesystem["allowRead"]
+    assert str((root / "public").resolve()) in filesystem["allowRead"]
+    assert str(root.resolve()) in filesystem["denyRead"]
+    assert str(root.resolve()) in filesystem["denyWrite"]
+
+
+def test_build_agent_settings_allows_network_by_default(tmp_path):
+    default = Settings(
+        workspaces_dir=tmp_path / "workspaces",
+        agent_mode="claude",
+    )
+    payload = json.loads(build_agent_settings(default, tmp_path / "project"))
+
+    assert "sandbox" not in payload
+    assert payload["permissions"]["blockReadsOutsideWorkingDirectories"] is True
+
+
+def test_build_agent_settings_can_disable_bash_sandbox(tmp_path):
+    insecure = Settings(
+        workspaces_dir=tmp_path / "workspaces",
+        agent_mode="claude",
+        agent_sandbox_enabled=False,
+    )
+    payload = json.loads(build_agent_settings(insecure, tmp_path / "project"))
+    assert "sandbox" not in payload
+    assert payload["permissions"]["blockReadsOutsideWorkingDirectories"] is True
+
+
+def test_build_options_registers_web_tools_when_configured(tmp_path):
+    configured = Settings(
+        workspaces_dir=tmp_path / "workspaces",
+        agent_mode="claude",
+        web_search_base_url="http://searxng:8080",
+        web_fetch_allowed_domains="cdn.example.com",
+    )
+    options = build_options(configured, tmp_path / "project", None)
+    assert "web" in options.mcp_servers
+    assert "mcp__web__web_search" in options.allowed_tools
+    assert "mcp__web__web_fetch" in options.allowed_tools
+
+
+def test_build_options_skips_web_tools_when_unconfigured(tmp_path):
+    options = build_options(settings(tmp_path), tmp_path / "project", None)
+    assert options.mcp_servers == {}
+    assert not any(name.startswith("mcp__web__") for name in options.allowed_tools)

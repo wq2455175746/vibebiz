@@ -28,13 +28,14 @@ type StoredSkillClient interface {
 }
 
 type SkillManager struct {
-	Client StoredSkillClient
-	Users  admin.Repository
-	Obs    *observability.Provider
+	Client            StoredSkillClient
+	Users             admin.Repository
+	Obs               *observability.Provider
+	UserWritesEnabled bool
 }
 
 func NewSkillManager(client StoredSkillClient, users admin.Repository, obs *observability.Provider) *SkillManager {
-	return &SkillManager{Client: client, Users: users, Obs: obs}
+	return &SkillManager{Client: client, Users: users, Obs: obs, UserWritesEnabled: false}
 }
 
 func (h *SkillManager) ListMine(c echo.Context) error {
@@ -54,6 +55,9 @@ func (h *SkillManager) UploadMine(c echo.Context) error {
 	if !ok {
 		return response.Fail(c, http.StatusUnauthorized, 40101, "unauthorized")
 	}
+	if !h.UserWritesEnabled {
+		return response.Fail(c, http.StatusForbidden, 40301, "user skill upload is disabled")
+	}
 	return h.upload(c, "user", session.UserID)
 }
 
@@ -61,6 +65,9 @@ func (h *SkillManager) DeleteMine(c echo.Context) error {
 	session, ok := auth.SessionFrom(c)
 	if !ok {
 		return response.Fail(c, http.StatusUnauthorized, 40101, "unauthorized")
+	}
+	if !h.UserWritesEnabled {
+		return response.Fail(c, http.StatusForbidden, 40301, "user skill upload is disabled")
 	}
 	name := strings.TrimSpace(c.Param("name"))
 	if name == "" {

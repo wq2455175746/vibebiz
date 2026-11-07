@@ -224,10 +224,10 @@ podman-build-split: container-build-split
 podman-build-all: podman-build podman-build-split
 
 docker-up: init
-	@docker compose up --build -d
+	@docker compose -f deployment/docker/docker-compose.yml --env-file /dev/null up --build -d
 
 docker-down:
-	@docker compose down
+	@docker compose -f deployment/docker/docker-compose.yml --env-file /dev/null down
 
 clean:
 	@$(MAKE) --no-print-directory -C $(BACKEND) clean

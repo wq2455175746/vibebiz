@@ -61,6 +61,7 @@ func skillUploadRequest(target, fieldScope, fieldUser, overwrite string) *http.R
 func TestSkillManagerUserUploadUsesSessionID(t *testing.T) {
 	fake := &fakeStoredSkillClient{}
 	h := NewSkillManager(fake, admin.NewMemoryRepository(), nil)
+	h.UserWritesEnabled = true
 	e := echo.New()
 	routeWithSession(e, http.MethodPost, "/me/skills", h.UploadMine, &auth.Session{
 		UserID: 7, Realm: auth.RealmUser,
@@ -73,6 +74,24 @@ func TestSkillManagerUserUploadUsesSessionID(t *testing.T) {
 	}
 	if fake.scope != "user" || fake.userID != 7 || !fake.overwrite || string(fake.uploaded) != "zipdata" {
 		t.Fatalf("upload = %+v", fake)
+	}
+}
+
+func TestSkillManagerUserWritesDisabledByDefault(t *testing.T) {
+	fake := &fakeStoredSkillClient{}
+	h := NewSkillManager(fake, admin.NewMemoryRepository(), nil)
+	e := echo.New()
+	routeWithSession(e, http.MethodPost, "/me/skills", h.UploadMine, &auth.Session{
+		UserID: 7, Realm: auth.RealmUser,
+	})
+
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, skillUploadRequest("/me/skills", "user", "7", "false"))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	if fake.userID != 0 || fake.uploaded != nil {
+		t.Fatalf("upload should not run: %+v", fake)
 	}
 }
 

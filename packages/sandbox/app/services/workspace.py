@@ -141,7 +141,10 @@ class Workspace:
     def project_dir(self, project_id: str) -> Path:
         if not PROJECT_ID_RE.fullmatch(project_id):
             raise WorkspaceError("invalid project id")
-        candidate = (self.root / project_id).resolve()
+        raw = self.root / project_id
+        if raw.is_symlink():
+            raise WorkspaceError("invalid project path")
+        candidate = raw.resolve()
         if not candidate.is_relative_to(self.root):
             raise WorkspaceError("invalid project path")
         return candidate
@@ -154,6 +157,8 @@ class Workspace:
         project.mkdir(parents=True, exist_ok=True)
         for name, content in STARTER_FILES.items():
             target = project / name
+            if target.is_symlink():
+                continue
             if not target.exists():
                 target.write_text(content, encoding="utf-8")
         return project
@@ -182,7 +187,7 @@ class Workspace:
         entries: list[dict] = []
         for path in sorted(project.rglob("*")):
             rel_parts = path.relative_to(project).parts
-            if any(part in IGNORED_PARTS for part in rel_parts):
+            if any(part in IGNORED_PARTS for part in rel_parts) or path.is_symlink():
                 continue
             stat = path.stat()
             entries.append(
@@ -203,7 +208,7 @@ class Workspace:
         last_modified_at = 0
         for path in sorted(project.rglob("*")):
             rel_parts = path.relative_to(project).parts
-            if any(part in IGNORED_PARTS for part in rel_parts):
+            if any(part in IGNORED_PARTS for part in rel_parts) or path.is_symlink():
                 continue
             stat = path.stat()
             if path.is_dir():
@@ -225,7 +230,11 @@ class Workspace:
         with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
             for path in sorted(project.rglob("*")):
                 rel_parts = path.relative_to(project).parts
-                if any(part in IGNORED_PARTS for part in rel_parts) or path.is_dir():
+                if (
+                    any(part in IGNORED_PARTS for part in rel_parts)
+                    or path.is_symlink()
+                    or path.is_dir()
+                ):
                     continue
                 archive.add(path, arcname=path.relative_to(project).as_posix(), recursive=False)
         return buffer.getvalue()
@@ -235,7 +244,9 @@ class Workspace:
         for child in project.iterdir():
             if child.name in IGNORED_PARTS:
                 continue
-            if child.is_dir():
+            if child.is_symlink():
+                child.unlink()
+            elif child.is_dir():
                 shutil.rmtree(child)
             else:
                 child.unlink()

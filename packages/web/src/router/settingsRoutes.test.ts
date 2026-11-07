@@ -9,7 +9,6 @@ describe('settings routes', () => {
     expect(children.map((child) => child.path)).toEqual([
       '',
       'profile',
-      'skills',
       'notification-channels',
       'artifact-space',
       'delivery-space',
@@ -20,7 +19,6 @@ describe('settings routes', () => {
     expect(children.map((child) => child.name)).toEqual([
       'settings',
       'settings-profile',
-      'settings-skills',
       'settings-notification-channels',
       'settings-artifact-space',
       'settings-delivery-space',
@@ -33,7 +31,6 @@ describe('settings routes', () => {
   it('exposes the left menu entries in display order', () => {
     expect(settingsMenu.map((item) => item.label)).toEqual([
       '个人信息',
-      '我的技能',
       '通知渠道',
       '制品空间配置',
       '交付空间配置',
@@ -43,7 +40,6 @@ describe('settings routes', () => {
     ])
     expect(settingsMenu.map((item) => item.to)).toEqual([
       '/settings/profile',
-      '/settings/skills',
       '/settings/notification-channels',
       '/settings/artifact-space',
       '/settings/delivery-space',

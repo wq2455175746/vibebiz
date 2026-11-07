@@ -63,6 +63,7 @@ config:
   smtpSecurity: starttls
   userTraceDir: /app/logs/user-trace
   usageTimezone: Asia/Shanghai
+  userSkillUploadEnabled: "false"
   otelExporterOtlpEndpoint: ""
   otelExporterOtlpProtocol: http/protobuf
   otelResourceAttributes: "deployment.environment=k8s,service.namespace=vibebiz"

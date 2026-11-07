@@ -90,8 +90,8 @@ CP / DP → sandbox
 - 同一 Wi-Fi 手机可访问 `http://电脑局域网IP:8080/p/{projectId}/`。
 - 本地 Docker 使用 `data/published`；线上 `deployment/docker/docker-compose.public.yml` 使用 `deployment/docker/published`。
 - 线上 `published` 服务端口由 `PUBLISHED_HTTP_PORT` 控制，默认 `8088`；需在安全组/防火墙放行该端口，或改用域名和 HTTPS 反向代理。
-- 本地 `docker-compose.yml` 和线上 `deployment/docker/docker-compose.public.yml` 都包含 `published` 服务。
-- 启动：`PUBLIC_BASE_URL=http://服务器IP:PUBLISHED_HTTP_PORT docker compose up -d backend published`，确保 CP 返回正确公网链接。
+- 本地 `deployment/docker/docker-compose.yml` 和线上 `deployment/docker/docker-compose.public.yml` 都包含 `published` 服务。
+- 启动：`PUBLIC_BASE_URL=http://服务器IP:PUBLISHED_HTTP_PORT docker compose -f deployment/docker/docker-compose.yml up -d backend published`，确保 CP 返回正确公网链接。
 - nginx 示例配置见 `deployment/nginx/published.conf`。
 - CP 的 `/p/` 路由仅用于本地预览，并加了 sandbox CSP；生产必须把用户作品放在独立域名，避免与 CP 共享登录态。
 - 「系统设置 → 个人信息」会列出当前用户所有工作区的已发布项目，点击卡片打开分享页。
@@ -294,6 +294,7 @@ helm upgrade --install vibebiz deployment/helm/vibebiz -n vibebiz --create-names
 | `S3_*` | 头像与项目资料存储；`S3_REMOTE_DIR_PREFIX` 为桶内统一前缀；`S3_FORCE_PATH_STYLE` MinIO 用 `true`、阿里云 OSS 用 `false`；浏览器直传失败时回退 CP 代理上传 |
 | `ENTERPRISE_HARNESS_S3_KEY` | 企业 Harness zip 的完整 S3 key，默认 `tmp/vibebiz_prod/vibebiz-harness.zip`；不拼接 `S3_REMOTE_DIR_PREFIX` |
 | `NOTIFICATION_SECRET_KEY` | 通知渠道配置加密密钥；为空时回退 `MODEL_SECRET_KEY` |
+| `USER_SKILL_UPLOAD_ENABLED` | 用户端技能上传/删除开关，默认 `false`；关闭时仅保留 ops-web 管理员维护 |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` / `SMTP_FROM` | 平台发信 SMTP 配置 |
 | `SMTP_SECURITY` | SMTP 安全模式：`starttls` / `tls` / `none` |
 | `SESSION_USER_TTL` / `SESSION_OPS_TTL` | 用户 / 运营 Session 有效期 |
@@ -314,6 +315,12 @@ helm upgrade --install vibebiz deployment/helm/vibebiz -n vibebiz --create-names
 | `ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_API_KEY` | Agent 模型凭据 |
 | `AGENT_MODEL` / `AGENT_SKILLS` / `AGENT_PLUGINS` / `AGENT_MAX_TURNS` | Agent 行为配置；默认最多 100 轮 |
 | `AGENT_MAX_BUFFER_BYTES` | Claude SDK 单次输出缓冲上限，默认 32MB |
+| `AGENT_SANDBOX_ENABLED` / `AGENT_SANDBOX_WEAKER_NESTED` | Bash 沙箱总开关 / 容器内弱化嵌套模式 |
+| `AGENT_NETWORK_RESTRICTED` | 默认 `false`：允许外部/本机网络，此时不启用 Bash 沙箱；设为 `true` 才启用文件+网络沙箱 |
+| `AGENT_SANDBOX_ALLOWED_DOMAINS` | 网络受限时 Bash 域名白名单；为空表示 Bash 无外网 |
+| `WEB_SEARCH_BASE_URL` / `WEB_SEARCH_API_KEY` / `WEB_SEARCH_MAX_RESULTS` | 受控搜索工具，兼容 SearXNG JSON 接口；为空则不注册 |
+| `WEB_FETCH_ALLOWED_DOMAINS` | `web_fetch` 域名白名单；为空则不注册该工具 |
+| `CLONE_TEST_RUNNER_ENABLED` | 是否执行仓库单测；生产默认关闭 |
 
 ### Frontend
 
@@ -491,6 +498,7 @@ templates/     Go / Python / TypeScript / Vue / 文档模板
 - [业务数据库设计](superpowers/specs/2026-10-28-business-database-design.md)
 - [Sandbox 多类型与扩容架构](../.ai/rules/sandbox-architecture.md)
 - [Sandbox 注册中心设计](superpowers/specs/2026-10-29-sandbox-registry-design.md)
+- [Sandbox 安全隔离与提示词注入防护总结](sandbox-security-summary.md)
 - [企业工程开发设计](superpowers/specs/2026-10-30-enterprise-engineering-design.md)
 - [架构与编码规则](../.ai/rules/architecture.md)
 - [Helm 部署说明](../deployment/helm/README.md)

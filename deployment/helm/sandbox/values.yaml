@@ -27,6 +27,14 @@ config:
   agentSkills: all
   agentPlugins: ""
   agentMaxTurns: "100"
+  agentSandboxEnabled: "true"
+  agentNetworkRestricted: "false"
+  agentSandboxWeakerNested: "true"
+  agentSandboxAllowedDomains: ""
+  webSearchBaseUrl: ""
+  webSearchMaxResults: "5"
+  webFetchAllowedDomains: ""
+  cloneTestRunnerEnabled: "false"
   llmBaseUrl: https://api.deepseek.com
   llmModelName: deepseek-flash
   logLevel: info

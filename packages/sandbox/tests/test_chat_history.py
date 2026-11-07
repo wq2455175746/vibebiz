@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from app.errors import WorkspaceError
 from app.services.chat_history import ChatHistory
 from app.services.chat_turns import ChatTurnManager, TurnLocked, iter_turn_events
 from app.services.project_lease import StaleProjectEpoch, read_epoch
@@ -269,3 +270,29 @@ def test_turn_guard_blocks_workspace_writes_while_active(tmp_path):
         assert await manager.status("p1") == {"active": False, "turnId": None}
 
     asyncio.run(run())
+
+
+def test_chathistory_symlink_is_rejected(tmp_path):
+    workspace = Workspace(tmp_path / "workspaces")
+    project = workspace.init_project("p1")
+    victim = project / "victim.txt"
+    victim.write_text("keep", encoding="utf-8")
+    (project / ".chathistory").symlink_to(project / "elsewhere")
+
+    history = ChatHistory(workspace)
+    with pytest.raises(WorkspaceError):
+        asyncio.run(history.append_user("p1", "hello", "turn-1"))
+    assert victim.read_text(encoding="utf-8") == "keep"
+
+
+def test_gitignore_symlink_is_not_followed(tmp_path):
+    workspace = Workspace(tmp_path / "workspaces")
+    project = workspace.init_project("p1")
+    victim = project / "victim.txt"
+    victim.write_text("keep", encoding="utf-8")
+    (project / ".gitignore").symlink_to(victim)
+
+    history = ChatHistory(workspace)
+    asyncio.run(history.append_user("p1", "hello", "turn-1"))
+
+    assert victim.read_text(encoding="utf-8") == "keep"

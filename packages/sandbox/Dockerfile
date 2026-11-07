@@ -22,9 +22,11 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     fi; \
     apt-get update \
     && apt-get install -y --no-install-recommends \
+        bubblewrap \
         ca-certificates \
         curl \
-        git
+        git \
+        socat
 
 WORKDIR /app
 COPY requirements.txt ./

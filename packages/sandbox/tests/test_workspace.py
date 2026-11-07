@@ -191,3 +191,38 @@ def test_import_archive_rejects_path_traversal(tmp_path):
 
     with pytest.raises(WorkspaceError):
         workspace.import_archive("p1", buffer.getvalue())
+
+
+def test_symlinked_project_dir_is_rejected(tmp_path):
+    workspace = make_workspace(tmp_path)
+    root = tmp_path / "workspaces"
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "target").mkdir()
+    (root / "p1").symlink_to(root / "target")
+
+    with pytest.raises(WorkspaceError):
+        workspace.project_dir("p1")
+
+
+def test_listing_and_archive_skip_symlinks(tmp_path):
+    import io
+    import tarfile
+
+    workspace = make_workspace(tmp_path)
+    project = workspace.init_project("p1")
+    victim = tmp_path / "victim.txt"
+    victim.write_text("secret", encoding="utf-8")
+    (project / "link.txt").symlink_to(victim)
+
+    listed = {item["path"] for item in workspace.list_files("p1")}
+    assert "link.txt" not in listed
+    assert workspace.stats("p1")["fileCount"] == len(
+        [
+            name
+            for name in os.listdir(project)
+            if (project / name).is_file() and not (project / name).is_symlink()
+        ]
+    )
+
+    with tarfile.open(fileobj=io.BytesIO(workspace.archive("p1")), mode="r:gz") as archive:
+        assert "link.txt" not in archive.getnames()

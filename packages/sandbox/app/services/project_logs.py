@@ -1,4 +1,5 @@
 import json
+import os
 import re
 import threading
 from collections import deque
@@ -6,6 +7,8 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+from app.services.safe_paths import UnsafePathError, open_append, resolve_within
 
 PROJECT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 LOG_DIR = ".logs"
@@ -27,29 +30,38 @@ class ProjectLogStore:
     def _project_dir(self, project_id: str) -> Path | None:
         if not PROJECT_ID_RE.fullmatch(project_id):
             return None
-        project = (self.root / project_id).resolve()
+        raw = self.root / project_id
+        if raw.is_symlink():
+            return None
+        project = raw.resolve()
         if not project.is_relative_to(self.root) or not project.is_dir():
             return None
         return project
 
     def _log_dir(self, project_id: str) -> Path | None:
         project = self._project_dir(project_id)
-        return project / LOG_DIR if project else None
+        if project is None:
+            return None
+        try:
+            return resolve_within(project / LOG_DIR, project)
+        except UnsafePathError:
+            return None
 
     def append(self, project_id: str, entry: dict[str, Any], timestamp: float) -> bool:
+        project = self._project_dir(project_id)
         log_dir = self._log_dir(project_id)
-        if log_dir is None:
+        if project is None or log_dir is None:
             return False
         moment = datetime.fromtimestamp(timestamp, UTC)
         day = moment.astimezone().strftime("%Y-%m-%d")
         path = log_dir / f"agent_{day}.jsonl"
         try:
-            log_dir.mkdir(parents=True, exist_ok=True)
+            fd = open_append(path, project)
             with self._lock:
-                with path.open("a", encoding="utf-8") as stream:
+                with os.fdopen(fd, "a", encoding="utf-8") as stream:
                     stream.write(json.dumps(entry, ensure_ascii=False) + "\n")
                 self._cleanup(day)
-        except OSError:
+        except (OSError, UnsafePathError):
             return False
         return True
 
@@ -60,7 +72,7 @@ class ProjectLogStore:
         cutoff = self._now().timestamp() - self.retention_days * 86400
         for path in self.root.glob(f"*/{LOG_DIR}/agent_*.jsonl"):
             try:
-                if path.stat().st_mtime < cutoff:
+                if path.is_symlink() or path.stat().st_mtime < cutoff:
                     path.unlink()
             except OSError:
                 continue
@@ -71,8 +83,11 @@ class ProjectLogStore:
             return []
         entries: deque[dict[str, Any]] = deque(maxlen=max(0, limit))
         for path in sorted(log_dir.glob("agent_*.jsonl")):
+            if path.is_symlink():
+                continue
             try:
-                with path.open(encoding="utf-8") as stream:
+                fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+                with os.fdopen(fd, "r", encoding="utf-8") as stream:
                     for line in stream:
                         try:
                             item = json.loads(line)

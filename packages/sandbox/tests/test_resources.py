@@ -181,3 +181,21 @@ def test_clone_image_rejects_over_ten_megabytes(tmp_path):
         headers=headers,
     )
     assert response.status_code == 413
+
+
+def test_resource_root_symlink_is_rejected(tmp_path):
+    client = make_client(tmp_path)
+    init_project(client)
+    project = tmp_path / "workspaces" / "p1"
+    victim = tmp_path / "victim"
+    victim.mkdir()
+    (project / ".resources").symlink_to(victim)
+
+    response = client.put(
+        "/internal/projects/p1/resources/res-1",
+        content=b"%PDF-1.7",
+        headers=resource_headers(),
+    )
+
+    assert response.status_code >= 400
+    assert list(victim.iterdir()) == []

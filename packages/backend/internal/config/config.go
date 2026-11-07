@@ -61,6 +61,7 @@ type Config struct {
 	ModelSecretKey         string
 	NotificationSecretKey  string
 	UsageTimezone          string
+	UserSkillUploadEnabled bool
 
 	UserTraceEnabled      bool
 	UserTraceDir          string
@@ -129,6 +130,7 @@ func Load(plane string) Config {
 		ModelSecretKey:         getString("MODEL_SECRET_KEY", ""),
 		NotificationSecretKey:  getString("NOTIFICATION_SECRET_KEY", getString("MODEL_SECRET_KEY", "")),
 		UsageTimezone:          getString("USAGE_TIMEZONE", "Asia/Shanghai"),
+		UserSkillUploadEnabled: getBool("USER_SKILL_UPLOAD_ENABLED", false),
 
 		UserTraceEnabled:      getBool("USER_TRACE_ENABLED", true),
 		UserTraceDir:          getString("USER_TRACE_DIR", "../../data/user-trace"),
