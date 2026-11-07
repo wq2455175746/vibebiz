@@ -189,7 +189,7 @@ func TestResolverUsesHealthyBinding(t *testing.T) {
 			Status: StatusOnline, HealthStatus: HealthHealthy, LastHeartbeatAt: &heartbeat,
 		},
 	}}
-	resolver := NewResolver(repo, NewSelector(repo, 15*time.Second, func() time.Time { return now }), 15*time.Second, func() time.Time { return now })
+	resolver := NewResolver(repo, NewSelector(repo, 15*time.Second, func() time.Time { return now }), 15*time.Second, 30*time.Second, func() time.Time { return now })
 
 	route, err := resolver.ResolveRoute(context.Background(), "p1")
 	if err != nil {
@@ -222,7 +222,7 @@ func TestResolverReturnsLeaseEpoch(t *testing.T) {
 		Instance: &Instance{ID: 1, Scheme: "http", Host: "sandbox-a", Port: 8000,
 			Status: StatusOnline, HealthStatus: HealthHealthy, LastHeartbeatAt: &heartbeat},
 	}}
-	resolver := NewResolver(repo, NewSelector(repo, 15*time.Second, func() time.Time { return now }), 15*time.Second, func() time.Time { return now })
+	resolver := NewResolver(repo, NewSelector(repo, 15*time.Second, func() time.Time { return now }), 15*time.Second, 30*time.Second, func() time.Time { return now })
 	route, err := resolver.ResolveRoute(context.Background(), "p1")
 	if err != nil {
 		t.Fatal(err)
@@ -244,7 +244,7 @@ func TestResolverRenewsLeaseNearExpiry(t *testing.T) {
 		Instance: &Instance{ID: 1, Scheme: "http", Host: "sandbox-a", Port: 8000,
 			Status: StatusOnline, HealthStatus: HealthHealthy, LastHeartbeatAt: &heartbeat},
 	}}
-	resolver := NewResolver(repo, NewSelector(repo, 15*time.Second, func() time.Time { return now }), 15*time.Second, func() time.Time { return now })
+	resolver := NewResolver(repo, NewSelector(repo, 15*time.Second, func() time.Time { return now }), 15*time.Second, 30*time.Second, func() time.Time { return now })
 	route, err := resolver.ResolveRoute(context.Background(), "p1")
 	if err != nil {
 		t.Fatal(err)
@@ -254,6 +254,58 @@ func TestResolverRenewsLeaseNearExpiry(t *testing.T) {
 	}
 	if len(repo.renews) != 1 || repo.renews[0] != 3 {
 		t.Fatalf("renews = %+v", repo.renews)
+	}
+}
+
+func TestResolverUsesHeartbeatTTLForOwnerEligibility(t *testing.T) {
+	now := time.Date(2026, 11, 7, 10, 0, 0, 0, time.UTC)
+	bound := int64(1)
+	staleHeartbeat := now.Add(-20 * time.Second)
+	freshHeartbeat := now.Add(-time.Second)
+	repo := &fakeRepository{
+		binding: Binding{
+			ProjectInternalID: 42,
+			SandboxID:         &bound,
+			LeaseUntil:        now.Add(25 * time.Second),
+			Epoch:             3,
+			Instance: &Instance{ID: 1, Scheme: "http", Host: "sandbox-a", Port: 8000,
+				Status: StatusOnline, HealthStatus: HealthHealthy, LastHeartbeatAt: &staleHeartbeat},
+		},
+		selectSeq: []Instance{{ID: 1, Scheme: "http", Host: "sandbox-a", Port: 8000,
+			Status: StatusOnline, HealthStatus: HealthHealthy, LastHeartbeatAt: &freshHeartbeat}},
+	}
+	resolver := NewResolver(repo, NewSelector(repo, 15*time.Second, func() time.Time { return now }), 15*time.Second, 30*time.Second, func() time.Time { return now })
+
+	if _, err := resolver.ResolveRoute(context.Background(), "p1"); err != nil {
+		t.Fatal(err)
+	}
+	if len(repo.acquires) != 1 {
+		t.Fatalf("acquires = %+v", repo.acquires)
+	}
+	if repo.acquires[0].ttl != 30*time.Second {
+		t.Fatalf("acquire ttl = %v, want 30s", repo.acquires[0].ttl)
+	}
+}
+
+func TestResolverUsesLeaseTTLForNearExpiryRenew(t *testing.T) {
+	now := time.Date(2026, 11, 7, 10, 0, 0, 0, time.UTC)
+	heartbeat := now.Add(-time.Second)
+	bound := int64(1)
+	repo := &fakeRepository{binding: Binding{
+		ProjectInternalID: 42,
+		SandboxID:         &bound,
+		LeaseUntil:        now.Add(20 * time.Second),
+		Epoch:             3,
+		Instance: &Instance{ID: 1, Scheme: "http", Host: "sandbox-a", Port: 8000,
+			Status: StatusOnline, HealthStatus: HealthHealthy, LastHeartbeatAt: &heartbeat},
+	}}
+	resolver := NewResolver(repo, NewSelector(repo, 10*time.Second, func() time.Time { return now }), 10*time.Second, 60*time.Second, func() time.Time { return now })
+
+	if _, err := resolver.ResolveRoute(context.Background(), "p1"); err != nil {
+		t.Fatal(err)
+	}
+	if len(repo.renews) != 1 {
+		t.Fatalf("renews = %+v, want one renewal at lease-ttl threshold", repo.renews)
 	}
 }
 
@@ -274,7 +326,7 @@ func TestResolverRebindsExpiredLease(t *testing.T) {
 		},
 		selectSeq: []Instance{{ID: 2, Scheme: "http", Host: "sandbox-b", Port: 8000}},
 	}
-	resolver := NewResolver(repo, NewSelector(repo, 15*time.Second, func() time.Time { return now }), 15*time.Second, func() time.Time { return now })
+	resolver := NewResolver(repo, NewSelector(repo, 15*time.Second, func() time.Time { return now }), 15*time.Second, 30*time.Second, func() time.Time { return now })
 
 	route, err := resolver.ResolveRoute(context.Background(), "p1")
 	if err != nil {
@@ -319,7 +371,7 @@ func TestResolverRetriesAcquireConflict(t *testing.T) {
 		selectSeq:  []Instance{{ID: newID, Scheme: "http", Host: "sandbox-b", Port: 8000}},
 		acquireErr: ErrBindingConflict,
 	}
-	resolver := NewResolver(repo, NewSelector(repo, 15*time.Second, func() time.Time { return now }), 15*time.Second, func() time.Time { return now })
+	resolver := NewResolver(repo, NewSelector(repo, 15*time.Second, func() time.Time { return now }), 15*time.Second, 30*time.Second, func() time.Time { return now })
 
 	route, err := resolver.ResolveRoute(context.Background(), "p1")
 	if err != nil {
@@ -347,7 +399,7 @@ func TestResolverConflictsOnLiveLease(t *testing.T) {
 		},
 		instances: []Instance{{ID: 2, Scheme: "http", Host: "sandbox-b", Port: 8000}},
 	}
-	resolver := NewResolver(repo, NewSelector(repo, 15*time.Second, func() time.Time { return now }), 15*time.Second, func() time.Time { return now })
+	resolver := NewResolver(repo, NewSelector(repo, 15*time.Second, func() time.Time { return now }), 15*time.Second, 30*time.Second, func() time.Time { return now })
 
 	if _, err := resolver.ResolveRoute(context.Background(), "p1"); !errors.Is(err, ErrBindingConflict) {
 		t.Fatalf("err = %v, want ErrBindingConflict", err)
@@ -369,7 +421,7 @@ func TestResolverAcquireSameOwnerRenewsLease(t *testing.T) {
 		},
 		instances: []Instance{{ID: 1, Scheme: "http", Host: "sandbox-a", Port: 8000}},
 	}
-	resolver := NewResolver(repo, NewSelector(repo, 15*time.Second, func() time.Time { return now }), 15*time.Second, func() time.Time { return now })
+	resolver := NewResolver(repo, NewSelector(repo, 15*time.Second, func() time.Time { return now }), 15*time.Second, 30*time.Second, func() time.Time { return now })
 
 	route, err := resolver.ResolveRoute(context.Background(), "p1")
 	if err != nil {
@@ -417,7 +469,7 @@ func TestResolverRenew(t *testing.T) {
 	now := time.Date(2026, 11, 7, 10, 0, 0, 0, time.UTC)
 	bound := int64(1)
 	repo := &fakeRepository{binding: Binding{ProjectInternalID: 42, SandboxID: &bound, Epoch: 3}}
-	resolver := NewResolver(repo, NewSelector(repo, 15*time.Second, func() time.Time { return now }), 15*time.Second, func() time.Time { return now })
+	resolver := NewResolver(repo, NewSelector(repo, 15*time.Second, func() time.Time { return now }), 15*time.Second, 30*time.Second, func() time.Time { return now })
 
 	if err := resolver.Renew(context.Background(), "p1", 3); err != nil {
 		t.Fatal(err)
@@ -427,7 +479,7 @@ func TestResolverRenew(t *testing.T) {
 	}
 
 	empty := &fakeRepository{binding: Binding{ProjectInternalID: 42}}
-	emptyResolver := NewResolver(empty, NewSelector(empty, 15*time.Second, func() time.Time { return now }), 15*time.Second, func() time.Time { return now })
+	emptyResolver := NewResolver(empty, NewSelector(empty, 15*time.Second, func() time.Time { return now }), 15*time.Second, 30*time.Second, func() time.Time { return now })
 	if err := emptyResolver.Renew(context.Background(), "p1", 3); !errors.Is(err, ErrBindingConflict) {
 		t.Fatalf("err = %v, want ErrBindingConflict", err)
 	}
@@ -436,7 +488,7 @@ func TestResolverRenew(t *testing.T) {
 func TestResolverNoHealthyNode(t *testing.T) {
 	now := time.Date(2026, 10, 29, 10, 0, 0, 0, time.UTC)
 	repo := &fakeRepository{selectErr: ErrNoHealthySandbox}
-	resolver := NewResolver(repo, NewSelector(repo, 15*time.Second, func() time.Time { return now }), 15*time.Second, func() time.Time { return now })
+	resolver := NewResolver(repo, NewSelector(repo, 15*time.Second, func() time.Time { return now }), 15*time.Second, 30*time.Second, func() time.Time { return now })
 
 	if _, err := resolver.ResolveBaseURL(context.Background(), "p1"); !errors.Is(err, ErrNoHealthySandbox) {
 		t.Fatalf("err = %v, want ErrNoHealthySandbox", err)

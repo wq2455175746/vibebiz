@@ -171,9 +171,9 @@ func main() {
 	roleHandler := handler.NewRoleHandler(roleService)
 	registryRepo := sandboxregistry.NewMySQLRepository(db)
 	selector := sandboxregistry.NewSelector(registryRepo, cfg.SandboxHeartbeatTTL, time.Now)
-	resolver := sandboxregistry.NewResolver(registryRepo, selector, cfg.SandboxHeartbeatTTL, time.Now)
+	resolver := sandboxregistry.NewResolver(registryRepo, selector, cfg.SandboxHeartbeatTTL, cfg.SandboxLeaseTTL, time.Now)
 	provisioner := sandboxregistry.NewProvisioner(selector, client.NewHTTPInitializer(obs), 3)
-	sandboxRouter := client.NewRouter(resolver, obs)
+	sandboxRouter := client.NewLeasedRouter(resolver, resolver, obs, cfg.SandboxLeaseRenewInterval)
 	var harnessImporter handler.HarnessImporter
 	if s3Presigner != nil {
 		harnessImporter = harnesssvc.NewService(s3Presigner, sandboxRouter, cfg.EnterpriseHarnessS3Key)

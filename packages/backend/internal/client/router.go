@@ -54,6 +54,12 @@ func NewRouter(resolver ProjectResolver, obs *observability.Provider) *Router {
 	return &Router{resolver: resolver, obs: obs, newClient: NewSandbox}
 }
 
+func NewLeasedRouter(resolver ProjectResolver, renewer RouteRenewer, obs *observability.Provider, renewInterval time.Duration) *Router {
+	router := NewRouter(resolver, obs)
+	router.SetLeaseRenewer(renewer, renewInterval)
+	return router
+}
+
 func (r *Router) SetLeaseRenewer(renewer RouteRenewer, interval time.Duration) {
 	r.renewer = renewer
 	r.renewInterval = interval

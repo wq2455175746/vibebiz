@@ -185,6 +185,30 @@ func TestLoadSandboxLeaseDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadSandboxLeaseInvalidFallsBackToDefaults(t *testing.T) {
+	cases := []struct {
+		name  string
+		ttl   string
+		renew string
+	}{
+		{name: "renew not less than ttl", ttl: "5s", renew: "10s"},
+		{name: "zero ttl", ttl: "0s", renew: "5s"},
+		{name: "zero renew", ttl: "30s", renew: "0s"},
+		{name: "negative values", ttl: "-1s", renew: "-1s"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("SANDBOX_LEASE_TTL", tc.ttl)
+			t.Setenv("SANDBOX_LEASE_RENEW_INTERVAL", tc.renew)
+
+			cfg := Load("dp")
+			if cfg.SandboxLeaseTTL != 30*time.Second || cfg.SandboxLeaseRenewInterval != 10*time.Second {
+				t.Fatalf("lease fallback = %v / %v", cfg.SandboxLeaseTTL, cfg.SandboxLeaseRenewInterval)
+			}
+		})
+	}
+}
+
 func TestLoadModelSecretKey(t *testing.T) {
 	t.Setenv("MODEL_SECRET_KEY", "abc")
 	if cfg := Load("cp"); cfg.ModelSecretKey != "abc" {

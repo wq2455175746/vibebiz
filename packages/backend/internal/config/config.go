@@ -7,6 +7,11 @@ import (
 	"time"
 )
 
+const (
+	defaultSandboxLeaseTTL           = 30 * time.Second
+	defaultSandboxLeaseRenewInterval = 10 * time.Second
+)
+
 type Config struct {
 	Host        string
 	Port        int
@@ -71,6 +76,10 @@ type Config struct {
 
 func Load(plane string) Config {
 	plane = normalizePlane(plane)
+	leaseTTL, leaseRenewInterval := normalizeLeaseDurations(
+		getDuration("SANDBOX_LEASE_TTL", defaultSandboxLeaseTTL),
+		getDuration("SANDBOX_LEASE_RENEW_INTERVAL", defaultSandboxLeaseRenewInterval),
+	)
 	return Config{
 		Host:        getString("HOST", "127.0.0.1"),
 		Port:        getInt("PORT", defaultPort(plane)),
@@ -94,8 +103,8 @@ func Load(plane string) Config {
 		SandboxHeartbeatTTL:       getDuration("SANDBOX_HEARTBEAT_TTL", 15*time.Second),
 		SandboxHealthInterval:     getDuration("SANDBOX_HEALTH_INTERVAL", 10*time.Second),
 		SandboxHealthTimeout:      getDuration("SANDBOX_HEALTH_TIMEOUT", 2*time.Second),
-		SandboxLeaseTTL:           getDuration("SANDBOX_LEASE_TTL", 30*time.Second),
-		SandboxLeaseRenewInterval: getDuration("SANDBOX_LEASE_RENEW_INTERVAL", 10*time.Second),
+		SandboxLeaseTTL:           leaseTTL,
+		SandboxLeaseRenewInterval: leaseRenewInterval,
 		AsynqRedisDB:              getInt("ASYNQ_REDIS_DB", 1),
 		AsynqConcurrency:          getInt("ASYNQ_CONCURRENCY", 4),
 		ScheduledDispatchInterval: getDuration("SCHEDULED_DISPATCH_INTERVAL", 30*time.Second),
@@ -185,6 +194,13 @@ func getDuration(key string, fallback time.Duration) time.Duration {
 		return fallback
 	}
 	return v
+}
+
+func normalizeLeaseDurations(ttl, renew time.Duration) (time.Duration, time.Duration) {
+	if ttl <= 0 || renew <= 0 || renew >= ttl {
+		return defaultSandboxLeaseTTL, defaultSandboxLeaseRenewInterval
+	}
+	return ttl, renew
 }
 
 func splitCSV(v string) []string {

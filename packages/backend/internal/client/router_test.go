@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"vibebiz/internal/observability"
 	"vibebiz/internal/resource"
@@ -31,6 +32,18 @@ func (f fakeRouteResolver) ResolveBaseURL(context.Context, string) (string, erro
 
 func (f fakeRouteResolver) ResolveRoute(context.Context, string) (Route, error) {
 	return Route{BaseURL: f.url, Epoch: f.epoch}, nil
+}
+
+func TestNewLeasedRouterWiresLeaseRenewer(t *testing.T) {
+	renewer := newFakeRenewer(nil)
+	router := NewLeasedRouter(fakeRouteResolver{}, renewer, nil, 10*time.Second)
+
+	if router.renewer != renewer {
+		t.Fatalf("renewer = %v, want configured renewer", router.renewer)
+	}
+	if router.renewInterval != 10*time.Second {
+		t.Fatalf("renew interval = %v, want 10s", router.renewInterval)
+	}
 }
 
 func TestRouterSendsProjectEpoch(t *testing.T) {

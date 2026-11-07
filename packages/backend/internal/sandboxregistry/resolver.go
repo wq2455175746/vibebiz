@@ -7,17 +7,18 @@ import (
 )
 
 type Resolver struct {
-	repo     Repository
-	selector *Selector
-	ttl      time.Duration
-	now      func() time.Time
+	repo         Repository
+	selector     *Selector
+	heartbeatTTL time.Duration
+	leaseTTL     time.Duration
+	now          func() time.Time
 }
 
-func NewResolver(repo Repository, selector *Selector, ttl time.Duration, now func() time.Time) *Resolver {
+func NewResolver(repo Repository, selector *Selector, heartbeatTTL, leaseTTL time.Duration, now func() time.Time) *Resolver {
 	if now == nil {
 		now = time.Now
 	}
-	return &Resolver{repo: repo, selector: selector, ttl: ttl, now: now}
+	return &Resolver{repo: repo, selector: selector, heartbeatTTL: heartbeatTTL, leaseTTL: leaseTTL, now: now}
 }
 
 func (r *Resolver) ResolveRoute(ctx context.Context, projectID string) (Route, error) {
@@ -27,9 +28,9 @@ func (r *Resolver) ResolveRoute(ctx context.Context, projectID string) (Route, e
 			return Route{}, err
 		}
 		now := r.now().UTC()
-		if binding.SandboxID != nil && binding.LeaseUntil.After(now) && binding.Instance != nil && binding.Instance.Usable(now, r.ttl) {
-			if binding.LeaseUntil.Before(now.Add(r.ttl / 2)) {
-				_ = r.repo.RenewProjectLease(ctx, binding.ProjectInternalID, *binding.SandboxID, binding.Epoch, now, r.ttl)
+		if binding.SandboxID != nil && binding.LeaseUntil.After(now) && binding.Instance != nil && binding.Instance.Usable(now, r.heartbeatTTL) {
+			if binding.LeaseUntil.Before(now.Add(r.leaseTTL / 2)) {
+				_ = r.repo.RenewProjectLease(ctx, binding.ProjectInternalID, *binding.SandboxID, binding.Epoch, now, r.leaseTTL)
 			}
 			return Route{BaseURL: binding.Instance.BaseURL(), Epoch: binding.Epoch}, nil
 		}
@@ -37,7 +38,7 @@ func (r *Resolver) ResolveRoute(ctx context.Context, projectID string) (Route, e
 		if err != nil {
 			return Route{}, err
 		}
-		lease, err := r.repo.AcquireProjectLease(ctx, binding.ProjectInternalID, binding.SandboxID, instance.ID, now, r.ttl)
+		lease, err := r.repo.AcquireProjectLease(ctx, binding.ProjectInternalID, binding.SandboxID, instance.ID, now, r.leaseTTL)
 		if errors.Is(err, ErrBindingConflict) {
 			continue
 		}
@@ -62,5 +63,5 @@ func (r *Resolver) Renew(ctx context.Context, projectID string, epoch int64) err
 	if binding.SandboxID == nil {
 		return ErrBindingConflict
 	}
-	return r.repo.RenewProjectLease(ctx, binding.ProjectInternalID, *binding.SandboxID, epoch, r.now().UTC(), r.ttl)
+	return r.repo.RenewProjectLease(ctx, binding.ProjectInternalID, *binding.SandboxID, epoch, r.now().UTC(), r.leaseTTL)
 }
