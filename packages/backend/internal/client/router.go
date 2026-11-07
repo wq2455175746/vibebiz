@@ -215,11 +215,22 @@ func (r *Router) Chat(ctx context.Context, id string, payload []byte) (io.ReadCl
 	if err != nil {
 		return nil, err
 	}
-	stream, err := sandbox.Chat(ctx, id, payload)
+	renewal := r.startLeaseRenewal(ctx, id, route.Epoch)
+	requestCtx := ctx
+	if renewal != nil {
+		requestCtx = renewal.ctx
+	}
+	stream, err := sandbox.Chat(requestCtx, id, payload)
 	if err != nil {
+		if renewal != nil {
+			renewal.stop()
+		}
 		return nil, err
 	}
-	return r.wrapLeaseStream(ctx, id, route.Epoch, stream), nil
+	if renewal != nil {
+		return renewal.wrap(stream), nil
+	}
+	return stream, nil
 }
 
 func (r *Router) PreviewURL(ctx context.Context, id string) (string, error) {

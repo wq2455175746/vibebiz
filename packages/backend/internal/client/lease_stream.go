@@ -3,9 +3,127 @@ package client
 import (
 	"context"
 	"io"
+	"log/slog"
 	"sync"
 	"time"
 )
+
+type streamCloser struct {
+	once   sync.Once
+	mu     sync.Mutex
+	stream io.Closer
+	closed bool
+	err    error
+}
+
+func (c *streamCloser) set(stream io.Closer) {
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		_ = stream.Close()
+		return
+	}
+	c.stream = stream
+	c.mu.Unlock()
+}
+
+func (c *streamCloser) close() error {
+	c.once.Do(func() {
+		c.mu.Lock()
+		c.closed = true
+		stream := c.stream
+		c.mu.Unlock()
+		if stream != nil {
+			c.err = stream.Close()
+		}
+	})
+	return c.err
+}
+
+type leaseRenewal struct {
+	router    *Router
+	projectID string
+	epoch     int64
+	ctx       context.Context
+	cancel    context.CancelFunc
+	done      chan struct{}
+
+	mu     sync.Mutex
+	err    error
+	closer streamCloser
+}
+
+func (r *Router) startLeaseRenewal(ctx context.Context, projectID string, epoch int64) *leaseRenewal {
+	if r.renewer == nil || epoch <= 0 || r.renewInterval <= 0 {
+		return nil
+	}
+	renewCtx, cancel := context.WithCancel(ctx)
+	renewal := &leaseRenewal{
+		router:    r,
+		projectID: projectID,
+		epoch:     epoch,
+		ctx:       renewCtx,
+		cancel:    cancel,
+		done:      make(chan struct{}),
+	}
+	go func() {
+		defer close(renewal.done)
+		ticker := time.NewTicker(r.renewInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-renewCtx.Done():
+				return
+			case <-ticker.C:
+				if err := r.renewer.Renew(renewCtx, projectID, epoch); err != nil {
+					if renewCtx.Err() != nil {
+						return
+					}
+					renewal.fail(err)
+					return
+				}
+			}
+		}
+	}()
+	return renewal
+}
+
+func (l *leaseRenewal) fail(err error) {
+	l.mu.Lock()
+	if l.err == nil {
+		l.err = err
+	}
+	l.mu.Unlock()
+	l.router.logLeaseRenewError(l.ctx, l.projectID, l.epoch, err)
+	l.cancel()
+	_ = l.closer.close()
+}
+
+func (l *leaseRenewal) stop() {
+	l.cancel()
+	<-l.done
+}
+
+func (l *leaseRenewal) wrap(stream io.ReadCloser) io.ReadCloser {
+	l.closer.set(stream)
+	return &renewingReadCloser{
+		ReadCloser: stream,
+		cancel:     l.cancel,
+		done:       l.done,
+		closeFn:    l.closer.close,
+	}
+}
+
+func (r *Router) logLeaseRenewError(ctx context.Context, projectID string, epoch int64, err error) {
+	if r.obs == nil || r.obs.Logger == nil {
+		return
+	}
+	r.obs.Logger.Log(ctx, slog.LevelError, "sandbox.lease.renew_failed",
+		"project_id", projectID,
+		"epoch", epoch,
+		"error", err.Error(),
+	)
+}
 
 type renewingReadCloser struct {
 	io.ReadCloser
@@ -23,43 +141,8 @@ func (r *renewingReadCloser) Read(p []byte) (int, error) {
 }
 
 func (r *renewingReadCloser) Close() error {
+	r.cancel()
 	err := r.closeFn()
 	<-r.done
 	return err
-}
-
-func (r *Router) wrapLeaseStream(ctx context.Context, projectID string, epoch int64, stream io.ReadCloser) io.ReadCloser {
-	if r.renewer == nil || epoch <= 0 || r.renewInterval <= 0 {
-		return stream
-	}
-	renewCtx, cancel := context.WithCancel(ctx)
-	done := make(chan struct{})
-
-	var closeOnce sync.Once
-	var closeErr error
-	closeStream := func() error {
-		closeOnce.Do(func() {
-			cancel()
-			closeErr = stream.Close()
-		})
-		return closeErr
-	}
-
-	go func() {
-		defer close(done)
-		ticker := time.NewTicker(r.renewInterval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-renewCtx.Done():
-				return
-			case <-ticker.C:
-				if err := r.renewer.Renew(renewCtx, projectID, epoch); err != nil {
-					_ = closeStream()
-					return
-				}
-			}
-		}
-	}()
-	return &renewingReadCloser{ReadCloser: stream, cancel: cancel, done: done, closeFn: closeStream}
 }

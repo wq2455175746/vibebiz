@@ -10,12 +10,6 @@ import (
 
 	"vibebiz/internal/observability"
 	"vibebiz/internal/resource"
-	"vibebiz/internal/sandboxregistry"
-)
-
-var (
-	_ RouteResolver = (*sandboxregistry.Resolver)(nil)
-	_ RouteRenewer  = (*sandboxregistry.Resolver)(nil)
 )
 
 type fakeResolver struct {

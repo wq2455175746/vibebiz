@@ -7,7 +7,39 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
+
+func TestNewSandboxTimeouts(t *testing.T) {
+	sandbox := NewSandbox("http://sandbox-a:8000", nil)
+	if sandbox.http.Timeout != 10*time.Minute {
+		t.Fatalf("regular timeout = %v", sandbox.http.Timeout)
+	}
+	if sandbox.stream.Timeout != 0 {
+		t.Fatalf("stream timeout = %v, want 0", sandbox.stream.Timeout)
+	}
+
+	regular, ok := sandbox.http.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("regular transport = %T", sandbox.http.Transport)
+	}
+	stream, ok := sandbox.stream.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("stream transport = %T", sandbox.stream.Transport)
+	}
+	if regular != stream {
+		t.Fatal("regular and stream clients should share one transport")
+	}
+	if regular.ResponseHeaderTimeout != 30*time.Second {
+		t.Fatalf("response header timeout = %v", regular.ResponseHeaderTimeout)
+	}
+	if regular.DialContext == nil {
+		t.Fatal("connection timeout/dialer was not preserved")
+	}
+	if regular.TLSHandshakeTimeout <= 0 {
+		t.Fatalf("TLS handshake timeout = %v", regular.TLSHandshakeTimeout)
+	}
+}
 
 func TestSandboxInitProject(t *testing.T) {
 	var called bool

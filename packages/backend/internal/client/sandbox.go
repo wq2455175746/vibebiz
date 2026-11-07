@@ -104,15 +104,19 @@ type Sandbox struct {
 	obs     *observability.Provider
 }
 
+const streamResponseHeaderTimeout = 30 * time.Second
+
 func NewSandbox(baseURL string, obs *observability.Provider) *Sandbox {
-	transport := http.DefaultTransport
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.ResponseHeaderTimeout = streamResponseHeaderTimeout
+	var roundTripper http.RoundTripper = transport
 	if obs != nil {
-		transport = otelhttp.NewTransport(http.DefaultTransport)
+		roundTripper = otelhttp.NewTransport(transport)
 	}
 	return &Sandbox{
 		baseURL: strings.TrimRight(baseURL, "/"),
-		http:    &http.Client{Transport: transport, Timeout: 10 * time.Minute},
-		stream:  &http.Client{Transport: transport},
+		http:    &http.Client{Transport: roundTripper, Timeout: 10 * time.Minute},
+		stream:  &http.Client{Transport: roundTripper, Timeout: 0},
 		obs:     obs,
 	}
 }
