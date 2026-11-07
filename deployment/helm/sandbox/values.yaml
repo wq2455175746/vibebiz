@@ -79,7 +79,7 @@ autoscaling:
   targetCPUUtilizationPercentage: 70
 
 podDisruptionBudget:
-  enabled: false
+  enabled: true
   minAvailable: 1
 
 nodeSelector: {}

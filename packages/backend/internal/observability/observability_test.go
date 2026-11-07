@@ -34,6 +34,35 @@ func TestMetricsHandlerExposesProjectCounter(t *testing.T) {
 	}
 }
 
+func TestMetricsHandlerExposesProjectLeaseMetrics(t *testing.T) {
+	ctx := context.Background()
+	p, err := New(ctx, "vibebiz-test", "dp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Shutdown(ctx)
+
+	p.RecordProjectLeaseAcquire("ok")
+	p.RecordProjectLeaseRenewFail()
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/metrics", nil)
+	p.MetricsHandler.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	for _, metric := range []string{
+		"vibebiz_project_lease_acquire_total",
+		"vibebiz_project_lease_renew_fail_total",
+	} {
+		if !strings.Contains(body, metric) {
+			t.Fatalf("metrics missing %s: %s", metric, body)
+		}
+	}
+	if !strings.Contains(body, `result="ok"`) {
+		t.Fatalf("metrics missing acquire result: %s", body)
+	}
+}
+
 func TestMiddlewareAddsRequestIDToContext(t *testing.T) {
 	ctx := context.Background()
 	p, err := New(ctx, "vibebiz-test", "cp")

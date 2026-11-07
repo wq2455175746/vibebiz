@@ -294,10 +294,10 @@ func TestRenewFailureLogsAndStoresError(t *testing.T) {
 	obs := &observability.Provider{Logger: slog.New(&captureHandler{records: records})}
 	renewErr := errors.New("lease lost")
 	renewer := newFakeRenewer(renewErr)
-	router := NewRouter(fakeRouteResolver{url: "http://sandbox-a:8000", epoch: 9}, obs)
+	router := NewRouter(fakeRouteResolver{url: "http://sandbox-a:8000", epoch: 9, sandboxID: 7}, obs)
 	router.SetLeaseRenewer(renewer, time.Millisecond)
 
-	renewal := router.startLeaseRenewal(context.Background(), "p1", 9)
+	renewal := router.startLeaseRenewal(context.Background(), "p1", 9, 7)
 	stream := newBlockingReadCloser()
 	wrapped := renewal.wrap(stream)
 
@@ -310,7 +310,7 @@ func TestRenewFailureLogsAndStoresError(t *testing.T) {
 			t.Fatalf("record = %+v", record)
 		}
 		attrs := recordAttrs(record)
-		if attrs["project_id"] != "p1" || attrs["epoch"] != "9" {
+		if attrs["project_id"] != "p1" || attrs["epoch"] != "9" || attrs["sandbox_id"] != "7" {
 			t.Fatalf("attrs = %+v", attrs)
 		}
 	case <-time.After(time.Second):
@@ -330,7 +330,7 @@ func TestLeaseStreamDoubleClose(t *testing.T) {
 	router := NewRouter(fakeRouteResolver{url: "http://sandbox-a:8000", epoch: 9}, nil)
 	router.SetLeaseRenewer(renewer, time.Hour)
 
-	renewal := router.startLeaseRenewal(context.Background(), "p1", 9)
+	renewal := router.startLeaseRenewal(context.Background(), "p1", 9, 7)
 	stream := &countingReadCloser{}
 	wrapped := renewal.wrap(stream)
 
@@ -350,7 +350,7 @@ func TestLeaseRenewalStopCancelsAndWaits(t *testing.T) {
 	router := NewRouter(fakeRouteResolver{url: "http://sandbox-a:8000", epoch: 9}, nil)
 	router.SetLeaseRenewer(renewer, time.Hour)
 
-	renewal := router.startLeaseRenewal(context.Background(), "p1", 9)
+	renewal := router.startLeaseRenewal(context.Background(), "p1", 9, 7)
 	done := make(chan struct{})
 	go func() {
 		renewal.stop()
@@ -372,17 +372,17 @@ func TestLeaseRenewalStopCancelsAndWaits(t *testing.T) {
 
 func TestStartLeaseRenewalSkipsWithoutRenewal(t *testing.T) {
 	router := NewRouter(fakeRouteResolver{url: "http://sandbox-a:8000", epoch: 9}, nil)
-	if got := router.startLeaseRenewal(context.Background(), "p1", 9); got != nil {
+	if got := router.startLeaseRenewal(context.Background(), "p1", 9, 7); got != nil {
 		t.Fatal("expected nil renewal without renewer")
 	}
 
 	router.SetLeaseRenewer(newFakeRenewer(nil), 0)
-	if got := router.startLeaseRenewal(context.Background(), "p1", 9); got != nil {
+	if got := router.startLeaseRenewal(context.Background(), "p1", 9, 7); got != nil {
 		t.Fatal("expected nil renewal with zero interval")
 	}
 
 	router.SetLeaseRenewer(newFakeRenewer(nil), time.Second)
-	if got := router.startLeaseRenewal(context.Background(), "p1", 0); got != nil {
+	if got := router.startLeaseRenewal(context.Background(), "p1", 0, 0); got != nil {
 		t.Fatal("expected nil renewal with zero epoch")
 	}
 }

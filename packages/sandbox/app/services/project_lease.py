@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from app.errors import WorkspaceError
+from app.observability import STALE_EPOCH_REJECT
 
 
 class StaleProjectEpoch(WorkspaceError):
@@ -33,6 +34,7 @@ def check_epoch(project_dir: Path, epoch: int, sandbox_name: str) -> None:
         return
     current = read_epoch(project_dir)
     if epoch < current:
+        STALE_EPOCH_REJECT.labels(project_id=project_dir.name).inc()
         raise StaleProjectEpoch("stale project epoch")
     if epoch == current:
         return

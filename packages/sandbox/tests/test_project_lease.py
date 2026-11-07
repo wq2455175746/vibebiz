@@ -2,6 +2,7 @@ import json
 
 import pytest
 
+from app.observability import STALE_EPOCH_REJECT
 from app.services.project_lease import StaleProjectEpoch, check_epoch, read_epoch
 
 
@@ -11,6 +12,18 @@ def test_stale_epoch_is_rejected(tmp_path):
     (project / ".vibebiz" / "lease").write_text(json.dumps({"epoch": 5}), encoding="utf-8")
     with pytest.raises(StaleProjectEpoch):
         check_epoch(project, 4, "sandbox-a")
+
+
+def test_stale_epoch_increments_metric(tmp_path):
+    project = tmp_path / "p1"
+    (project / ".vibebiz").mkdir(parents=True)
+    (project / ".vibebiz" / "lease").write_text(json.dumps({"epoch": 5}), encoding="utf-8")
+    before = STALE_EPOCH_REJECT.labels(project_id="p1")._value.get()
+
+    with pytest.raises(StaleProjectEpoch):
+        check_epoch(project, 4, "sandbox-a")
+
+    assert STALE_EPOCH_REJECT.labels(project_id="p1")._value.get() == before + 1
 
 
 def test_new_epoch_updates_lease_file(tmp_path):

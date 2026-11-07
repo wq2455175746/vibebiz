@@ -125,6 +125,19 @@ func (f *fakeRepository) UpdateProjectBinding(_ context.Context, projectID int64
 	return nil
 }
 
+type fakeLeaseMetrics struct {
+	acquires    []string
+	renewFailed int
+}
+
+func (f *fakeLeaseMetrics) RecordProjectLeaseAcquire(result string) {
+	f.acquires = append(f.acquires, result)
+}
+
+func (f *fakeLeaseMetrics) RecordProjectLeaseRenewFail() {
+	f.renewFailed++
+}
+
 type fakeInitializer struct {
 	failures map[string]bool
 	calls    []string
@@ -227,8 +240,63 @@ func TestResolverReturnsLeaseEpoch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if route.BaseURL != "http://sandbox-a:8000" || route.Epoch != 3 {
+	if route.BaseURL != "http://sandbox-a:8000" || route.Epoch != 3 || route.SandboxID != 1 {
 		t.Fatalf("route = %+v", route)
+	}
+}
+
+func TestResolverRecordsLeaseAcquireResult(t *testing.T) {
+	now := time.Date(2026, 11, 7, 10, 0, 0, 0, time.UTC)
+	oldID := int64(1)
+	repo := &fakeRepository{
+		binding: Binding{
+			ProjectInternalID: 42,
+			SandboxID:         &oldID,
+			LeaseUntil:        now.Add(-time.Second),
+			Epoch:             4,
+			Instance:          &Instance{ID: 1, Status: StatusOffline, HealthStatus: HealthUnhealthy},
+		},
+		selectSeq: []Instance{{ID: 2, Scheme: "http", Host: "sandbox-b", Port: 8000}},
+	}
+	metrics := &fakeLeaseMetrics{}
+	resolver := NewResolver(repo, NewSelector(repo, 15*time.Second, func() time.Time { return now }), 15*time.Second, 30*time.Second, func() time.Time { return now })
+	resolver.SetMetrics(metrics)
+
+	route, err := resolver.ResolveRoute(context.Background(), "p1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if route.SandboxID != 2 {
+		t.Fatalf("route = %+v", route)
+	}
+	if len(metrics.acquires) != 1 || metrics.acquires[0] != "ok" {
+		t.Fatalf("acquire metrics = %+v", metrics.acquires)
+	}
+}
+
+func TestResolverRecordsLeaseAcquireConflict(t *testing.T) {
+	now := time.Date(2026, 11, 7, 10, 0, 0, 0, time.UTC)
+	heartbeat := now.Add(-time.Minute)
+	bound := int64(1)
+	repo := &fakeRepository{
+		binding: Binding{
+			ProjectInternalID: 42,
+			SandboxID:         &bound,
+			LeaseUntil:        now.Add(20 * time.Second),
+			Epoch:             3,
+			Instance:          &Instance{ID: 1, Status: StatusOffline, HealthStatus: HealthUnhealthy, LastHeartbeatAt: &heartbeat},
+		},
+		instances: []Instance{{ID: 2, Scheme: "http", Host: "sandbox-b", Port: 8000}},
+	}
+	metrics := &fakeLeaseMetrics{}
+	resolver := NewResolver(repo, NewSelector(repo, 15*time.Second, func() time.Time { return now }), 15*time.Second, 30*time.Second, func() time.Time { return now })
+	resolver.SetMetrics(metrics)
+
+	if _, err := resolver.ResolveRoute(context.Background(), "p1"); !errors.Is(err, ErrBindingConflict) {
+		t.Fatalf("err = %v, want ErrBindingConflict", err)
+	}
+	if len(metrics.acquires) != 2 || metrics.acquires[0] != "conflict" || metrics.acquires[1] != "conflict" {
+		t.Fatalf("acquire metrics = %+v", metrics.acquires)
 	}
 }
 
@@ -254,6 +322,40 @@ func TestResolverRenewsLeaseNearExpiry(t *testing.T) {
 	}
 	if len(repo.renews) != 1 || repo.renews[0] != 3 {
 		t.Fatalf("renews = %+v", repo.renews)
+	}
+}
+
+func TestResolverRetriesAfterNearExpiryRenewFailure(t *testing.T) {
+	now := time.Date(2026, 11, 7, 10, 0, 0, 0, time.UTC)
+	heartbeat := now.Add(-time.Second)
+	bound := int64(1)
+	nearExpiry := Binding{
+		ProjectInternalID: 42,
+		SandboxID:         &bound,
+		LeaseUntil:        now.Add(5 * time.Second),
+		Epoch:             3,
+		Instance: &Instance{ID: 1, Scheme: "http", Host: "sandbox-a", Port: 8000,
+			Status: StatusOnline, HealthStatus: HealthHealthy, LastHeartbeatAt: &heartbeat},
+	}
+	refreshed := nearExpiry
+	refreshed.LeaseUntil = now.Add(25 * time.Second)
+	repo := &fakeRepository{
+		bindingSeq: []Binding{nearExpiry, refreshed},
+		renewErr:   ErrBindingConflict,
+	}
+	metrics := &fakeLeaseMetrics{}
+	resolver := NewResolver(repo, NewSelector(repo, 15*time.Second, func() time.Time { return now }), 15*time.Second, 30*time.Second, func() time.Time { return now })
+	resolver.SetMetrics(metrics)
+
+	route, err := resolver.ResolveRoute(context.Background(), "p1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if route.BaseURL != "http://sandbox-a:8000" || route.Epoch != 3 || route.SandboxID != 1 {
+		t.Fatalf("route = %+v", route)
+	}
+	if metrics.renewFailed != 1 {
+		t.Fatalf("renew failure metrics = %d, want 1", metrics.renewFailed)
 	}
 }
 
@@ -332,7 +434,7 @@ func TestResolverRebindsExpiredLease(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if route.BaseURL != "http://sandbox-b:8000" || route.Epoch != 5 {
+	if route.BaseURL != "http://sandbox-b:8000" || route.Epoch != 5 || route.SandboxID != 2 {
 		t.Fatalf("route = %+v", route)
 	}
 	if len(repo.acquires) != 1 || repo.acquires[0].oldID == nil || *repo.acquires[0].oldID != 1 || repo.acquires[0].newID != 2 {

@@ -22,8 +22,9 @@ func (f fakeResolver) ResolveBaseURL(_ context.Context, projectID string) (strin
 }
 
 type fakeRouteResolver struct {
-	url   string
-	epoch int64
+	url       string
+	epoch     int64
+	sandboxID int64
 }
 
 func (f fakeRouteResolver) ResolveBaseURL(context.Context, string) (string, error) {
@@ -31,7 +32,7 @@ func (f fakeRouteResolver) ResolveBaseURL(context.Context, string) (string, erro
 }
 
 func (f fakeRouteResolver) ResolveRoute(context.Context, string) (Route, error) {
-	return Route{BaseURL: f.url, Epoch: f.epoch}, nil
+	return Route{BaseURL: f.url, Epoch: f.epoch, SandboxID: f.sandboxID}, nil
 }
 
 func TestNewLeasedRouterWiresLeaseRenewer(t *testing.T) {

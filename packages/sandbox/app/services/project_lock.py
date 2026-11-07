@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
 
 from app.errors import WorkspaceError
+from app.observability import PROJECT_LOCK_TIMEOUT, PROJECT_LOCK_WAIT
 
 
 class ProjectLockBusy(WorkspaceError):
@@ -24,8 +25,9 @@ class ProjectLock:
 
     @contextmanager
     def acquire_sync(self, project_dir: Path) -> Iterator[None]:
+        started = time.monotonic()
         handle = self._open(project_dir)
-        deadline = time.monotonic() + self.timeout
+        deadline = started + self.timeout
         try:
             while True:
                 try:
@@ -33,8 +35,12 @@ class ProjectLock:
                     break
                 except BlockingIOError:
                     if time.monotonic() >= deadline:
+                        PROJECT_LOCK_TIMEOUT.labels(project_id=project_dir.name).inc()
                         raise ProjectLockBusy("project is busy") from None
                     time.sleep(0.05)
+            PROJECT_LOCK_WAIT.labels(operation="sync", project_id=project_dir.name).observe(
+                time.monotonic() - started
+            )
             yield
         finally:
             try:
@@ -44,8 +50,9 @@ class ProjectLock:
 
     @asynccontextmanager
     async def acquire(self, project_dir: Path) -> AsyncIterator[None]:
+        started = time.monotonic()
         handle = self._open(project_dir)
-        deadline = time.monotonic() + self.timeout
+        deadline = started + self.timeout
         try:
             while True:
                 try:
@@ -53,8 +60,12 @@ class ProjectLock:
                     break
                 except BlockingIOError:
                     if time.monotonic() >= deadline:
+                        PROJECT_LOCK_TIMEOUT.labels(project_id=project_dir.name).inc()
                         raise ProjectLockBusy("project is busy") from None
                     await asyncio.sleep(0.05)
+            PROJECT_LOCK_WAIT.labels(operation="async", project_id=project_dir.name).observe(
+                time.monotonic() - started
+            )
             yield
         finally:
             try:

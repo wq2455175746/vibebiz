@@ -8,10 +8,12 @@ import (
 )
 
 type Metrics struct {
-	HTTPRequests    *prometheus.CounterVec
-	HTTPDuration    *prometheus.HistogramVec
-	SandboxRequests *prometheus.CounterVec
-	SSEEvents       *prometheus.CounterVec
+	HTTPRequests          *prometheus.CounterVec
+	HTTPDuration          *prometheus.HistogramVec
+	SandboxRequests       *prometheus.CounterVec
+	SSEEvents             *prometheus.CounterVec
+	ProjectLeaseAcquire   *prometheus.CounterVec
+	ProjectLeaseRenewFail *prometheus.CounterVec
 
 	registry *prometheus.Registry
 }
@@ -36,6 +38,14 @@ func newMetrics() *Metrics {
 			Name: "vibebiz_sse_events_total",
 			Help: "Total number of SSE events relayed.",
 		}, []string{"project_id", "type"}),
+		ProjectLeaseAcquire: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "vibebiz_project_lease_acquire_total",
+			Help: "Total number of project lease acquisition attempts.",
+		}, []string{"service", "plane", "result"}),
+		ProjectLeaseRenewFail: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "vibebiz_project_lease_renew_fail_total",
+			Help: "Total number of project lease renewal failures.",
+		}, []string{"service", "plane"}),
 		registry: registry,
 	}
 
@@ -44,6 +54,8 @@ func newMetrics() *Metrics {
 		m.HTTPDuration,
 		m.SandboxRequests,
 		m.SSEEvents,
+		m.ProjectLeaseAcquire,
+		m.ProjectLeaseRenewFail,
 	)
 	return m
 }
@@ -58,4 +70,12 @@ func (m *Metrics) RecordSandboxRequest(serviceName, plane, operation, status, pr
 
 func (m *Metrics) RecordSSEEvent(projectID, eventType string) {
 	m.SSEEvents.WithLabelValues(projectID, eventType).Inc()
+}
+
+func (m *Metrics) RecordProjectLeaseAcquire(serviceName, plane, result string) {
+	m.ProjectLeaseAcquire.WithLabelValues(serviceName, plane, result).Inc()
+}
+
+func (m *Metrics) RecordProjectLeaseRenewFail(serviceName, plane string) {
+	m.ProjectLeaseRenewFail.WithLabelValues(serviceName, plane).Inc()
 }

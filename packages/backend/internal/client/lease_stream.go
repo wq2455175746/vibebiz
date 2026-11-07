@@ -44,6 +44,7 @@ type leaseRenewal struct {
 	router    *Router
 	projectID string
 	epoch     int64
+	sandboxID int64
 	ctx       context.Context
 	cancel    context.CancelFunc
 	done      chan struct{}
@@ -53,7 +54,7 @@ type leaseRenewal struct {
 	closer streamCloser
 }
 
-func (r *Router) startLeaseRenewal(ctx context.Context, projectID string, epoch int64) *leaseRenewal {
+func (r *Router) startLeaseRenewal(ctx context.Context, projectID string, epoch, sandboxID int64) *leaseRenewal {
 	if r.renewer == nil || epoch <= 0 || r.renewInterval <= 0 {
 		return nil
 	}
@@ -62,6 +63,7 @@ func (r *Router) startLeaseRenewal(ctx context.Context, projectID string, epoch 
 		router:    r,
 		projectID: projectID,
 		epoch:     epoch,
+		sandboxID: sandboxID,
 		ctx:       renewCtx,
 		cancel:    cancel,
 		done:      make(chan struct{}),
@@ -94,7 +96,7 @@ func (l *leaseRenewal) fail(err error) {
 		l.err = err
 	}
 	l.mu.Unlock()
-	l.router.logLeaseRenewError(l.ctx, l.projectID, l.epoch, err)
+	l.router.logLeaseRenewError(l.ctx, l.projectID, l.sandboxID, l.epoch, err)
 	l.cancel()
 	_ = l.closer.close()
 }
@@ -114,12 +116,13 @@ func (l *leaseRenewal) wrap(stream io.ReadCloser) io.ReadCloser {
 	}
 }
 
-func (r *Router) logLeaseRenewError(ctx context.Context, projectID string, epoch int64, err error) {
+func (r *Router) logLeaseRenewError(ctx context.Context, projectID string, sandboxID, epoch int64, err error) {
 	if r.obs == nil || r.obs.Logger == nil {
 		return
 	}
 	r.obs.Logger.Log(ctx, slog.LevelError, "sandbox.lease.renew_failed",
 		"project_id", projectID,
+		"sandbox_id", sandboxID,
 		"epoch", epoch,
 		"error", err.Error(),
 	)

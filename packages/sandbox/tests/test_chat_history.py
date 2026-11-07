@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from app.services.chat_history import ChatHistory
-from app.services.chat_turns import ChatTurnManager, TurnLocked
+from app.services.chat_turns import ChatTurnManager, TurnLocked, iter_turn_events
 from app.services.project_lease import StaleProjectEpoch, read_epoch
 from app.services.project_lock import ProjectLock, ProjectLockBusy
 from app.services.workspace import Workspace
@@ -76,6 +76,10 @@ async def wait_until_inactive(manager: ChatTurnManager, project_id: str = "p1") 
             return
         await asyncio.sleep(0.01)
     assert await manager.status(project_id) == {"active": False, "turnId": None}
+
+
+async def collect_turn_events(manager: ChatTurnManager, turn) -> list:
+    return [event async for event in iter_turn_events(manager, turn)]
 
 
 def write_lease(project: Path, epoch: int) -> None:
@@ -172,6 +176,8 @@ def test_stop_before_task_runs_releases_lock(tmp_path):
             await turn.task
         await wait_until_inactive(manager)
         assert turn.lock_cm is None
+        events = await asyncio.wait_for(collect_turn_events(manager, turn), 0.5)
+        assert events == []
         async with lock.acquire(project_dir):
             pass
 
@@ -195,7 +201,32 @@ def test_stop_during_finally_releases_lock(tmp_path):
             await turn.task
         await wait_until_inactive(manager)
         assert turn.lock_cm is None
+        events = await asyncio.wait_for(collect_turn_events(manager, turn), 0.5)
+        assert events
         async with lock.acquire(project_dir):
+            pass
+
+    asyncio.run(run())
+
+
+def test_cancelled_turn_emits_terminal_event(tmp_path):
+    workspace = Workspace(tmp_path / "workspaces")
+    workspace.init_project("p1")
+    history = ChatHistory(workspace)
+    lock = ProjectLock(timeout=0.1)
+    agent = GateAgent()
+    manager = ChatTurnManager(
+        agent, history, FakeVersioning(), project_lock=lock, sandbox_name="sandbox-a"
+    )
+
+    async def run() -> None:
+        turn = await manager.start("p1", "hello", workspace)
+        assert await manager.stop("p1") is True
+        with suppress(asyncio.CancelledError):
+            await turn.task
+        events = await asyncio.wait_for(collect_turn_events(manager, turn), 0.5)
+        assert events == []
+        async with lock.acquire(workspace.project_dir("p1")):
             pass
 
     asyncio.run(run())

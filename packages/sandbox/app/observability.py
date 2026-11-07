@@ -62,6 +62,21 @@ SSE_EVENTS = Counter(
     "SSE events emitted per project",
     ["project_id", "type"],
 )
+PROJECT_LOCK_WAIT = Histogram(
+    "vibebiz_project_lock_wait_seconds",
+    "Time spent waiting for the project cross-process lock",
+    ["operation", "project_id"],
+)
+PROJECT_LOCK_TIMEOUT = Counter(
+    "vibebiz_project_lock_timeout_total",
+    "Project lock acquisition timeouts",
+    ["project_id"],
+)
+STALE_EPOCH_REJECT = Counter(
+    "vibebiz_project_stale_epoch_reject_total",
+    "Writes rejected because their project epoch is stale",
+    ["project_id"],
+)
 
 _PROJECT_PATH = re.compile(r"^/internal/projects/([^/]+)")
 _request_id: ContextVar[str] = ContextVar("request_id", default="")

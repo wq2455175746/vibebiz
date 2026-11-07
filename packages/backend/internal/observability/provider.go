@@ -56,3 +56,11 @@ func (p *Provider) RecordSandboxRequest(operation, status, projectID string) {
 func (p *Provider) RecordSSEEvent(projectID, eventType string) {
 	p.Metrics.RecordSSEEvent(projectID, eventType)
 }
+
+func (p *Provider) RecordProjectLeaseAcquire(result string) {
+	p.Metrics.RecordProjectLeaseAcquire(p.ServiceName, p.Plane, result)
+}
+
+func (p *Provider) RecordProjectLeaseRenewFail() {
+	p.Metrics.RecordProjectLeaseRenewFail(p.ServiceName, p.Plane)
+}

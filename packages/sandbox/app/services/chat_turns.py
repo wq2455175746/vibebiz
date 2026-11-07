@@ -41,6 +41,7 @@ class Turn:
     user_id: int = 0
     task: asyncio.Task | None = None
     lock_cm: Any = None
+    done_sent: bool = False
     subscribers: set[asyncio.Queue[dict[str, Any] | None]] = field(default_factory=set)
 
 
@@ -276,7 +277,14 @@ class ChatTurnManager:
         turn.lock_cm = None
         await cm.__aexit__(None, None, None)
 
+    def _done(self, turn: Turn) -> None:
+        if turn.done_sent:
+            return
+        turn.done_sent = True
+        self._broadcast(turn, None)
+
     async def _finish(self, turn: Turn) -> None:
+        self._done(turn)
         try:
             await self._release(turn)
         finally:
@@ -375,7 +383,7 @@ class ChatTurnManager:
                             "turnId": turn.id,
                         },
                     )
-                self._broadcast(turn, None)
+                self._done(turn)
             finally:
                 await self._finish(turn)
             if cancelled:

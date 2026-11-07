@@ -221,7 +221,7 @@ func (r *Router) Chat(ctx context.Context, id string, payload []byte) (io.ReadCl
 	if err != nil {
 		return nil, err
 	}
-	renewal := r.startLeaseRenewal(ctx, id, route.Epoch)
+	renewal := r.startLeaseRenewal(ctx, id, route.Epoch, route.SandboxID)
 	requestCtx := ctx
 	if renewal != nil {
 		requestCtx = renewal.ctx

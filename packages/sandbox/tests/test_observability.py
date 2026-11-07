@@ -65,6 +65,9 @@ def test_metrics_endpoint_exposes_vibebiz_metrics(tmp_path):
         "vibebiz_sandbox_requests_total",
         "vibebiz_project_agent_runs_total",
         "vibebiz_sse_events_total",
+        "vibebiz_project_lock_wait_seconds",
+        "vibebiz_project_lock_timeout_total",
+        "vibebiz_project_stale_epoch_reject_total",
     ):
         assert metric in response.text
 

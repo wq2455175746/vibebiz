@@ -77,8 +77,9 @@ type Lease struct {
 }
 
 type Route struct {
-	BaseURL string
-	Epoch   int64
+	BaseURL   string
+	Epoch     int64
+	SandboxID int64
 }
 
 type Repository interface {
