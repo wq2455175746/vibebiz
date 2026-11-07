@@ -325,6 +325,21 @@ def test_project_stats_invalid_project_id(tmp_path):
     assert response.json()["code"] != 0
 
 
+def test_chat_rejects_stale_epoch(tmp_path):
+    client = make_client(tmp_path)
+    init_project(client)
+    write_lease(tmp_path, "p1", 5)
+
+    response = client.post(
+        "/internal/projects/p1/chat",
+        headers={"X-Project-Epoch": "4"},
+        json={"message": "hello"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == 40902
+
+
 def test_chat_stream_updates_workspace(tmp_path):
     client = make_client(tmp_path)
     init_project(client)

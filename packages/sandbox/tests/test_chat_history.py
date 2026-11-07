@@ -1,5 +1,6 @@
 import asyncio
 import json
+from contextlib import suppress
 from pathlib import Path
 
 import pytest
@@ -50,6 +51,31 @@ class GateAgent:
         self.started.set()
         await self.release.wait()
         yield {"type": "agent", "payload": {"type": "result", "subtype": "success"}}
+
+
+class InstantAgent:
+    mode = "stub"
+
+    async def run(self, *_args, **_kwargs):
+        yield {"type": "agent", "payload": {"type": "result", "subtype": "success"}}
+
+
+class BlockingAssistantHistory(ChatHistory):
+    def __init__(self, workspace: Workspace) -> None:
+        super().__init__(workspace)
+        self.in_finally = asyncio.Event()
+
+    async def append_assistant(self, *_args, **_kwargs) -> None:
+        self.in_finally.set()
+        await asyncio.Event().wait()
+
+
+async def wait_until_inactive(manager: ChatTurnManager, project_id: str = "p1") -> None:
+    for _ in range(100):
+        if await manager.status(project_id) == {"active": False, "turnId": None}:
+            return
+        await asyncio.sleep(0.01)
+    assert await manager.status(project_id) == {"active": False, "turnId": None}
 
 
 def write_lease(project: Path, epoch: int) -> None:
@@ -124,6 +150,53 @@ def test_turn_updates_lease_with_newer_epoch(tmp_path):
         assert read_epoch(project_dir) == 5
         agent.release.set()
         await turn.task
+
+    asyncio.run(run())
+
+
+def test_stop_before_task_runs_releases_lock(tmp_path):
+    workspace = Workspace(tmp_path / "workspaces")
+    project_dir = workspace.init_project("p1")
+    history = ChatHistory(workspace)
+    lock = ProjectLock(timeout=0.1)
+    agent = GateAgent()
+    manager = ChatTurnManager(
+        agent, history, FakeVersioning(), project_lock=lock, sandbox_name="sandbox-a"
+    )
+
+    async def run() -> None:
+        turn = await manager.start("p1", "hello", workspace)
+        assert not agent.started.is_set()
+        assert await manager.stop("p1") is True
+        with suppress(asyncio.CancelledError):
+            await turn.task
+        await wait_until_inactive(manager)
+        assert turn.lock_cm is None
+        async with lock.acquire(project_dir):
+            pass
+
+    asyncio.run(run())
+
+
+def test_stop_during_finally_releases_lock(tmp_path):
+    workspace = Workspace(tmp_path / "workspaces")
+    project_dir = workspace.init_project("p1")
+    history = BlockingAssistantHistory(workspace)
+    lock = ProjectLock(timeout=0.1)
+    manager = ChatTurnManager(
+        InstantAgent(), history, FakeVersioning(), project_lock=lock, sandbox_name="sandbox-a"
+    )
+
+    async def run() -> None:
+        turn = await manager.start("p1", "hello", workspace)
+        await history.in_finally.wait()
+        assert await manager.stop("p1") is True
+        with suppress(asyncio.CancelledError):
+            await turn.task
+        await wait_until_inactive(manager)
+        assert turn.lock_cm is None
+        async with lock.acquire(project_dir):
+            pass
 
     asyncio.run(run())
 

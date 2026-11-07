@@ -28,6 +28,7 @@ def read_epoch(project_dir: Path) -> int:
 
 
 def check_epoch(project_dir: Path, epoch: int, sandbox_name: str) -> None:
+    """Validate and advance the project epoch; callers must hold the project flock."""
     if epoch <= 0:
         return
     current = read_epoch(project_dir)

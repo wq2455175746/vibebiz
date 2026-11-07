@@ -1,7 +1,7 @@
 import asyncio
 import uuid
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -229,6 +229,7 @@ class ChatTurnManager:
                 turn.subscribers.add(turn.queue)
                 self._active[project_id] = turn
                 turn.task = asyncio.create_task(self._run(turn, workspace, session_id))
+                turn.task.add_done_callback(lambda _task: self._schedule_finish(turn))
                 started = True
             except BaseException:
                 if not started:
@@ -261,6 +262,27 @@ class ChatTurnManager:
 
     def unsubscribe(self, turn: Turn, queue: asyncio.Queue[dict[str, Any] | None]) -> None:
         turn.subscribers.discard(queue)
+
+    def _schedule_finish(self, turn: Turn) -> None:
+        if turn.lock_cm is None and self._active.get(turn.project_id) is not turn:
+            return
+        with suppress(RuntimeError):
+            asyncio.get_running_loop().create_task(self._finish(turn))
+
+    async def _release(self, turn: Turn) -> None:
+        cm = turn.lock_cm
+        if cm is None:
+            return
+        turn.lock_cm = None
+        await cm.__aexit__(None, None, None)
+
+    async def _finish(self, turn: Turn) -> None:
+        try:
+            await self._release(turn)
+        finally:
+            async with self._lock:
+                if self._active.get(turn.project_id) is turn:
+                    self._active.pop(turn.project_id, None)
 
     async def _run(self, turn: Turn, workspace: Workspace, session_id: str | None) -> None:
         collector = TurnCollector()
@@ -316,44 +338,46 @@ class ChatTurnManager:
             )
             self._broadcast(turn, {"type": "error", "message": error_message})
         finally:
-            tools = collector.finalize(status)
-            content = collector.content()
-            if status == "error" and not content:
-                content = error_message
             try:
-                await self.history.append_assistant(
-                    turn.project_id,
-                    turn.id,
-                    content,
-                    tools,
-                    status,
-                    model=self.model,
-                    duration_ms=collector.duration_ms,
-                    num_turns=collector.num_turns,
-                    error_message=error_message,
-                )
-            except Exception:
-                logger.exception(
-                    "chat.history.write_failed",
-                    extra={"project_id": turn.project_id, "turn_id": turn.id},
-                )
-            usage = collector.usage()
-            if usage["modelRequests"] > 0 or usage["inputTokens"] > 0 or usage["outputTokens"] > 0:
-                self._broadcast(
-                    turn,
-                    {
-                        "type": "usage",
-                        **usage,
-                        "model": self.model,
-                        "turnId": turn.id,
-                    },
-                )
-            self._broadcast(turn, None)
-            if turn.lock_cm is not None:
-                await turn.lock_cm.__aexit__(None, None, None)
-            async with self._lock:
-                if self._active.get(turn.project_id) is turn:
-                    self._active.pop(turn.project_id, None)
+                tools = collector.finalize(status)
+                content = collector.content()
+                if status == "error" and not content:
+                    content = error_message
+                try:
+                    await self.history.append_assistant(
+                        turn.project_id,
+                        turn.id,
+                        content,
+                        tools,
+                        status,
+                        model=self.model,
+                        duration_ms=collector.duration_ms,
+                        num_turns=collector.num_turns,
+                        error_message=error_message,
+                    )
+                except Exception:
+                    logger.exception(
+                        "chat.history.write_failed",
+                        extra={"project_id": turn.project_id, "turn_id": turn.id},
+                    )
+                usage = collector.usage()
+                if (
+                    usage["modelRequests"] > 0
+                    or usage["inputTokens"] > 0
+                    or usage["outputTokens"] > 0
+                ):
+                    self._broadcast(
+                        turn,
+                        {
+                            "type": "usage",
+                            **usage,
+                            "model": self.model,
+                            "turnId": turn.id,
+                        },
+                    )
+                self._broadcast(turn, None)
+            finally:
+                await self._finish(turn)
             if cancelled:
                 raise asyncio.CancelledError
 
