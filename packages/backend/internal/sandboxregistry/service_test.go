@@ -10,17 +10,32 @@ import (
 type fakeRepository struct {
 	instances  []Instance
 	binding    Binding
+	bindingSeq []Binding
 	selectSeq  []Instance
 	selectErr  error
 	selectArgs [][]int64
 	updateErr  error
 	updates    []bindingUpdate
+
+	lease      Lease
+	acquireErr error
+	acquires   []leaseAcquire
+	renewErr   error
+	renews     []int64
 }
 
 type bindingUpdate struct {
 	projectID int64
 	oldID     *int64
 	newID     int64
+}
+
+type leaseAcquire struct {
+	projectID int64
+	oldID     *int64
+	newID     int64
+	now       time.Time
+	ttl       time.Duration
 }
 
 func (f *fakeRepository) UpsertHeartbeat(context.Context, Heartbeat, time.Time) (Instance, error) {
@@ -55,7 +70,40 @@ func (f *fakeRepository) UpdateHealth(context.Context, int64, bool, time.Time, s
 	return nil
 }
 func (f *fakeRepository) GetProjectBinding(context.Context, string) (Binding, error) {
+	if len(f.bindingSeq) > 0 {
+		binding := f.bindingSeq[0]
+		f.bindingSeq = f.bindingSeq[1:]
+		return binding, nil
+	}
 	return f.binding, nil
+}
+func (f *fakeRepository) AcquireProjectLease(_ context.Context, projectID int64, oldID *int64, newID int64, now time.Time, ttl time.Duration) (Lease, error) {
+	f.acquires = append(f.acquires, leaseAcquire{projectID: projectID, oldID: oldID, newID: newID, now: now, ttl: ttl})
+	if f.acquireErr != nil {
+		err := f.acquireErr
+		f.acquireErr = nil
+		return Lease{}, err
+	}
+	epoch := f.binding.Epoch
+	if epoch == 0 {
+		epoch = 1
+	} else if f.binding.SandboxID == nil || *f.binding.SandboxID != newID {
+		epoch++
+	}
+	f.lease = Lease{ProjectInternalID: projectID, SandboxID: newID, LeaseUntil: now.Add(ttl), Epoch: epoch}
+	f.binding.SandboxID = &newID
+	f.binding.LeaseUntil = f.lease.LeaseUntil
+	f.binding.Epoch = f.lease.Epoch
+	return f.lease, nil
+}
+func (f *fakeRepository) RenewProjectLease(_ context.Context, _ int64, _ int64, epoch int64, _ time.Time, _ time.Duration) error {
+	f.renews = append(f.renews, epoch)
+	if f.renewErr != nil {
+		err := f.renewErr
+		f.renewErr = nil
+		return err
+	}
+	return nil
 }
 func (f *fakeRepository) UpdateProjectBinding(_ context.Context, projectID int64, oldID *int64, newID int64) error {
 	if f.updateErr != nil {
@@ -125,6 +173,8 @@ func TestResolverUsesHealthyBinding(t *testing.T) {
 	repo := &fakeRepository{binding: Binding{
 		ProjectInternalID: 42,
 		SandboxID:         &bound,
+		LeaseUntil:        now.Add(20 * time.Second),
+		Epoch:             2,
 		Instance: &Instance{
 			ID: 1, Scheme: "http", Host: "sandbox-a", Port: 8000,
 			Status: StatusOnline, HealthStatus: HealthHealthy, LastHeartbeatAt: &heartbeat,
@@ -132,16 +182,73 @@ func TestResolverUsesHealthyBinding(t *testing.T) {
 	}}
 	resolver := NewResolver(repo, NewSelector(repo, 15*time.Second, func() time.Time { return now }), 15*time.Second, func() time.Time { return now })
 
+	route, err := resolver.ResolveRoute(context.Background(), "p1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if route.BaseURL != "http://sandbox-a:8000" || route.Epoch != 2 {
+		t.Fatalf("route = %+v", route)
+	}
+	if len(repo.acquires) != 0 || len(repo.renews) != 0 {
+		t.Fatalf("acquires = %+v, renews = %+v", repo.acquires, repo.renews)
+	}
 	baseURL, err := resolver.ResolveBaseURL(context.Background(), "p1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if baseURL != "http://sandbox-a:8000" || len(repo.updates) != 0 {
-		t.Fatalf("baseURL = %s, updates = %+v", baseURL, repo.updates)
+	if baseURL != "http://sandbox-a:8000" {
+		t.Fatalf("baseURL = %s", baseURL)
 	}
 }
 
-func TestResolverRebindsOfflineBinding(t *testing.T) {
+func TestResolverReturnsLeaseEpoch(t *testing.T) {
+	now := time.Date(2026, 11, 7, 10, 0, 0, 0, time.UTC)
+	heartbeat := now.Add(-time.Second)
+	bound := int64(1)
+	repo := &fakeRepository{binding: Binding{
+		ProjectInternalID: 42,
+		SandboxID:         &bound,
+		LeaseUntil:        now.Add(20 * time.Second),
+		Epoch:             3,
+		Instance: &Instance{ID: 1, Scheme: "http", Host: "sandbox-a", Port: 8000,
+			Status: StatusOnline, HealthStatus: HealthHealthy, LastHeartbeatAt: &heartbeat},
+	}}
+	resolver := NewResolver(repo, NewSelector(repo, 15*time.Second, func() time.Time { return now }), 15*time.Second, func() time.Time { return now })
+	route, err := resolver.ResolveRoute(context.Background(), "p1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if route.BaseURL != "http://sandbox-a:8000" || route.Epoch != 3 {
+		t.Fatalf("route = %+v", route)
+	}
+}
+
+func TestResolverRenewsLeaseNearExpiry(t *testing.T) {
+	now := time.Date(2026, 11, 7, 10, 0, 0, 0, time.UTC)
+	heartbeat := now.Add(-time.Second)
+	bound := int64(1)
+	repo := &fakeRepository{binding: Binding{
+		ProjectInternalID: 42,
+		SandboxID:         &bound,
+		LeaseUntil:        now.Add(5 * time.Second),
+		Epoch:             3,
+		Instance: &Instance{ID: 1, Scheme: "http", Host: "sandbox-a", Port: 8000,
+			Status: StatusOnline, HealthStatus: HealthHealthy, LastHeartbeatAt: &heartbeat},
+	}}
+	resolver := NewResolver(repo, NewSelector(repo, 15*time.Second, func() time.Time { return now }), 15*time.Second, func() time.Time { return now })
+	route, err := resolver.ResolveRoute(context.Background(), "p1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if route.Epoch != 3 {
+		t.Fatalf("route = %+v", route)
+	}
+	if len(repo.renews) != 1 || repo.renews[0] != 3 {
+		t.Fatalf("renews = %+v", repo.renews)
+	}
+}
+
+func TestResolverRebindsExpiredLease(t *testing.T) {
 	now := time.Date(2026, 10, 29, 10, 0, 0, 0, time.UTC)
 	oldID := int64(1)
 	oldHeartbeat := now.Add(-time.Minute)
@@ -149,6 +256,8 @@ func TestResolverRebindsOfflineBinding(t *testing.T) {
 		binding: Binding{
 			ProjectInternalID: 42,
 			SandboxID:         &oldID,
+			LeaseUntil:        now.Add(-time.Second),
+			Epoch:             4,
 			Instance: &Instance{
 				ID: 1, Scheme: "http", Host: "sandbox-a", Port: 8000,
 				Status: StatusOffline, HealthStatus: HealthUnhealthy, LastHeartbeatAt: &oldHeartbeat,
@@ -158,47 +267,80 @@ func TestResolverRebindsOfflineBinding(t *testing.T) {
 	}
 	resolver := NewResolver(repo, NewSelector(repo, 15*time.Second, func() time.Time { return now }), 15*time.Second, func() time.Time { return now })
 
-	baseURL, err := resolver.ResolveBaseURL(context.Background(), "p1")
+	route, err := resolver.ResolveRoute(context.Background(), "p1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if baseURL != "http://sandbox-b:8000" {
-		t.Fatalf("baseURL = %s", baseURL)
+	if route.BaseURL != "http://sandbox-b:8000" || route.Epoch != 5 {
+		t.Fatalf("route = %+v", route)
 	}
-	if len(repo.updates) != 1 || repo.updates[0].oldID == nil || *repo.updates[0].oldID != 1 || repo.updates[0].newID != 2 {
+	if len(repo.acquires) != 1 || repo.acquires[0].oldID == nil || *repo.acquires[0].oldID != 1 || repo.acquires[0].newID != 2 {
+		t.Fatalf("acquires = %+v", repo.acquires)
+	}
+	if len(repo.updates) != 0 {
 		t.Fatalf("updates = %+v", repo.updates)
 	}
 }
 
-func TestResolverRetriesCASConflict(t *testing.T) {
+func TestResolverRetriesAcquireConflict(t *testing.T) {
 	now := time.Date(2026, 10, 29, 10, 0, 0, 0, time.UTC)
 	heartbeat := now.Add(-time.Second)
 	oldID := int64(1)
 	newID := int64(2)
 	repo := &fakeRepository{
-		binding: Binding{
-			ProjectInternalID: 42,
-			SandboxID:         &oldID,
-			Instance:          &Instance{ID: 1, Status: StatusOffline, HealthStatus: HealthUnhealthy, LastHeartbeatAt: &heartbeat},
+		bindingSeq: []Binding{
+			{
+				ProjectInternalID: 42,
+				SandboxID:         &oldID,
+				LeaseUntil:        now.Add(-time.Second),
+				Epoch:             2,
+				Instance:          &Instance{ID: 1, Status: StatusOffline, HealthStatus: HealthUnhealthy, LastHeartbeatAt: &heartbeat},
+			},
+			{
+				ProjectInternalID: 42,
+				SandboxID:         &newID,
+				LeaseUntil:        now.Add(20 * time.Second),
+				Epoch:             3,
+				Instance: &Instance{
+					ID: newID, Scheme: "http", Host: "sandbox-b", Port: 8000,
+					Status: StatusOnline, HealthStatus: HealthHealthy, LastHeartbeatAt: &heartbeat,
+				},
+			},
 		},
-		selectSeq: []Instance{{ID: newID, Scheme: "http", Host: "sandbox-b", Port: 8000}},
-		updateErr: ErrBindingConflict,
+		selectSeq:  []Instance{{ID: newID, Scheme: "http", Host: "sandbox-b", Port: 8000}},
+		acquireErr: ErrBindingConflict,
 	}
 	resolver := NewResolver(repo, NewSelector(repo, 15*time.Second, func() time.Time { return now }), 15*time.Second, func() time.Time { return now })
 
-	// After the conflict, the fake binding is already node 2 and healthy.
-	repo.binding.SandboxID = &newID
-	repo.binding.Instance = &Instance{
-		ID: newID, Scheme: "http", Host: "sandbox-b", Port: 8000,
-		Status: StatusOnline, HealthStatus: HealthHealthy, LastHeartbeatAt: &heartbeat,
-	}
-
-	baseURL, err := resolver.ResolveBaseURL(context.Background(), "p1")
+	route, err := resolver.ResolveRoute(context.Background(), "p1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if baseURL != "http://sandbox-b:8000" {
-		t.Fatalf("baseURL = %s", baseURL)
+	if route.BaseURL != "http://sandbox-b:8000" || route.Epoch != 3 {
+		t.Fatalf("route = %+v", route)
+	}
+	if len(repo.acquires) != 1 {
+		t.Fatalf("acquires = %+v", repo.acquires)
+	}
+}
+
+func TestResolverRenew(t *testing.T) {
+	now := time.Date(2026, 11, 7, 10, 0, 0, 0, time.UTC)
+	bound := int64(1)
+	repo := &fakeRepository{binding: Binding{ProjectInternalID: 42, SandboxID: &bound, Epoch: 3}}
+	resolver := NewResolver(repo, NewSelector(repo, 15*time.Second, func() time.Time { return now }), 15*time.Second, func() time.Time { return now })
+
+	if err := resolver.Renew(context.Background(), "p1", 3); err != nil {
+		t.Fatal(err)
+	}
+	if len(repo.renews) != 1 || repo.renews[0] != 3 {
+		t.Fatalf("renews = %+v", repo.renews)
+	}
+
+	empty := &fakeRepository{binding: Binding{ProjectInternalID: 42}}
+	emptyResolver := NewResolver(empty, NewSelector(empty, 15*time.Second, func() time.Time { return now }), 15*time.Second, func() time.Time { return now })
+	if err := emptyResolver.Renew(context.Background(), "p1", 3); !errors.Is(err, ErrBindingConflict) {
+		t.Fatalf("err = %v, want ErrBindingConflict", err)
 	}
 }
 

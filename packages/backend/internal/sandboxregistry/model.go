@@ -65,6 +65,20 @@ type Binding struct {
 	ProjectPublicID   string
 	SandboxID         *int64
 	Instance          *Instance
+	LeaseUntil        time.Time
+	Epoch             int64
+}
+
+type Lease struct {
+	ProjectInternalID int64
+	SandboxID         int64
+	LeaseUntil        time.Time
+	Epoch             int64
+}
+
+type Route struct {
+	BaseURL string
+	Epoch   int64
 }
 
 type Repository interface {
@@ -77,4 +91,6 @@ type Repository interface {
 	UpdateHealth(ctx context.Context, id int64, healthy bool, at time.Time, errMessage string) error
 	GetProjectBinding(ctx context.Context, publicProjectID string) (Binding, error)
 	UpdateProjectBinding(ctx context.Context, projectInternalID int64, oldSandboxID *int64, newSandboxID int64) error
+	AcquireProjectLease(ctx context.Context, projectInternalID int64, oldSandboxID *int64, sandboxID int64, now time.Time, ttl time.Duration) (Lease, error)
+	RenewProjectLease(ctx context.Context, projectInternalID, sandboxID, epoch int64, now time.Time, ttl time.Duration) error
 }

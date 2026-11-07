@@ -179,14 +179,18 @@ func (r *MySQLRepository) UpdateHealth(ctx context.Context, id int64, healthy bo
 
 func (r *MySQLRepository) GetProjectBinding(ctx context.Context, publicProjectID string) (Binding, error) {
 	var row struct {
-		ID        int64
-		PublicID  string
-		SandboxID *int64
+		ID             int64
+		PublicID       string
+		ProjectSandbox *int64
+		LeaseSandbox   *int64
+		LeaseUntil     *time.Time
+		Epoch          *int64
 	}
 	err := r.db.WithContext(ctx).
 		Table("project").
-		Select("id, public_id, sandbox_id").
-		Where("public_id = ? AND deleted_at IS NULL", publicProjectID).
+		Select("project.id, project.public_id, project.sandbox_id AS project_sandbox, project_leases.sandbox_id AS lease_sandbox, project_leases.lease_until, project_leases.epoch").
+		Joins("LEFT JOIN project_leases ON project_leases.project_id = project.id").
+		Where("project.public_id = ? AND project.deleted_at IS NULL", publicProjectID).
 		Take(&row).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -194,15 +198,25 @@ func (r *MySQLRepository) GetProjectBinding(ctx context.Context, publicProjectID
 		}
 		return Binding{}, fmt.Errorf("get project binding: %w", err)
 	}
+	sandboxID := row.ProjectSandbox
+	if row.LeaseSandbox != nil {
+		sandboxID = row.LeaseSandbox
+	}
 	binding := Binding{
 		ProjectInternalID: row.ID,
 		ProjectPublicID:   row.PublicID,
-		SandboxID:         row.SandboxID,
+		SandboxID:         sandboxID,
 	}
-	if row.SandboxID == nil {
+	if row.LeaseUntil != nil {
+		binding.LeaseUntil = row.LeaseUntil.UTC()
+	}
+	if row.Epoch != nil {
+		binding.Epoch = *row.Epoch
+	}
+	if sandboxID == nil {
 		return binding, nil
 	}
-	instance, err := r.Get(ctx, *row.SandboxID)
+	instance, err := r.Get(ctx, *sandboxID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return binding, nil
@@ -211,6 +225,98 @@ func (r *MySQLRepository) GetProjectBinding(ctx context.Context, publicProjectID
 	}
 	binding.Instance = &instance
 	return binding, nil
+}
+
+func (r *MySQLRepository) AcquireProjectLease(ctx context.Context, projectInternalID int64, oldSandboxID *int64, sandboxID int64, now time.Time, ttl time.Duration) (Lease, error) {
+	now = now.UTC()
+	expires := now.Add(ttl)
+	var lease Lease
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var row model.ProjectLease
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("project_id = ?", projectInternalID).
+			Take(&row).Error
+		switch {
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			row = model.ProjectLease{
+				ProjectID:  projectInternalID,
+				SandboxID:  sandboxID,
+				LeaseUntil: expires,
+				Epoch:      1,
+			}
+			if err := tx.Create(&row).Error; err != nil {
+				if errors.Is(err, gorm.ErrDuplicatedKey) {
+					return ErrBindingConflict
+				}
+				return fmt.Errorf("create project lease: %w", err)
+			}
+			if err := r.updateProjectSandboxMirror(tx, projectInternalID, sandboxID); err != nil {
+				return err
+			}
+		case err != nil:
+			return fmt.Errorf("lock project lease: %w", err)
+		default:
+			previousOwner := row.SandboxID
+			if row.LeaseUntil.After(now) {
+				if row.SandboxID != sandboxID {
+					return ErrBindingConflict
+				}
+				row.LeaseUntil = expires
+			} else {
+				row.SandboxID = sandboxID
+				row.LeaseUntil = expires
+				row.Epoch++
+			}
+			if err := tx.Model(&row).Updates(map[string]any{
+				"sandbox_id":  row.SandboxID,
+				"lease_until": row.LeaseUntil,
+				"epoch":       row.Epoch,
+			}).Error; err != nil {
+				return fmt.Errorf("update project lease: %w", err)
+			}
+			if previousOwner != row.SandboxID {
+				if err := r.updateProjectSandboxMirror(tx, projectInternalID, sandboxID); err != nil {
+					return err
+				}
+			}
+		}
+		lease = Lease{
+			ProjectInternalID: projectInternalID,
+			SandboxID:         row.SandboxID,
+			LeaseUntil:        row.LeaseUntil.UTC(),
+			Epoch:             row.Epoch,
+		}
+		return nil
+	})
+	if err != nil {
+		return Lease{}, err
+	}
+	return lease, nil
+}
+
+func (r *MySQLRepository) RenewProjectLease(ctx context.Context, projectInternalID, sandboxID, epoch int64, now time.Time, ttl time.Duration) error {
+	now = now.UTC()
+	result := r.db.WithContext(ctx).
+		Model(&model.ProjectLease{}).
+		Where("project_id = ? AND sandbox_id = ? AND epoch = ? AND lease_until > ?", projectInternalID, sandboxID, epoch, now).
+		Update("lease_until", now.Add(ttl))
+	if result.Error != nil {
+		return fmt.Errorf("renew project lease: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return ErrBindingConflict
+	}
+	return nil
+}
+
+func (r *MySQLRepository) updateProjectSandboxMirror(tx *gorm.DB, projectInternalID, sandboxID int64) error {
+	err := tx.Model(&model.Project{}).
+		Where("id = ?", projectInternalID).
+		Update("sandbox_id", sandboxID).Error
+	if err != nil {
+		return fmt.Errorf("update project sandbox mirror: %w", err)
+	}
+	return nil
 }
 
 func (r *MySQLRepository) UpdateProjectBinding(ctx context.Context, projectInternalID int64, oldSandboxID *int64, newSandboxID int64) error {
