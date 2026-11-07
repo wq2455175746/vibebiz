@@ -188,16 +188,23 @@ project_leases(
 - `fsGroup` / 统一 UID，保证共享卷可写。
 - CP 接 MySQL 后再开多副本。
 
-## 11. 当前实现差距
+## 11. 当前实现状态
 
-- `Workspace` 仍是本地 `WORKSPACES_DIR`，没有 `.vibebiz`。
-- 没有 `project_leases`、owner resolver、租约续期。
-- DP 只有单一 `SANDBOX_BASE_URL`，没有 sandbox 列表/调度。
-- CP 当前创建项目时会直接调用 sandbox init；目标态改为 CP 只写元数据，由 DP 首次请求获取租约并初始化。
-- CP `ProjectStore` 与 admin 仍是内存。
-- `client.NewSandbox` 仍有 10 分钟总超时，会截断长 SSE。
-- sandbox 只有 stub agent，没有多 Agent adapter。
-- 预览/文件树/git 尚未排除 `.vibebiz`。
+已实现（代码与单测）：
+
+- `project_leases`、owner resolver、CP/DP 租约续期与 epoch。
+- sandbox `.vibebiz/lock` 的 `flock` 与 `.vibebiz/lease` 的 epoch 校验。
+- `init`、文件写、Agent 整轮、`git commit`、archive import、resource 写/删、clone 写/测试均纳入项目锁。
+- `.vibebiz` 已从文件树、预览、stats、archive、git 排除。
+- chat/SSE 使用无总超时的上游 client，并在流期间续租。
+
+仍待：
+
+- 在真实 RWX（EFS/CephFS）上验证 `flock` 语义和多 Pod 故障切换。
+- PDB、HPA 自定义指标、主动 rebalance、多地域。
+- CP 创建项目仍会直接调用 sandbox init；目标态仍是由 DP 首次请求获取租约并初始化。
+- CP `ProjectStore` 与 admin seed 的 MySQL 化程度以 `AGENTS.md` 当前边界为准。
+- sandbox 多 Agent adapter 的完整度以实际镜像为准。
 
 ## 12. 落地顺序
 
