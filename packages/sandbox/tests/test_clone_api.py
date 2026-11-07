@@ -1,4 +1,5 @@
 import io
+import json
 import zipfile
 from pathlib import Path
 
@@ -11,6 +12,16 @@ from app.main import create_app
 def make_client(tmp_path: Path) -> TestClient:
     settings = Settings(workspaces_dir=tmp_path / "workspaces", agent_mode="stub")
     return TestClient(create_app(settings))
+
+
+def write_lease(tmp_path: Path, project_id: str = "p1", epoch: int = 5) -> None:
+    lease = tmp_path / "workspaces" / project_id / ".vibebiz" / "lease"
+    lease.parent.mkdir(parents=True, exist_ok=True)
+    lease.write_text(json.dumps({"epoch": epoch, "sandbox": "sandbox-a"}), encoding="utf-8")
+
+
+def clone_payload() -> dict:
+    return {"name": "Acme", "description": "clone acme", "sourceUrl": "", "assets": []}
 
 
 def zip_bytes(files: dict[str, str]) -> bytes:
@@ -68,6 +79,34 @@ def test_clone_sync_and_tests_api(tmp_path):
     report = client.get("/internal/projects/p1/file", params={"path": "docs/clone/test-report.md"})
     assert report.status_code == 200
     assert "通过" in report.json()["result"]["content"]
+
+
+def test_clone_sync_rejects_stale_epoch(tmp_path):
+    client = make_client(tmp_path)
+    client.post("/internal/projects/p1/init")
+    write_lease(tmp_path, epoch=5)
+
+    response = client.put(
+        "/internal/projects/p1/clone",
+        json=clone_payload(),
+        headers={"X-Project-Epoch": "4"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == 40902
+
+
+def test_clone_sync_returns_busy_when_project_lock_is_held(tmp_path):
+    client = make_client(tmp_path)
+    client.post("/internal/projects/p1/init")
+    client.app.state.project_lock.timeout = 0.1
+    project_dir = client.app.state.workspace.project_dir("p1")
+
+    with client.app.state.project_lock.acquire_sync(project_dir):
+        response = client.put("/internal/projects/p1/clone", json=clone_payload())
+
+    assert response.status_code == 423
+    assert response.json()["code"] == 42300
 
 
 def test_clone_sync_rejects_invalid_url(tmp_path):

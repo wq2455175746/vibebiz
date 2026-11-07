@@ -30,6 +30,7 @@ services:
       CP_REGISTRY_URL: http://backend:8080/cp/api/v1/internal/sandboxes/heartbeat
       SANDBOX_REGISTRY_TOKEN: ${SANDBOX_REGISTRY_TOKEN:-change-me}
       SANDBOX_HEARTBEAT_INTERVAL: ${SANDBOX_HEARTBEAT_INTERVAL:-5s}
+      SANDBOX_LOCK_TIMEOUT: ${SANDBOX_LOCK_TIMEOUT:-2s}
       AGENT_MODE: ${AGENT_MODE:-stub}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://api.deepseek.com}

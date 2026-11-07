@@ -13,6 +13,7 @@ data:
   SANDBOX_MAX_CONCURRENCY: {{ .Values.config.maxConcurrency | quote }}
   CP_REGISTRY_URL: {{ .Values.config.cpRegistryUrl | quote }}
   SANDBOX_HEARTBEAT_INTERVAL: {{ .Values.config.heartbeatInterval | quote }}
+  SANDBOX_LOCK_TIMEOUT: {{ .Values.config.lockTimeout | quote }}
   AGENT_MODE: {{ .Values.config.agentMode | quote }}
   ANTHROPIC_BASE_URL: {{ .Values.config.anthropicBaseUrl | quote }}
   AGENT_MODEL: {{ .Values.config.agentModel | quote }}

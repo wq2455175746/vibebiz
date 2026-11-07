@@ -20,6 +20,7 @@ config:
   maxConcurrency: "8"
   cpRegistryUrl: http://backend:8080/cp/api/v1/internal/sandboxes/heartbeat
   heartbeatInterval: 5s
+  lockTimeout: "2s"
   agentMode: stub
   anthropicBaseUrl: https://api.deepseek.com/anthropic
   agentModel: deepseek-flash

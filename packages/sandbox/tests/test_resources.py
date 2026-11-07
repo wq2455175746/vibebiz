@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from urllib.parse import quote_plus
 
@@ -15,6 +16,12 @@ def make_client(tmp_path: Path) -> TestClient:
 def init_project(client: TestClient, project_id: str = "p1") -> None:
     response = client.post(f"/internal/projects/{project_id}/init")
     assert response.status_code == 200, response.text
+
+
+def write_lease(tmp_path: Path, project_id: str = "p1", epoch: int = 5) -> None:
+    lease = tmp_path / "workspaces" / project_id / ".vibebiz" / "lease"
+    lease.parent.mkdir(parents=True, exist_ok=True)
+    lease.write_text(json.dumps({"epoch": epoch, "sandbox": "sandbox-a"}), encoding="utf-8")
 
 
 def resource_headers(
@@ -55,6 +62,52 @@ def test_write_list_delete_resource_and_hide_it_from_files(tmp_path):
     assert deleted.status_code == 200
     assert deleted.json()["result"]["deleted"] is True
     assert client.get("/internal/projects/p1/resources").json()["result"]["resources"] == []
+
+
+def test_resource_write_rejects_stale_epoch(tmp_path):
+    client = make_client(tmp_path)
+    init_project(client)
+    write_lease(tmp_path, epoch=5)
+
+    response = client.put(
+        "/internal/projects/p1/resources/res-1",
+        content=b"%PDF-1.7",
+        headers={**resource_headers(), "X-Project-Epoch": "4"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == 40902
+
+
+def test_resource_delete_rejects_stale_epoch(tmp_path):
+    client = make_client(tmp_path)
+    init_project(client)
+    write_lease(tmp_path, epoch=5)
+
+    response = client.delete(
+        "/internal/projects/p1/resources/res-1",
+        headers={"X-Project-Epoch": "4"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == 40902
+
+
+def test_resource_write_returns_busy_when_project_lock_is_held(tmp_path):
+    client = make_client(tmp_path)
+    init_project(client)
+    client.app.state.project_lock.timeout = 0.1
+    project_dir = client.app.state.workspace.project_dir("p1")
+
+    with client.app.state.project_lock.acquire_sync(project_dir):
+        response = client.put(
+            "/internal/projects/p1/resources/res-1",
+            content=b"%PDF-1.7",
+            headers=resource_headers(),
+        )
+
+    assert response.status_code == 423
+    assert response.json()["code"] == 42300
 
 
 def test_duplicate_display_name_is_rejected(tmp_path):

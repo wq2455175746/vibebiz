@@ -205,6 +205,19 @@ def test_invalid_epoch_header_is_rejected(tmp_path):
     assert response.status_code == 400
 
 
+def test_vibebiz_is_hidden_from_files_and_archive(tmp_path):
+    client = make_client(tmp_path)
+    init_project(client)
+    project_dir = tmp_path / "workspaces" / "p1"
+    (project_dir / ".vibebiz").mkdir(exist_ok=True)
+    (project_dir / ".vibebiz" / "lease").write_text("{}", encoding="utf-8")
+
+    files = client.get("/internal/projects/p1/files").json()["result"]["files"]
+    assert all(".vibebiz" not in item["path"] for item in files)
+    archive = client.get("/internal/projects/p1/archive")
+    assert b".vibebiz" not in archive.content
+
+
 def test_vibebiz_is_hidden_from_files_stats_archive_and_preview(tmp_path):
     client = make_client(tmp_path)
     init_project(client)
