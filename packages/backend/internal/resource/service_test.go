@@ -18,6 +18,7 @@ type fakeS3 struct {
 	contentType string
 	size        int64
 	copied      string
+	getKey      string
 	deleted     []string
 }
 
@@ -35,7 +36,8 @@ func (f *fakeS3) Copy(_ context.Context, _ string, dst string, _ string) error {
 	return nil
 }
 
-func (f *fakeS3) Get(_ context.Context, _ string) (io.ReadCloser, int64, error) {
+func (f *fakeS3) Get(_ context.Context, key string) (io.ReadCloser, int64, error) {
+	f.getKey = key
 	return io.NopCloser(bytes.NewReader([]byte("hello"))), f.size, nil
 }
 
@@ -261,5 +263,80 @@ func TestAdoptReadyDoesNotRecordAgain(t *testing.T) {
 	}
 	if guard.recorded {
 		t.Fatal("ready resource should not record upload again")
+	}
+}
+
+func TestPresignChannelBuildAcceptsZip(t *testing.T) {
+	repo := newFakeRepo()
+	s3 := &fakeS3{}
+	svc := NewService(repo, s3, nil)
+	result, err := svc.Presign(context.Background(), 3, 7, PresignInput{
+		Filename: "game-web-mobile.zip", ContentType: "application/zip",
+		Size: 1024, Purpose: PurposeChannelBuild,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ResourceID == "" {
+		t.Fatal("resource id is empty")
+	}
+	if s3.contentType != "application/zip" {
+		t.Fatalf("content type = %q", s3.contentType)
+	}
+}
+
+func TestPresignChannelBuildRejectsNonZip(t *testing.T) {
+	svc := NewService(newFakeRepo(), &fakeS3{}, nil)
+	_, err := svc.Presign(context.Background(), 3, 7, PresignInput{
+		Filename: "game.exe", ContentType: "application/octet-stream",
+		Size: 1024, Purpose: PurposeChannelBuild,
+	})
+	if !errors.Is(err, ErrInvalidFile) {
+		t.Fatalf("err = %v, want ErrInvalidFile", err)
+	}
+}
+
+func TestPresignChannelBuildRejectsTooLarge(t *testing.T) {
+	svc := NewService(newFakeRepo(), &fakeS3{}, nil)
+	_, err := svc.Presign(context.Background(), 3, 7, PresignInput{
+		Filename: "game-web-mobile.zip", ContentType: "application/zip",
+		Size: MaxChannelBuildFileBytes + 1, Purpose: PurposeChannelBuild,
+	})
+	if !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("err = %v, want ErrTooLarge", err)
+	}
+}
+
+func TestOpenReadyChannelBuildRejectsWrongProject(t *testing.T) {
+	repo := newFakeRepo()
+	project := "p2"
+	item := &model.ProjectResource{
+		ResourceID: "r1", ProjectPublicID: &project, Purpose: PurposeChannelBuild,
+		Status: "ready", S3Key: "k1",
+	}
+	repo.items["r1"] = item
+	svc := NewService(repo, &fakeS3{}, nil)
+	if _, _, err := svc.OpenReadyChannelBuild(context.Background(), "p1", "r1"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestOpenReadyChannelBuildReturnsReadyZip(t *testing.T) {
+	repo := newFakeRepo()
+	project := "p1"
+	item := &model.ProjectResource{
+		ResourceID: "r1", ProjectPublicID: &project, Purpose: PurposeChannelBuild,
+		Status: "ready", S3Key: "k1",
+	}
+	repo.items["r1"] = item
+	s3 := &fakeS3{size: 2048}
+	svc := NewService(repo, s3, nil)
+	body, size, err := svc.OpenReadyChannelBuild(context.Background(), "p1", "r1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer body.Close()
+	if size != 2048 || s3.getKey != "k1" {
+		t.Fatalf("size = %d key = %q", size, s3.getKey)
 	}
 }
