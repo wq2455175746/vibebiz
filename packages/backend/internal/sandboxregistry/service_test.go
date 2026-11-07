@@ -3,11 +3,13 @@ package sandboxregistry
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 )
 
 type fakeRepository struct {
+	mu         sync.Mutex
 	instances  []Instance
 	binding    Binding
 	bindingSeq []Binding
@@ -78,16 +80,23 @@ func (f *fakeRepository) GetProjectBinding(context.Context, string) (Binding, er
 	return f.binding, nil
 }
 func (f *fakeRepository) AcquireProjectLease(_ context.Context, projectID int64, oldID *int64, newID int64, now time.Time, ttl time.Duration) (Lease, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.acquires = append(f.acquires, leaseAcquire{projectID: projectID, oldID: oldID, newID: newID, now: now, ttl: ttl})
 	if f.acquireErr != nil {
 		err := f.acquireErr
 		f.acquireErr = nil
 		return Lease{}, err
 	}
+	now = now.UTC()
 	epoch := f.binding.Epoch
-	if epoch == 0 {
+	if f.binding.SandboxID != nil && f.binding.LeaseUntil.After(now) {
+		if *f.binding.SandboxID != newID {
+			return Lease{}, ErrBindingConflict
+		}
+	} else if epoch == 0 {
 		epoch = 1
-	} else if f.binding.SandboxID == nil || *f.binding.SandboxID != newID {
+	} else {
 		epoch++
 	}
 	f.lease = Lease{ProjectInternalID: projectID, SandboxID: newID, LeaseUntil: now.Add(ttl), Epoch: epoch}
@@ -321,6 +330,86 @@ func TestResolverRetriesAcquireConflict(t *testing.T) {
 	}
 	if len(repo.acquires) != 1 {
 		t.Fatalf("acquires = %+v", repo.acquires)
+	}
+}
+
+func TestResolverConflictsOnLiveLease(t *testing.T) {
+	now := time.Date(2026, 11, 7, 10, 0, 0, 0, time.UTC)
+	heartbeat := now.Add(-time.Minute)
+	bound := int64(1)
+	repo := &fakeRepository{
+		binding: Binding{
+			ProjectInternalID: 42,
+			SandboxID:         &bound,
+			LeaseUntil:        now.Add(20 * time.Second),
+			Epoch:             3,
+			Instance:          &Instance{ID: 1, Status: StatusOffline, HealthStatus: HealthUnhealthy, LastHeartbeatAt: &heartbeat},
+		},
+		instances: []Instance{{ID: 2, Scheme: "http", Host: "sandbox-b", Port: 8000}},
+	}
+	resolver := NewResolver(repo, NewSelector(repo, 15*time.Second, func() time.Time { return now }), 15*time.Second, func() time.Time { return now })
+
+	if _, err := resolver.ResolveRoute(context.Background(), "p1"); !errors.Is(err, ErrBindingConflict) {
+		t.Fatalf("err = %v, want ErrBindingConflict", err)
+	}
+	if len(repo.acquires) != 2 {
+		t.Fatalf("acquires = %+v", repo.acquires)
+	}
+}
+
+func TestResolverAcquireSameOwnerRenewsLease(t *testing.T) {
+	now := time.Date(2026, 11, 7, 10, 0, 0, 0, time.UTC)
+	bound := int64(1)
+	repo := &fakeRepository{
+		binding: Binding{
+			ProjectInternalID: 42,
+			SandboxID:         &bound,
+			LeaseUntil:        now.Add(20 * time.Second),
+			Epoch:             3,
+		},
+		instances: []Instance{{ID: 1, Scheme: "http", Host: "sandbox-a", Port: 8000}},
+	}
+	resolver := NewResolver(repo, NewSelector(repo, 15*time.Second, func() time.Time { return now }), 15*time.Second, func() time.Time { return now })
+
+	route, err := resolver.ResolveRoute(context.Background(), "p1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if route.BaseURL != "http://sandbox-a:8000" || route.Epoch != 3 {
+		t.Fatalf("route = %+v", route)
+	}
+	if len(repo.acquires) != 1 {
+		t.Fatalf("acquires = %+v", repo.acquires)
+	}
+}
+
+func TestAcquireProjectLeaseFirstAcquisitionSingleWinner(t *testing.T) {
+	now := time.Date(2026, 11, 7, 10, 0, 0, 0, time.UTC)
+	repo := &fakeRepository{}
+	errs := make([]error, 2)
+	var wg sync.WaitGroup
+	for i := range errs {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_, errs[i] = repo.AcquireProjectLease(context.Background(), 42, nil, int64(i+1), now, 30*time.Second)
+		}(i)
+	}
+	wg.Wait()
+
+	successes, conflicts := 0, 0
+	for _, err := range errs {
+		switch {
+		case err == nil:
+			successes++
+		case errors.Is(err, ErrBindingConflict):
+			conflicts++
+		default:
+			t.Fatalf("unexpected err: %v", err)
+		}
+	}
+	if successes != 1 || conflicts != 1 {
+		t.Fatalf("successes = %d, conflicts = %d, errs = %v", successes, conflicts, errs)
 	}
 }
 

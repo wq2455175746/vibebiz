@@ -3,10 +3,12 @@ package sandboxregistry
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	mysqldriver "github.com/go-sql-driver/mysql"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -153,6 +155,31 @@ func TestMySQLRepositoryGetProjectBindingWithoutSandbox(t *testing.T) {
 	}
 }
 
+func TestMySQLRepositoryGetProjectBindingWithoutInstance(t *testing.T) {
+	db, mock := newMockRegistryDB(t)
+	repo := NewMySQLRepository(db)
+	leaseUntil := time.Date(2026, 11, 7, 10, 0, 30, 0, time.UTC)
+
+	mock.ExpectQuery("SELECT project.id, project.public_id, project.sandbox_id AS project_sandbox, project_leases.sandbox_id AS lease_sandbox, project_leases.lease_until, project_leases.epoch FROM `project` LEFT JOIN project_leases ON project_leases.project_id = project.id WHERE .*public_id = \\?.*deleted_at IS NULL").
+		WithArgs("p1", 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "public_id", "project_sandbox", "lease_sandbox", "lease_until", "epoch"}).
+			AddRow(42, "p1", 7, 7, leaseUntil, 4))
+	mock.ExpectQuery("SELECT .* FROM `sandbox_instance` WHERE id = \\?").
+		WithArgs(7, 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}))
+
+	got, err := repo.GetProjectBinding(context.Background(), "p1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ProjectInternalID != 42 || got.SandboxID == nil || *got.SandboxID != 7 || got.Instance != nil || got.Epoch != 4 || !got.LeaseUntil.Equal(leaseUntil) {
+		t.Fatalf("binding = %+v", got)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestMySQLRepositoryAcquireProjectLeaseCreates(t *testing.T) {
 	db, mock := newMockRegistryDB(t)
 	repo := NewMySQLRepository(db)
@@ -288,6 +315,9 @@ func TestMySQLRepositoryAcquireProjectLeaseConflict(t *testing.T) {
 		WithArgs(int64(42), 1).
 		WillReturnRows(sqlmock.NewRows([]string{"project_id", "sandbox_id", "lease_until", "epoch"}).
 			AddRow(42, 1, future, 2))
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `sandbox_instance` WHERE id = \\?.*deleted_at.*IS NULL").
+		WithArgs(int64(1)).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
 	mock.ExpectRollback()
 
 	_, err := repo.AcquireProjectLease(context.Background(), 42, &oldID, 2, now, 30*time.Second)
@@ -296,6 +326,68 @@ func TestMySQLRepositoryAcquireProjectLeaseConflict(t *testing.T) {
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestMySQLRepositoryAcquireProjectLeaseTakesOverMissingOwner(t *testing.T) {
+	db, mock := newMockRegistryDB(t)
+	repo := NewMySQLRepository(db)
+	now := time.Date(2026, 11, 7, 10, 0, 0, 0, time.UTC)
+	expires := now.Add(30 * time.Second)
+	future := now.Add(20 * time.Second)
+	oldID := int64(1)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT .* FROM `project_leases` WHERE project_id = \\? .*FOR UPDATE").
+		WithArgs(int64(42), 1).
+		WillReturnRows(sqlmock.NewRows([]string{"project_id", "sandbox_id", "lease_until", "epoch"}).
+			AddRow(42, 1, future, 2))
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `sandbox_instance` WHERE id = \\?.*deleted_at.*IS NULL").
+		WithArgs(int64(1)).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectExec("UPDATE `project_leases` SET `epoch`=\\?,`lease_until`=\\?,`sandbox_id`=\\?,`updated_at`=\\? WHERE `project_id` = \\?").
+		WithArgs(int64(3), expires, int64(2), sqlmock.AnyArg(), int64(42)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("UPDATE `project` SET `sandbox_id`=\\?,`updated_at`=\\? WHERE id = \\? AND `project`.`deleted_at` IS NULL").
+		WithArgs(int64(2), sqlmock.AnyArg(), int64(42)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	lease, err := repo.AcquireProjectLease(context.Background(), 42, &oldID, 2, now, 30*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lease.SandboxID != 2 || lease.Epoch != 3 || !lease.LeaseUntil.Equal(expires) {
+		t.Fatalf("lease = %+v", lease)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMySQLRepositoryAcquireProjectLeaseRetryableErrors(t *testing.T) {
+	for _, number := range []uint16{mysqlDuplicateEntry, mysqlDeadlock} {
+		t.Run(fmt.Sprintf("%d", number), func(t *testing.T) {
+			db, mock := newMockRegistryDB(t)
+			repo := NewMySQLRepository(db)
+			now := time.Date(2026, 11, 7, 10, 0, 0, 0, time.UTC)
+
+			mock.ExpectBegin()
+			mock.ExpectQuery("SELECT .* FROM `project_leases` WHERE project_id = \\? .*FOR UPDATE").
+				WithArgs(int64(42), 1).
+				WillReturnRows(sqlmock.NewRows([]string{"project_id"}))
+			mock.ExpectExec("INSERT INTO `project_leases`").
+				WillReturnError(&mysqldriver.MySQLError{Number: number})
+			mock.ExpectRollback()
+
+			_, err := repo.AcquireProjectLease(context.Background(), 42, nil, 2, now, 30*time.Second)
+			if !errors.Is(err, ErrBindingConflict) {
+				t.Fatalf("err = %v, want ErrBindingConflict", err)
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }
 

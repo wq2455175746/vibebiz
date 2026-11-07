@@ -6,11 +6,17 @@ import (
 	"fmt"
 	"time"
 
+	mysqldriver "github.com/go-sql-driver/mysql"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
 	"vibebiz/internal/dao/model"
+)
+
+const (
+	mysqlDuplicateEntry = 1062
+	mysqlDeadlock       = 1213
 )
 
 type MySQLRepository struct {
@@ -245,9 +251,6 @@ func (r *MySQLRepository) AcquireProjectLease(ctx context.Context, projectIntern
 				Epoch:      1,
 			}
 			if err := tx.Create(&row).Error; err != nil {
-				if errors.Is(err, gorm.ErrDuplicatedKey) {
-					return ErrBindingConflict
-				}
 				return fmt.Errorf("create project lease: %w", err)
 			}
 			if err := r.updateProjectSandboxMirror(tx, projectInternalID, sandboxID); err != nil {
@@ -259,9 +262,19 @@ func (r *MySQLRepository) AcquireProjectLease(ctx context.Context, projectIntern
 			previousOwner := row.SandboxID
 			if row.LeaseUntil.After(now) {
 				if row.SandboxID != sandboxID {
-					return ErrBindingConflict
+					exists, err := leaseOwnerExists(tx, row.SandboxID)
+					if err != nil {
+						return err
+					}
+					if exists {
+						return ErrBindingConflict
+					}
+					row.SandboxID = sandboxID
+					row.LeaseUntil = expires
+					row.Epoch++
+				} else {
+					row.LeaseUntil = expires
 				}
-				row.LeaseUntil = expires
 			} else {
 				row.SandboxID = sandboxID
 				row.LeaseUntil = expires
@@ -289,6 +302,9 @@ func (r *MySQLRepository) AcquireProjectLease(ctx context.Context, projectIntern
 		return nil
 	})
 	if err != nil {
+		if errors.Is(err, gorm.ErrDuplicatedKey) || isRetryableLeaseError(err) {
+			return Lease{}, ErrBindingConflict
+		}
 		return Lease{}, err
 	}
 	return lease, nil
@@ -317,6 +333,22 @@ func (r *MySQLRepository) updateProjectSandboxMirror(tx *gorm.DB, projectInterna
 		return fmt.Errorf("update project sandbox mirror: %w", err)
 	}
 	return nil
+}
+
+func leaseOwnerExists(tx *gorm.DB, sandboxID int64) (bool, error) {
+	var count int64
+	if err := tx.Model(&model.SandboxInstance{}).Where("id = ?", sandboxID).Count(&count).Error; err != nil {
+		return false, fmt.Errorf("check project lease owner: %w", err)
+	}
+	return count > 0, nil
+}
+
+func isRetryableLeaseError(err error) bool {
+	var mysqlErr *mysqldriver.MySQLError
+	if !errors.As(err, &mysqlErr) {
+		return false
+	}
+	return mysqlErr.Number == mysqlDuplicateEntry || mysqlErr.Number == mysqlDeadlock
 }
 
 func (r *MySQLRepository) UpdateProjectBinding(ctx context.Context, projectInternalID int64, oldSandboxID *int64, newSandboxID int64) error {
