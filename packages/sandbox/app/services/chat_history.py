@@ -1,5 +1,4 @@
 import asyncio
-import contextlib
 import hashlib
 import json
 import os
@@ -10,6 +9,14 @@ from pathlib import Path
 from typing import Any
 
 from app.errors import TooLargeError, WorkspaceError
+from app.services.safe_paths import (
+    UnsafePathError,
+    open_append,
+    read_bytes,
+    read_text,
+    resolve_within,
+    write_text,
+)
 from app.services.workspace import Workspace
 
 HISTORY_DIR = ".chathistory"
@@ -31,7 +38,11 @@ class ChatHistory:
 
     def path(self, project_id: str) -> Path:
         project_dir = self.workspace.project_dir(project_id)
-        return project_dir / HISTORY_DIR / HISTORY_FILE
+        try:
+            history_dir = resolve_within(project_dir / HISTORY_DIR, project_dir)
+        except UnsafePathError as exc:
+            raise WorkspaceError("invalid chat history path") from exc
+        return history_dir / HISTORY_FILE
 
     async def append_user(
         self,
@@ -97,13 +108,16 @@ class ChatHistory:
             return entry["id"]
 
     def read_tail(self, project_id: str, limit: int) -> HistoryTail:
+        project_dir = self.workspace.project_dir(project_id)
         path = self.path(project_id)
-        if not path.is_file():
+        try:
+            raw = read_bytes(path, project_dir)
+        except (OSError, UnsafePathError) as exc:
+            raise WorkspaceError("invalid chat history path") from exc
+        if raw is None:
             return HistoryTail(content="", truncated=False, version="")
-        size = path.stat().st_size
-        if size > self.max_bytes:
+        if len(raw) > self.max_bytes:
             raise TooLargeError("chat history is too large")
-        raw = path.read_bytes()
         lines = [
             line for line in raw.decode("utf-8", errors="replace").splitlines() if line.strip()
         ]
@@ -122,13 +136,15 @@ class ChatHistory:
         return self._locks.setdefault(project_id, asyncio.Lock())
 
     def _last_message_id(self, project_id: str) -> str | None:
+        project_dir = self.workspace.project_dir(project_id)
         path = self.path(project_id)
-        if not path.is_file():
-            return None
         try:
-            lines = path.read_text(encoding="utf-8").splitlines()
-        except OSError as exc:
+            content = read_text(path, project_dir)
+        except (OSError, UnsafePathError) as exc:
             raise WorkspaceError("read chat history failed") from exc
+        if content is None:
+            return None
+        lines = content.splitlines()
         for line in reversed(lines):
             try:
                 entry = json.loads(line)
@@ -139,13 +155,13 @@ class ChatHistory:
         return None
 
     def _append(self, project_id: str, entry: dict[str, Any]) -> None:
+        project_dir = self.workspace.project_dir(project_id)
         path = self.path(project_id)
-        self._ensure_gitignored(path.parent.parent)
-        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        with contextlib.suppress(OSError):
-            os.chmod(path.parent, 0o700)
-
-        fd = os.open(path, os.O_APPEND | os.O_CREAT | os.O_WRONLY, 0o600)
+        self._ensure_gitignored(project_dir)
+        try:
+            fd = open_append(path, project_dir)
+        except (OSError, UnsafePathError) as exc:
+            raise WorkspaceError("invalid chat history path") from exc
         try:
             if os.fstat(fd).st_size == 0:
                 header = {
@@ -162,11 +178,17 @@ class ChatHistory:
 
     def _ensure_gitignored(self, project_dir: Path) -> None:
         ignore = project_dir / ".gitignore"
-        existing = ignore.read_text(encoding="utf-8") if ignore.exists() else ""
+        try:
+            existing = read_text(ignore, project_dir) or ""
+        except (OSError, UnsafePathError):
+            return
         if ".chathistory/" in existing.splitlines():
             return
         suffix = "" if not existing or existing.endswith("\n") else "\n"
-        ignore.write_text(existing + suffix + ".chathistory/\n", encoding="utf-8")
+        try:
+            write_text(ignore, existing + suffix + ".chathistory/\n", project_dir, mode=0o644)
+        except (OSError, UnsafePathError):
+            return
 
     def _message_entry(
         self,

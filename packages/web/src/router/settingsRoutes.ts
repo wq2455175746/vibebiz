@@ -17,13 +17,6 @@ export const settingsMenu: SettingsMenuItem[] = [
     group: '账户',
   },
   {
-    label: '我的技能',
-    icon: 'pi pi-sparkles',
-    to: '/settings/skills',
-    name: 'settings-skills',
-    group: '账户',
-  },
-  {
     label: '通知渠道',
     icon: 'pi pi-bell',
     to: '/settings/notification-channels',
@@ -78,11 +71,6 @@ export const settingsRoute: RouteRecordRaw = {
       path: 'profile',
       name: 'settings-profile',
       component: () => import('@/views/settings/ProfileView.vue'),
-    },
-    {
-      path: 'skills',
-      name: 'settings-skills',
-      component: () => import('@/views/settings/SkillsView.vue'),
     },
     {
       path: 'notification-channels',

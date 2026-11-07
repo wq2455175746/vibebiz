@@ -8,8 +8,8 @@ from app.config import Settings
 from app.main import create_app
 
 
-def make_client(tmp_path: Path) -> TestClient:
-    settings = Settings(workspaces_dir=tmp_path / "workspaces", agent_mode="stub")
+def make_client(tmp_path: Path, **kwargs) -> TestClient:
+    settings = Settings(workspaces_dir=tmp_path / "workspaces", agent_mode="stub", **kwargs)
     return TestClient(create_app(settings))
 
 
@@ -22,7 +22,7 @@ def zip_bytes(files: dict[str, str]) -> bytes:
 
 
 def test_clone_sync_and_tests_api(tmp_path):
-    client = make_client(tmp_path)
+    client = make_client(tmp_path, clone_test_runner_enabled=True)
     assert client.post("/internal/projects/p1/init").status_code == 200
     payload = zip_bytes({"test_ok.py": "def test_ok():\n    assert True\n"})
     response = client.put(

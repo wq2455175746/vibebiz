@@ -1,3 +1,5 @@
+import json
+import os
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
@@ -17,9 +19,105 @@ from claude_agent_sdk import (
 from app.config import Settings
 from app.observability import AGENT_RUNS, get_logger, get_tracer
 from app.services.agent_roles import ALLOWED_TOOLS, build_agent_definitions, build_role_prompt
+from app.services.web_tools import build_web_mcp_server, split_domains
 from app.services.workspace import Workspace
 
 logger = get_logger()
+
+SENSITIVE_ENV_NAMES = {
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_AUTH_TOKEN",
+    "LLM_API_KEY",
+    "SANDBOX_REGISTRY_TOKEN",
+    "SMTP_PASSWORD",
+    "NOTIFICATION_SECRET_KEY",
+}
+SENSITIVE_ENV_SUFFIXES = ("_KEY", "_TOKEN", "_SECRET", "_PASSWORD")
+DENIED_SANDBOX_DOMAINS = [
+    "localhost",
+    "127.0.0.1",
+    "::1",
+    "169.254.169.254",
+    "metadata.google.internal",
+    "*.internal",
+    "*.local",
+]
+PERMISSION_DENY = [
+    "Read(./.env)",
+    "Read(./.env.*)",
+    "Edit(./.claude/**)",
+    "Write(./.claude/**)",
+    "Edit(./.mcp.json)",
+    "Write(./.mcp.json)",
+    "Edit(./.git/config)",
+    "Write(./.git/config)",
+    "Edit(./.git/hooks/**)",
+    "Write(./.git/hooks/**)",
+    "Edit(./.gitconfig)",
+    "Write(./.gitconfig)",
+]
+
+
+def _sensitive_env_names() -> list[str]:
+    names = set(SENSITIVE_ENV_NAMES)
+    names.update(key for key in os.environ if key.upper().endswith(SENSITIVE_ENV_SUFFIXES))
+    return sorted(names)
+
+
+def build_agent_settings(
+    settings: Settings,
+    project_dir: str | Path,
+    config_dir: str | Path | None = None,
+    skills_root: str | Path | None = None,
+) -> str:
+    project = Path(project_dir).resolve()
+    workspaces = settings.workspaces_dir.resolve()
+    deny_read = [
+        str(workspaces),
+        "/proc/*/environ",
+        "/proc/*/cmdline",
+        "/root",
+        "/etc/shadow",
+    ]
+    allow_read = [str(project)]
+    deny_write = ["/etc", "/root", "/var/run", "/run"]
+
+    if config_dir is not None:
+        allow_read.append(str(Path(config_dir).resolve()))
+    if skills_root is not None:
+        root = Path(skills_root).resolve()
+        deny_read.append(str(root))
+        deny_write.append(str(root))
+        allow_read.append(str((root / "public").resolve()))
+
+    payload: dict[str, Any] = {
+        "permissions": {
+            "blockReadsOutsideWorkingDirectories": True,
+            "blockWritesOutsideWorkingDirectories": True,
+            "deny": list(PERMISSION_DENY),
+        }
+    }
+    if settings.agent_sandbox_enabled and settings.agent_network_restricted:
+        payload["sandbox"] = {
+            "enabled": True,
+            "failIfUnavailable": True,
+            "allowUnsandboxedCommands": False,
+            "autoAllowBashIfSandboxed": True,
+            "enableWeakerNestedSandbox": settings.agent_sandbox_weaker_nested,
+            "filesystem": {
+                "denyRead": deny_read,
+                "allowRead": allow_read,
+                "denyWrite": deny_write,
+            },
+            "network": {
+                "allowedDomains": split_domains(settings.agent_sandbox_allowed_domains),
+                "deniedDomains": list(DENIED_SANDBOX_DOMAINS),
+            },
+            "credentials": {
+                "envVars": [{"name": name, "mode": "deny"} for name in _sensitive_env_names()]
+            },
+        }
+    return json.dumps(payload, ensure_ascii=False)
 
 
 def build_options(
@@ -31,18 +129,22 @@ def build_options(
     system_prompt_text: str = "",
     user_id: int = 0,
 ) -> ClaudeAgentOptions:
-    env: dict[str, str] = {}
+    env: dict[str, str] = {"CLAUDE_CODE_SUBPROCESS_ENV_SCRUB": "1"}
     if settings.anthropic_base_url:
         env["ANTHROPIC_BASE_URL"] = settings.anthropic_base_url
     if settings.anthropic_api_key:
         env["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
     if settings.anthropic_auth_token:
         env["ANTHROPIC_AUTH_TOKEN"] = settings.anthropic_auth_token
+    config_dir: Path | None = None
+    skills_root = settings.skills_root.resolve() if settings.skills_root else None
     if user_id > 0:
         try:
             from app.services.skill_store import prepare_agent_config, resolve_skills_root
 
-            home, config = prepare_agent_config(resolve_skills_root(settings), user_id)
+            skills_root = resolve_skills_root(settings)
+            home, config = prepare_agent_config(skills_root, user_id)
+            config_dir = config
             env["HOME"] = str(home)
             env["CLAUDE_CONFIG_DIR"] = str(config)
         except OSError:
@@ -50,6 +152,16 @@ def build_options(
                 "skills.config.unavailable",
                 extra={"user_id": user_id, "status": "fallback"},
             )
+    else:
+        anonymous_home = Path("/tmp/vibebiz-sandbox-home/anonymous")
+        config_dir = anonymous_home / ".claude"
+        try:
+            config_dir.mkdir(parents=True, exist_ok=True)
+            env["HOME"] = str(anonymous_home)
+            env["CLAUDE_CONFIG_DIR"] = str(config_dir)
+        except OSError:
+            config_dir = None
+            logger.warning("agent.config.anonymous_unavailable", extra={"status": "fallback"})
 
     skills: list[str] | str | None = None
     if settings.agent_skills and settings.agent_skills != "none":
@@ -66,7 +178,8 @@ def build_options(
     ]
 
     role_prompt = build_role_prompt(agent_roles or [], team_mode)
-    agent_defs = build_agent_definitions(agent_roles or [], team_mode)
+    web_server, web_tools = build_web_mcp_server(settings)
+    agent_defs = build_agent_definitions(agent_roles or [], team_mode, extra_tools=web_tools)
     prompt_parts = [part for part in (role_prompt, system_prompt_text) if part]
     system_prompt = None
     if prompt_parts:
@@ -76,8 +189,10 @@ def build_options(
             "append": "\n\n".join(prompt_parts),
         }
     allowed_tools = list(ALLOWED_TOOLS)
+    allowed_tools.extend(web_tools)
     if agent_defs:
         allowed_tools.append("Agent")
+    mcp_servers = {"web": web_server} if web_server else {}
 
     return ClaudeAgentOptions(
         cwd=str(cwd),
@@ -86,7 +201,11 @@ def build_options(
         max_turns=settings.agent_max_turns,
         permission_mode="acceptEdits",
         allowed_tools=allowed_tools,
-        setting_sources=["user", "project"],
+        disallowed_tools=["WebFetch", "WebSearch"],
+        settings=build_agent_settings(settings, cwd, config_dir, skills_root),
+        setting_sources=["user"],
+        mcp_servers=mcp_servers,
+        strict_mcp_config=True,
         skills=skills,
         plugins=plugins,
         system_prompt=system_prompt,

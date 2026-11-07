@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from app.errors import ConflictError, TooLargeError, WorkspaceError
+from app.services.safe_paths import UnsafePathError, read_text, resolve_within
 from app.services.workspace import Workspace
 
 RESOURCE_DIR = ".resources"
@@ -29,18 +30,26 @@ class ResourceStore:
         return self._locks.setdefault(project_id, asyncio.Lock())
 
     def _root(self, project_id: str) -> Path:
-        return self.workspace.project_dir(project_id) / RESOURCE_DIR
+        project = self.workspace.project_dir(project_id)
+        try:
+            return resolve_within(project / RESOURCE_DIR, project)
+        except UnsafePathError as exc:
+            raise WorkspaceError("invalid resource path") from exc
 
     def _manifest_path(self, project_id: str) -> Path:
         return self._root(project_id) / MANIFEST_NAME
 
     def _read(self, project_id: str) -> dict[str, Any]:
         path = self._manifest_path(project_id)
-        if not path.exists():
+        try:
+            content = read_text(path, self._root(project_id))
+        except (OSError, UnsafePathError):
+            return {"version": 1, "files": []}
+        if content is None:
             return {"version": 1, "files": []}
         try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
+            payload = json.loads(content)
+        except json.JSONDecodeError:
             return {"version": 1, "files": []}
         if not isinstance(payload, dict) or not isinstance(payload.get("files"), list):
             return {"version": 1, "files": []}

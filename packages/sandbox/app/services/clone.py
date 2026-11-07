@@ -12,6 +12,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from app.errors import NotFoundError, WorkspaceError
+from app.services.safe_paths import UnsafePathError, resolve_within
 from app.services.workspace import Workspace
 
 CLONE_DIR = ".clone"
@@ -65,10 +66,19 @@ class CloneService:
         return project
 
     def _root(self, project_id: str) -> Path:
-        return self._existing_project(project_id) / CLONE_DIR
+        project = self._existing_project(project_id)
+        try:
+            return resolve_within(project / CLONE_DIR, project)
+        except UnsafePathError as exc:
+            raise WorkspaceError("invalid clone path") from exc
 
-    def _write_atomic(self, path: Path, content: str) -> None:
+    def _write_atomic(self, path: Path, content: str, root: Path) -> None:
+        try:
+            path = resolve_within(path, root)
+        except UnsafePathError as exc:
+            raise WorkspaceError("invalid clone path") from exc
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        path = resolve_within(path, root)
         fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
@@ -128,27 +138,41 @@ class CloneService:
     def sync(self, project_id: str, payload: dict) -> dict:
         project = self._existing_project(project_id)
         normalized = self._validate(payload)
-        root = project / CLONE_DIR
+        root = self._root(project_id)
         root.mkdir(parents=True, exist_ok=True, mode=0o700)
-        self._write_atomic(root / SOURCE_NAME, json.dumps(normalized, ensure_ascii=False, indent=2))
+        self._write_atomic(
+            root / SOURCE_NAME,
+            json.dumps(normalized, ensure_ascii=False, indent=2),
+            project,
+        )
         unit_test = next(
             (asset for asset in normalized["assets"] if asset["role"] == "unit_test"), None
         )
         if unit_test is None:
-            shutil.rmtree(root / TESTS_DIR, ignore_errors=True)
+            target = root / TESTS_DIR
+            if target.is_symlink():
+                target.unlink()
+            else:
+                shutil.rmtree(target, ignore_errors=True)
         else:
             self._extract_tests(project, root, unit_test["storageName"])
         return normalized
 
     def _extract_tests(self, project: Path, root: Path, storage_name: str) -> None:
-        archive_path = project / ".resources" / storage_name
+        try:
+            archive_path = resolve_within(project / ".resources" / storage_name, project)
+            target = resolve_within(root / TESTS_DIR, project)
+        except UnsafePathError as exc:
+            raise WorkspaceError("invalid clone test path") from exc
         if not archive_path.is_file():
             raise NotFoundError("unit test archive not found")
         temp_dir = Path(tempfile.mkdtemp(dir=root, prefix=".tests."))
         try:
             self._safe_extract(archive_path, temp_dir)
-            target = root / TESTS_DIR
-            shutil.rmtree(target, ignore_errors=True)
+            if target.is_symlink():
+                target.unlink()
+            else:
+                shutil.rmtree(target, ignore_errors=True)
             os.replace(temp_dir, target)
         finally:
             if temp_dir.exists():
@@ -185,7 +209,12 @@ class CloneService:
 
     async def run_tests(self, project_id: str) -> dict:
         project = self._existing_project(project_id)
-        tests_dir = project / CLONE_DIR / TESTS_DIR
+        try:
+            tests_dir = resolve_within(project / CLONE_DIR / TESTS_DIR, project)
+        except UnsafePathError:
+            return self._finish(project, "skipped", [], -1, "测试目录不安全", 0)
+        if tests_dir.is_dir() and any(path.is_symlink() for path in tests_dir.rglob("*")):
+            return self._finish(project, "skipped", [], -1, "测试目录包含符号链接", 0)
         command, cwd = self._detect_command(project, tests_dir)
         if not self.enabled:
             return self._finish(project, "skipped", [], -1, "测试执行已关闭", 0)
@@ -222,7 +251,9 @@ class CloneService:
         return self._finish(project, status, command, process.returncode or 0, output, duration_ms)
 
     def _detect_command(self, project: Path, tests_dir: Path) -> tuple[list[str] | None, Path]:
-        if tests_dir.is_dir() and any(tests_dir.rglob("*.py")):
+        if tests_dir.is_dir() and any(
+            path.is_file() and not path.is_symlink() for path in tests_dir.rglob("*.py")
+        ):
             return [
                 sys.executable,
                 "-m",
@@ -231,9 +262,11 @@ class CloneService:
                 "-rA",
                 str(tests_dir.relative_to(project)),
             ], project
-        if (project / "package.json").is_file():
+        package_json = project / "package.json"
+        if package_json.is_file() and not package_json.is_symlink():
             return ["npm", "test", "--", "--run"], project
-        if (tests_dir / "package.json").is_file():
+        tests_package = tests_dir / "package.json"
+        if tests_package.is_file() and not tests_package.is_symlink():
             return ["npm", "test", "--", "--run"], tests_dir
         return None, project
 
@@ -265,7 +298,7 @@ class CloneService:
             "```\n"
         )
         report_path = project / REPORT_PATH
-        self._write_atomic(report_path, report)
+        self._write_atomic(report_path, report, project)
         return {
             "status": status,
             "command": command,

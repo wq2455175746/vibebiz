@@ -17,7 +17,8 @@ ROOT_FILES = [
     "AGENTS.md",
     "Makefile",
     ".gitignore",
-    "docker-compose.yml",
+    "deployment/docker/docker-compose.yml",
+    "deployment/docker/docker-compose.public.yml",
 ]
 
 AI_FILES = [
@@ -369,7 +370,10 @@ def validate_contracts() -> None:
             "test-ops-web:",
         ],
     )
-    require_contains("docker-compose.yml", ["sandbox:", "backend:", "web:", "ops-web:", "target: combined"])
+    require_contains(
+        "deployment/docker/docker-compose.yml",
+        ["sandbox:", "backend:", "web:", "ops-web:", "target: combined"],
+    )
     require_contains("packages/backend/Dockerfile", ["AS cp", "AS dp", "AS combined", "docker-entrypoint.sh"])
     require_contains("packages/backend/docker-entrypoint.sh", ["CP_PORT", "DP_PORT", "/app/cp", "/app/dp"])
     require_contains(

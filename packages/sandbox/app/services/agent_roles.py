@@ -65,10 +65,13 @@ def build_role_prompt(roles: list[dict[str, Any]], team_mode: bool) -> str:
 
 
 def build_agent_definitions(
-    roles: list[dict[str, Any]], team_mode: bool
+    roles: list[dict[str, Any]],
+    team_mode: bool,
+    extra_tools: list[str] | None = None,
 ) -> dict[str, AgentDefinition]:
     if not roles or (len(roles) == 1 and not team_mode):
         return {}
+    tools = [*ALLOWED_TOOLS, *(extra_tools or [])]
     agents: dict[str, AgentDefinition] = {}
     for role in _normal_roles(roles):
         code = str(role.get("roleCode") or "").strip()
@@ -77,7 +80,7 @@ def build_agent_definitions(
         agents[code] = AgentDefinition(
             description=str(role.get("description") or _name(role)),
             prompt=str(role.get("systemPrompt") or ""),
-            tools=list(ALLOWED_TOOLS),
+            tools=list(tools),
             model="inherit",
         )
     return agents

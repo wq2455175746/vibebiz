@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
+from app.services.project_logs import ProjectLogStore
 
 
 def make_client(tmp_path: Path) -> TestClient:
@@ -102,3 +103,18 @@ def test_project_logs_returns_latest_100_across_dates(tmp_path):
     assert len(logs) == 100
     assert logs[0]["message"] == "old-20"
     assert logs[-1]["message"] == "new-59"
+
+
+def test_project_logs_reject_symlinked_log_dir(tmp_path):
+    root = tmp_path / "workspaces"
+    project = root / "p1"
+    project.mkdir(parents=True)
+    victim = tmp_path / "victim"
+    victim.mkdir()
+    (project / ".logs").symlink_to(victim)
+
+    store = ProjectLogStore(root)
+
+    assert store.append("p1", {"message": "secret"}, 0) is False
+    assert store.read_latest("p1", 10) == []
+    assert list(victim.iterdir()) == []

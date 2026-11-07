@@ -20,6 +20,17 @@ class Settings:
     agent_plugins: str = ""
     agent_max_turns: int = 100
     agent_max_buffer_bytes: int = 32 * 1024 * 1024
+    agent_sandbox_enabled: bool = True
+    agent_network_restricted: bool = False
+    agent_sandbox_weaker_nested: bool = True
+    agent_sandbox_allowed_domains: str = ""
+    web_search_base_url: str = ""
+    web_search_api_key: str = ""
+    web_search_max_results: int = 5
+    web_search_timeout_seconds: float = 15.0
+    web_fetch_allowed_domains: str = ""
+    web_fetch_max_bytes: int = 2_000_000
+    web_fetch_timeout_seconds: float = 15.0
     chat_turn_timeout_seconds: int = 600
     chat_history_max_bytes: int = 10 * 1024 * 1024
     sandbox_name: str = ""
@@ -30,7 +41,7 @@ class Settings:
     registry_token: str = ""
     heartbeat_interval: float = 5.0
     max_concurrency: int = 8
-    clone_test_runner_enabled: bool = True
+    clone_test_runner_enabled: bool = False
     clone_test_timeout_seconds: int = 120
 
 
@@ -39,6 +50,13 @@ def _seconds(name: str, default: float) -> float:
     if raw.endswith("s"):
         raw = raw[:-1]
     return float(raw) if raw else default
+
+
+def _bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name, "").strip().lower()
+    if not raw:
+        return default
+    return raw not in {"0", "false", "no", "off"}
 
 
 def load_settings() -> Settings:
@@ -71,6 +89,17 @@ def load_settings() -> Settings:
         agent_max_buffer_bytes=max(
             1024 * 1024, int(os.getenv("AGENT_MAX_BUFFER_BYTES", str(32 * 1024 * 1024)))
         ),
+        agent_sandbox_enabled=_bool("AGENT_SANDBOX_ENABLED", True),
+        agent_network_restricted=_bool("AGENT_NETWORK_RESTRICTED", False),
+        agent_sandbox_weaker_nested=_bool("AGENT_SANDBOX_WEAKER_NESTED", True),
+        agent_sandbox_allowed_domains=os.getenv("AGENT_SANDBOX_ALLOWED_DOMAINS", "").strip(),
+        web_search_base_url=os.getenv("WEB_SEARCH_BASE_URL", "").strip(),
+        web_search_api_key=os.getenv("WEB_SEARCH_API_KEY", "").strip(),
+        web_search_max_results=max(1, min(10, int(os.getenv("WEB_SEARCH_MAX_RESULTS", "5")))),
+        web_search_timeout_seconds=max(1.0, _seconds("WEB_SEARCH_TIMEOUT_SECONDS", 15.0)),
+        web_fetch_allowed_domains=os.getenv("WEB_FETCH_ALLOWED_DOMAINS", "").strip(),
+        web_fetch_max_bytes=max(1024, int(os.getenv("WEB_FETCH_MAX_BYTES", str(2_000_000)))),
+        web_fetch_timeout_seconds=max(1.0, _seconds("WEB_FETCH_TIMEOUT_SECONDS", 15.0)),
         chat_turn_timeout_seconds=int(os.getenv("CHAT_TURN_TIMEOUT_SECONDS", "600")),
         chat_history_max_bytes=int(os.getenv("CHAT_HISTORY_MAX_BYTES", str(10 * 1024 * 1024))),
         sandbox_name=sandbox_name,
@@ -81,7 +110,7 @@ def load_settings() -> Settings:
         registry_token=os.getenv("SANDBOX_REGISTRY_TOKEN", "").strip(),
         heartbeat_interval=max(1.0, _seconds("SANDBOX_HEARTBEAT_INTERVAL", 5.0)),
         max_concurrency=max(1, int(os.getenv("SANDBOX_MAX_CONCURRENCY", "8"))),
-        clone_test_runner_enabled=os.getenv("CLONE_TEST_RUNNER_ENABLED", "true").strip().lower()
+        clone_test_runner_enabled=os.getenv("CLONE_TEST_RUNNER_ENABLED", "false").strip().lower()
         not in {"0", "false", "no", "off"},
         clone_test_timeout_seconds=max(1, int(os.getenv("CLONE_TEST_TIMEOUT_SECONDS", "120"))),
     )

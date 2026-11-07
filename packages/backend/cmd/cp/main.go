@@ -187,6 +187,7 @@ func main() {
 		return instance.BaseURL(), nil
 	}), obs)
 	skillManager := handler.NewSkillManager(skillRouter, adminRepo, obs)
+	skillManager.UserWritesEnabled = cfg.UserSkillUploadEnabled
 	var resourceS3 resource.S3
 	if s3Presigner != nil {
 		resourceS3 = s3Presigner

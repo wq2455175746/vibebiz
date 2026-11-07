@@ -3,10 +3,11 @@ name: vibebiz
 services:
   logs-init:
     image: alpine:3.20
-    command: ["sh", "-c", "mkdir -p /logs/backend /logs/sandbox /data/workspaces && chmod 0777 /logs/backend /logs/sandbox /data/workspaces"]
+    command: ["sh", "-c", "mkdir -p /logs/backend /logs/sandbox /data/workspaces /data/skills && chmod 0777 /logs/backend /logs/sandbox /data/workspaces /data/skills"]
     volumes:
       - ./logs:/logs
       - ./workspaces:/data/workspaces
+      - ./skills:/data/skills
     restart: "no"
 
   publish-init:
@@ -28,12 +29,32 @@ services:
     environment:
       HOME: /home/appuser
       CLAUDE_CONFIG_DIR: /data/workspaces/.claude
+      WORKSPACES_DIR: /data/workspaces
+      SKILLS_ROOT: /data/skills
+      AGENT_SANDBOX_ENABLED: ${AGENT_SANDBOX_ENABLED:-true}
+      AGENT_NETWORK_RESTRICTED: ${AGENT_NETWORK_RESTRICTED:-false}
+      AGENT_SANDBOX_WEAKER_NESTED: ${AGENT_SANDBOX_WEAKER_NESTED:-true}
+      AGENT_SANDBOX_ALLOWED_DOMAINS: ${AGENT_SANDBOX_ALLOWED_DOMAINS:-}
+      WEB_SEARCH_BASE_URL: ${WEB_SEARCH_BASE_URL:-}
+      WEB_SEARCH_API_KEY: ${WEB_SEARCH_API_KEY:-}
+      WEB_SEARCH_MAX_RESULTS: ${WEB_SEARCH_MAX_RESULTS:-5}
+      WEB_FETCH_ALLOWED_DOMAINS: ${WEB_FETCH_ALLOWED_DOMAINS:-}
+      CLONE_TEST_RUNNER_ENABLED: "false"
     volumes:
       - ./workspaces:/data/workspaces
+      - ./skills:/data/skills
       - ./logs/sandbox:/app/logs
     depends_on:
       logs-init:
         condition: service_completed_successfully
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 512
+    mem_limit: 2g
+    cpus: 2.0
     restart: unless-stopped
 
   backend:
