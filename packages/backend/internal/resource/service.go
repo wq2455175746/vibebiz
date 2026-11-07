@@ -452,19 +452,8 @@ func validateForPurpose(name, ext, rawType, purpose string) (string, string, err
 			return "", "", ErrInvalidFile
 		}
 		return contentType, kind, nil
-	case PurposeCloneUnitTest:
-		if ext != ".zip" {
-			return "", "", ErrInvalidFile
-		}
-		contentType := normalizeContentType(rawType)
-		if contentType == "" || contentType == "application/octet-stream" {
-			contentType = "application/zip"
-		}
-		if !zipMIME[contentType] {
-			return "", "", ErrInvalidFile
-		}
-		return contentType, "document", nil
-	case PurposeChannelBuild:
+	case PurposeCloneUnitTest, PurposeChannelBuild:
+		ext = strings.ToLower(ext)
 		if ext != ".zip" {
 			return "", "", ErrInvalidFile
 		}
