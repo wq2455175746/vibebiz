@@ -2,6 +2,7 @@ import type { RouteRecordRaw } from 'vue-router'
 
 import AccessLogsView from '@/views/AccessLogsView.vue'
 import AuditView from '@/views/AuditView.vue'
+import ChannelGuidesView from '@/views/ChannelGuidesView.vue'
 import FdeResourcesView from '@/views/FdeResourcesView.vue'
 import LeaderboardView from '@/views/LeaderboardView.vue'
 import ModelsView from '@/views/ModelsView.vue'
@@ -45,6 +46,12 @@ export const childRoutes: RouteRecordRaw[] = [
   },
   { path: 'topics', name: 'topics', component: TopicsView, meta: { title: '类别管理' } },
   { path: 'templates', name: 'templates', component: TemplatesView, meta: { title: '模板管理' } },
+  {
+    path: 'channel-guides',
+    name: 'channel-guides',
+    component: ChannelGuidesView,
+    meta: { title: '发布渠道' },
+  },
   {
     path: 'scheduled-tasks',
     name: 'scheduled-tasks',
