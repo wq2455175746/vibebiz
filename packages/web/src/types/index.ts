@@ -91,6 +91,36 @@ export interface PublishedProject {
   url: string
 }
 
+export type ChannelPackageChannel = 'wechat_minigame' | 'douyin_minigame' | 'steam_desktop'
+export type ChannelPackageSourceType = 'html5' | 'engine_artifact'
+
+export interface ChannelPackage {
+  id: string
+  channel: ChannelPackageChannel
+  sourceType: ChannelPackageSourceType
+  status: 'building' | 'ready' | 'failed'
+  version: string
+  fileSizeBytes: number
+  level: 'A' | 'B' | 'C'
+  warnings: string[]
+  errorMessage: string
+  createdAt: string
+  downloadUrl: string
+  guideUrl: string
+}
+
+export interface ChannelGuide {
+  channel: ChannelPackageChannel
+  title: string
+  summary: string
+  markdown: string
+  steps: string[]
+  requirements: string[]
+  updatedAt: string
+}
+
+export type ChannelGuideItem = ChannelGuide
+
 export type ProjectStageStatus = 'locked' | 'active' | 'done' | 'placeholder'
 export type ProjectStageWorkspace = 'document' | 'development' | 'test' | 'artifact' | 'placeholder'
 
