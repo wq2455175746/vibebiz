@@ -47,7 +47,7 @@ func TestInitialSchemaCoversAllBusinessTables(t *testing.T) {
 		"rag_knowledge_base", "project_rag", "fde_resource",
 		"project_clone_source", "project_clone_asset",
 		"user_usage_daily", "user_access_log", "project_leases",
-		"project_channel_package",
+		"project_channel_package", "channel_guide",
 	}
 	var all strings.Builder
 	entries, err := fs.ReadDir(FS, ".")
@@ -218,8 +218,8 @@ func TestGooseCanCollectMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("collect migrations: %v", err)
 	}
-	if len(migs) != 28 {
-		t.Fatalf("collected %d migrations, want 28", len(migs))
+	if len(migs) != 29 {
+		t.Fatalf("collected %d migrations, want 29", len(migs))
 	}
 	for i, mig := range migs {
 		want := int64(i + 1)
@@ -432,6 +432,23 @@ func TestUserUsageDailyMigration(t *testing.T) {
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("usage migration missing %q", want)
+		}
+	}
+}
+
+func TestChannelGuideMigration(t *testing.T) {
+	body, err := fs.ReadFile(FS, "00029_channel_guide.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	for _, want := range []string{
+		"CREATE TABLE `channel_guide`", "uk_channel_guide_channel",
+		"idx_channel_guide_enabled_sort", "builtin", "sort_order",
+		"DROP TABLE IF EXISTS `channel_guide`", "-- +goose Up", "-- +goose Down",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("channel guide migration missing %q", want)
 		}
 	}
 }
