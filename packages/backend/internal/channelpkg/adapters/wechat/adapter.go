@@ -4,7 +4,9 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"crypto/sha256"
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -24,14 +26,16 @@ import (
 const (
 	adapterVersion = "1.0.0"
 
-	adapterFile = "adapter/index.js"
-	bundleFile  = "game/game.bundle.js"
+	adapterFile      = "adapter/index.js"
+	bundleFile       = "game/game.bundle.js"
+	maxManifestFiles = 500
 )
 
 var (
 	ErrExternalScript    = errors.New("wechat: external script is not allowed")
 	ErrUnsafeScript      = errors.New("wechat: script path escapes the source directory")
 	ErrUnsupportedSource = errors.New("wechat: source is not supported")
+	ErrIncompleteSource  = errors.New("wechat: mini-game source is incomplete")
 )
 
 //go:embed adapter.js
@@ -55,7 +59,7 @@ func (a *Adapter) Validate(source core.SourceInfo) core.Report {
 	return report
 }
 
-func (a *Adapter) Build(ctx context.Context, source core.SourceInfo, out io.Writer) (manifest core.Manifest, err error) {
+func (a *Adapter) Build(ctx context.Context, source core.SourceInfo, out io.Writer) (core.Manifest, error) {
 	report := a.Validate(source)
 	if len(report.Blockers) > 0 {
 		return core.Manifest{}, ErrUnsupportedSource
@@ -63,49 +67,92 @@ func (a *Adapter) Build(ctx context.Context, source core.SourceInfo, out io.Writ
 	if source.Dir == "" {
 		return core.Manifest{}, ErrUnsupportedSource
 	}
-
-	zw := zip.NewWriter(out)
-	defer func() {
-		if closeErr := zw.Close(); err == nil && closeErr != nil {
-			err = closeErr
+	levelA := isLevelA(source)
+	if levelA {
+		if err := validateLevelA(source.Dir); err != nil {
+			return core.Manifest{}, err
 		}
-	}()
+	}
 
-	manifest = core.Manifest{
+	summaries, err := core.SummarizeFiles(ctx, source.Dir, skipWorkspacePath)
+	if err != nil {
+		return core.Manifest{}, err
+	}
+	prefix := ""
+	if !levelA {
+		prefix = "game/"
+	}
+
+	manifest := core.Manifest{
+		ProjectID:      source.ProjectID,
 		Channel:        core.ChannelWeChat,
+		SourceType:     source.SourceType,
 		SourceVersion:  source.Version,
 		AdapterVersion: adapterVersion,
 		Entry:          filepath.ToSlash(source.Entry),
 		GeneratedAt:    time.Now().UTC(),
 		Level:          report.Level,
 		Warnings:       append([]string{}, report.Warnings...),
+		Report:         report,
+		Files:          make([]core.FileSummary, 0, len(summaries)),
 	}
+	for _, summary := range summaries {
+		manifest.Files = appendFileSummary(manifest.Files, core.FileSummary{
+			Path:   prefix + summary.Path,
+			Size:   summary.Size,
+			SHA256: summary.SHA256,
+		})
+	}
+
+	tmp, err := os.CreateTemp("", "vibebiz-wechat-*.zip")
+	if err != nil {
+		return core.Manifest{}, err
+	}
+	defer func() {
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
+	}()
+	zw := zip.NewWriter(tmp)
+
 	written := func(name string, data []byte) error {
 		if writeErr := core.WriteFile(zw, name, data); writeErr != nil {
 			return writeErr
 		}
 		manifest.FileCount++
 		manifest.TotalBytes += int64(len(data))
+		manifest.Files = appendFileSummary(manifest.Files, summarizeBytes(name, data))
 		return nil
 	}
 
-	if isLevelA(source) {
+	if levelA {
 		err = buildLevelA(ctx, zw, source, written, &manifest)
 	} else {
 		err = buildLevelB(ctx, zw, source, written, &manifest)
 	}
 	if err != nil {
+		_ = zw.Close()
 		return core.Manifest{}, err
 	}
 
-	if err = core.WriteJSON(zw, "package-manifest.json", manifest); err != nil {
+	manifest.Report.Warnings = append([]string{}, manifest.Warnings...)
+	if err := core.WriteJSON(zw, "package-manifest.json", manifest); err != nil {
+		_ = zw.Close()
+		return core.Manifest{}, err
+	}
+	if err := zw.Close(); err != nil {
+		return core.Manifest{}, err
+	}
+	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
+		return core.Manifest{}, err
+	}
+	if _, err := io.Copy(out, tmp); err != nil {
 		return core.Manifest{}, err
 	}
 	return manifest, nil
 }
 
 func buildLevelA(ctx context.Context, zw *zip.Writer, source core.SourceInfo, written func(string, []byte) error, manifest *core.Manifest) error {
-	count, total, err := core.CopyDirToZip(ctx, zw, source.Dir, "", nil)
+	count, total, err := core.CopyDirToZip(ctx, zw, source.Dir, "", skipWorkspacePath)
 	if err != nil {
 		return err
 	}
@@ -126,7 +173,7 @@ func buildLevelA(ctx context.Context, zw *zip.Writer, source core.SourceInfo, wr
 }
 
 func buildLevelB(ctx context.Context, zw *zip.Writer, source core.SourceInfo, written func(string, []byte) error, manifest *core.Manifest) error {
-	count, total, err := core.CopyDirToZip(ctx, zw, source.Dir, "game", nil)
+	count, total, err := core.CopyDirToZip(ctx, zw, source.Dir, "game", skipWorkspacePath)
 	if err != nil {
 		return err
 	}
@@ -171,7 +218,16 @@ func isLevelA(source core.SourceInfo) bool {
 	if source.Report.Level == core.LevelA {
 		return true
 	}
-	return fileExists(source.Dir, "game.js") && fileExists(source.Dir, "game.json")
+	return regularFileExists(source.Dir, "game.js") && regularFileExists(source.Dir, "game.json")
+}
+
+func validateLevelA(dir string) error {
+	for _, name := range []string{"game.js", "game.json"} {
+		if !regularFileExists(dir, name) {
+			return fmt.Errorf("%w: %s must be a regular file", ErrIncompleteSource, name)
+		}
+	}
+	return nil
 }
 
 func resolveEntryName(source core.SourceInfo) (string, error) {
@@ -209,8 +265,26 @@ func extractScripts(dir, entry string) ([]byte, []string, error) {
 	var warnings []string
 	var walk func(*html.Node) error
 	walk = func(node *html.Node) error {
-		if node.Type == html.ElementNode && node.Data == "script" {
-			return appendScript(&buf, dir, filepath.Dir(entryPath), node, &warnings)
+		if node.Type == html.ElementNode {
+			switch node.Data {
+			case "script":
+				return appendScript(&buf, dir, filepath.Dir(entryPath), node, &warnings)
+			case "link":
+				if hasExternalReference(attrValue(node, "href")) {
+					addWarning(&warnings, "external_resource:link")
+				}
+			case "img":
+				if hasExternalReference(attrValue(node, "src")) {
+					addWarning(&warnings, "external_resource:img")
+				}
+			case "style":
+				if hasExternalCSS(textContent(node)) {
+					addWarning(&warnings, "external_css_url")
+				}
+			}
+			if hasExternalCSS(attrValue(node, "style")) {
+				addWarning(&warnings, "external_css_url")
+			}
 		}
 		for child := node.FirstChild; child != nil; child = child.NextSibling {
 			if err := walk(child); err != nil {
@@ -228,7 +302,7 @@ func extractScripts(dir, entry string) ([]byte, []string, error) {
 func appendScript(buf *bytes.Buffer, root, base string, node *html.Node, warnings *[]string) error {
 	kind := strings.ToLower(strings.TrimSpace(attrValue(node, "type")))
 	if kind != "" && !isJavaScriptType(kind) {
-		*warnings = append(*warnings, "skipped_script_type:"+kind)
+		addWarning(warnings, "skipped_script_type:"+kind)
 		return nil
 	}
 
@@ -270,11 +344,15 @@ func appendChunk(buf *bytes.Buffer, data []byte) {
 }
 
 func resolveScript(root, base, src string) (string, error) {
-	parsed, err := url.Parse(strings.TrimSpace(src))
+	src = strings.TrimSpace(src)
+	if strings.HasPrefix(src, "//") {
+		return "", fmt.Errorf("%w: %s", ErrUnsafeScript, src)
+	}
+	parsed, err := url.Parse(src)
 	if err != nil {
 		return "", fmt.Errorf("%w: %s", ErrUnsafeScript, src)
 	}
-	if parsed.IsAbs() || parsed.Host != "" || strings.HasPrefix(src, "//") {
+	if parsed.IsAbs() || parsed.Host != "" {
 		return "", fmt.Errorf("%w: %s", ErrExternalScript, src)
 	}
 	name := strings.ReplaceAll(parsed.Path, "\\", "/")
@@ -318,7 +396,7 @@ func safeSourceFile(dir, name string) (string, error) {
 
 func isJavaScriptType(kind string) bool {
 	switch kind {
-	case "text/javascript", "application/javascript", "text/ecmascript", "application/ecmascript", "module":
+	case "text/javascript", "application/javascript", "text/ecmascript", "application/ecmascript":
 		return true
 	}
 	return false
@@ -376,4 +454,86 @@ func contains(values []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func skipWorkspacePath(rel string) bool {
+	rel = filepath.ToSlash(rel)
+	parts := strings.Split(rel, "/")
+	for _, part := range parts {
+		if strings.HasPrefix(part, ".") {
+			return true
+		}
+	}
+	if len(parts) > 0 && (parts[0] == "docs" || parts[0] == "node_modules") {
+		return true
+	}
+	switch parts[len(parts)-1] {
+	case "package-manifest.json", "CHANNEL_GUIDE.md":
+		return true
+	}
+	return false
+}
+
+func appendFileSummary(files []core.FileSummary, summary core.FileSummary) []core.FileSummary {
+	if len(files) >= maxManifestFiles {
+		return files
+	}
+	return append(files, summary)
+}
+
+func summarizeBytes(name string, data []byte) core.FileSummary {
+	hasher := sha256.Sum256(data)
+	return core.FileSummary{
+		Path:   filepath.ToSlash(name),
+		Size:   int64(len(data)),
+		SHA256: hex.EncodeToString(hasher[:])[:12],
+	}
+}
+
+func regularFileExists(dir, name string) bool {
+	info, err := os.Stat(filepath.Join(dir, filepath.FromSlash(name)))
+	return err == nil && info.Mode().IsRegular()
+}
+
+func addWarning(warnings *[]string, warning string) {
+	for _, existing := range *warnings {
+		if existing == warning {
+			return
+		}
+	}
+	*warnings = append(*warnings, warning)
+}
+
+func hasExternalReference(value string) bool {
+	value = strings.ToLower(strings.TrimSpace(value))
+	return strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://") || strings.HasPrefix(value, "//")
+}
+
+func hasExternalCSS(value string) bool {
+	value = strings.ToLower(value)
+	if strings.Contains(value, "http://") || strings.Contains(value, "https://") {
+		return true
+	}
+	compact := strings.Join(strings.Fields(value), "")
+	return strings.Contains(compact, "url(//") ||
+		strings.Contains(compact, `url("//`) ||
+		strings.Contains(compact, `url('//`) ||
+		strings.Contains(compact, `@import"//`) ||
+		strings.Contains(compact, `@import'//`) ||
+		strings.Contains(compact, "@import//")
+}
+
+func textContent(node *html.Node) string {
+	var builder strings.Builder
+	var walk func(*html.Node)
+	walk = func(current *html.Node) {
+		if current.Type == html.TextNode {
+			builder.WriteString(current.Data)
+		}
+		for child := current.FirstChild; child != nil; child = child.NextSibling {
+			walk(child)
+		}
+	}
+	walk(node)
+	return builder.String()
 }

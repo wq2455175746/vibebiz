@@ -48,7 +48,13 @@ func (s *WorkspaceSource) Materialize(ctx context.Context) (core.SourceInfo, err
 	if err != nil || !stat.IsDir() {
 		return core.SourceInfo{}, ErrSourceNotFound
 	}
-	return materializeDir(ctx, dir)
+	info, err := materializeDir(ctx, dir)
+	if err != nil {
+		return core.SourceInfo{}, err
+	}
+	info.ProjectID = s.ProjectID
+	info.SourceType = core.SourceHTML5
+	return info, nil
 }
 
 type ResourceSource struct {
@@ -105,6 +111,8 @@ func (s *ResourceSource) Materialize(ctx context.Context) (core.SourceInfo, erro
 	if err != nil {
 		return core.SourceInfo{}, err
 	}
+	info.ProjectID = s.ProjectID
+	info.SourceType = core.SourceEngineArtifact
 	info.Version = hex.EncodeToString(hasher.Sum(nil))[:16]
 	ok = true
 	return info, nil
