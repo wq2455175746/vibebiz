@@ -105,4 +105,44 @@ describe('CardsView', () => {
     await flush()
     expect(deleteMock).toHaveBeenCalledWith('demo-1')
   })
+
+  it('returns to the previous page after deleting the last row on a later page', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const row = (id: string) => ({
+      id,
+      ownerName: id,
+      user: id,
+      tags: [],
+      projectCount: 1,
+      featuredType: 'HTML',
+      hidden: false,
+      updatedAt: '2026-11-08T10:00:00.000Z',
+    })
+    listMock.mockImplementation(async (query) => {
+      if ((query?.page ?? 1) === 2) {
+        return { items: [row('demo-11')], total: 11, page: 2, pageSize: 10 }
+      }
+      return {
+        items: Array.from({ length: 10 }, (_, index) => row(`demo-${index + 1}`)),
+        total: 11,
+        page: 1,
+        pageSize: 10,
+      }
+    })
+    mount()
+    await flush()
+    const pageTwo = Array.from(host.querySelectorAll<HTMLButtonElement>('.p-paginator-page')).find(
+      (button) => button.textContent?.trim() === '2',
+    )
+    pageTwo?.click()
+    await flush()
+    expect(listMock).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2 }))
+    const deleteButton = Array.from(host.querySelectorAll<HTMLButtonElement>('button')).find(
+      (button) => button.textContent?.includes('删除'),
+    )
+    deleteButton?.click()
+    await flush()
+    expect(deleteMock).toHaveBeenCalledWith('demo-11')
+    expect(listMock).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1 }))
+  })
 })

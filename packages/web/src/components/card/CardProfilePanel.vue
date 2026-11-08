@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 
 import CardPreview from './CardPreview.vue'
 import type { BusinessCard, CardFeatured } from '@/types'
-import { CARD_MAX_TAGS, readFileAsDataUrl, validateCardUpload } from '@/utils/card'
+import { CARD_MAX_TAGS, isPdfFile, readFileAsDataUrl, validateCardUpload } from '@/utils/card'
 
 const props = defineProps<{ card: BusinessCard }>()
 const emit = defineEmits<{
@@ -60,7 +60,9 @@ function openUpload() {
 }
 
 async function onFileChange(event: Event) {
-  const file = (event.target as HTMLInputElement).files?.[0]
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
   if (!file) return
   const message = validateCardUpload(file)
   if (message) {
@@ -71,7 +73,7 @@ async function onFileChange(event: Event) {
   uploadError.value = ''
   try {
     const dataUrl = await readFileAsDataUrl(file)
-    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+    const isPdf = isPdfFile(file)
     emit('set-featured', {
       kind: 'file',
       fileType: isPdf ? 'pdf' : 'image',

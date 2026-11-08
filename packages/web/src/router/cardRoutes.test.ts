@@ -6,6 +6,8 @@ describe('card routes', () => {
   it('registers my card and discover routes behind auth', () => {
     expect(router.resolve('/my-card').name).toBe('my-card')
     expect(router.resolve('/discover').name).toBe('discover')
+    expect(router.resolve('/my-card').meta.public).toBeFalsy()
+    expect(router.resolve('/discover').meta.public).toBeFalsy()
   })
 
   it('marks share pages public', () => {

@@ -63,4 +63,23 @@ describe('AddProjectDialog', () => {
     await flush()
     expect(host.textContent).toContain('暂无已发布项目')
   })
+
+  it('renders the provided add error', async () => {
+    listMock.mockResolvedValue([published('p4', '作品四')])
+    mount({ existingIds: [], full: false, error: '项目已添加或已达到 5 个上限' })
+    await flush()
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain('项目已添加或已达到 5 个上限')
+  })
+
+  it('disables a project while its add is pending', async () => {
+    listMock.mockResolvedValue([published('p5', '作品五')])
+    const onAdd = vi.fn()
+    mount({ existingIds: [], full: false, onAdd })
+    await flush()
+    const button = host.querySelector<HTMLButtonElement>('.add-project-action')
+    button?.click()
+    await flush()
+    expect(onAdd).toHaveBeenCalledTimes(1)
+    expect(button?.disabled).toBe(true)
+  })
 })

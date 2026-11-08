@@ -2,7 +2,9 @@
 import { CARD_TYPE_LABELS } from '@/utils/card'
 import type { CardProjectItem } from '@/types'
 
-const props = defineProps<{ item: CardProjectItem }>()
+const props = withDefaults(defineProps<{ item: CardProjectItem; removable?: boolean }>(), {
+  removable: true,
+})
 const emit = defineEmits<{
   open: [item: CardProjectItem]
   remove: [projectId: string]
@@ -18,11 +20,12 @@ const emit = defineEmits<{
     <div class="card-project-body">
       <div class="card-project-title">
         <strong>{{ item.name }}</strong>
-        <span class="tag">{{ CARD_TYPE_LABELS[item.type] }}</span>
+        <span class="tag">{{ CARD_TYPE_LABELS[item.type] ?? '内容' }}</span>
       </div>
       <p>{{ item.description || '暂无简介' }}</p>
     </div>
     <button
+      v-if="removable"
       class="card-project-remove"
       type="button"
       aria-label="移除项目"

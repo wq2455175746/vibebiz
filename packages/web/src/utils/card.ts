@@ -143,11 +143,15 @@ export function sortDiscoverCards(cards: BusinessCard[], mineId = 'me'): Busines
   })
 }
 
+export function isPdfFile(file: { name: string; type: string }): boolean {
+  return file.type === 'application/pdf'
+}
+
 export function validateCardUpload(file: { name: string; size: number; type: string }): string {
-  const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+  const isPdf = isPdfFile(file)
   const isImage = file.type.startsWith('image/')
   if (!isPdf && !isImage) return '只支持 PDF 或图片'
-  if (file.size <= 0 || file.size > CARD_MAX_UPLOAD_BYTES) return '文件不能超过 2MB'
+  if (file.size <= 0 || file.size > CARD_MAX_UPLOAD_BYTES) return '文件为空或超过 2MB'
   return ''
 }
 

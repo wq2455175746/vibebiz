@@ -50,7 +50,11 @@ async function remove(row: unknown) {
   try {
     await deleteCard(card.id)
     notice.value = '名片已删除'
-    await load()
+    if (page.value > 1 && rows.value.length === 1) {
+      await setPage(page.value - 1)
+    } else {
+      await load()
+    }
   } catch (err) {
     actionError.value = err instanceof Error ? err.message : '删除名片失败'
   } finally {

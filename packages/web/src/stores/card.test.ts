@@ -2,8 +2,9 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { mockCards } from '@/mocks/cards'
+import { getProject } from '@/api/projects'
 import { useCardStore } from './card'
-import type { CardProjectItem } from '@/types'
+import type { CardProjectItem, Project, PublishedProject } from '@/types'
 
 vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({ user: { id: 7, username: 'alice', avatarUrl: null } }),
@@ -40,8 +41,36 @@ function seedItem(store: ReturnType<typeof useCardStore>, projectId: string) {
   store.$patch({ mine: { ...store.mine, items: [...store.mine.items, item] } })
 }
 
+const getProjectMock = vi.mocked(getProject)
+
+function published(projectId: string): PublishedProject {
+  return {
+    projectId,
+    name: projectId,
+    description: '',
+    tags: [],
+    coverUrl: null,
+    publishedAt: '2026-11-08T00:00:00.000Z',
+    url: `/p/${projectId}`,
+  }
+}
+
+function projectDetail(previewPath: string): Project {
+  return {
+    id: 'p1',
+    name: 'p1',
+    prompt: '',
+    previewPath,
+    state: 'active',
+    createdAt: '2026-11-08T00:00:00.000Z',
+    updatedAt: '2026-11-08T00:00:00.000Z',
+  }
+}
+
 beforeEach(() => {
   vi.stubGlobal('localStorage', memoryStorage())
+  getProjectMock.mockReset()
+  getProjectMock.mockResolvedValue(projectDetail('docs/demo.pdf'))
   setActivePinia(createPinia())
 })
 
@@ -111,5 +140,36 @@ describe('card store', () => {
     const first = store.listDiscover(1, 6)
     expect(first.items).toHaveLength(6)
     expect(first.total).toBe(mockCards.length)
+  })
+
+  it('rejects a concurrent duplicate add after the detail request resolves', async () => {
+    const store = useCardStore()
+    store.load()
+    const resolvers: Array<(project: Project) => void> = []
+    getProjectMock.mockImplementation(
+      () => new Promise<Project>((resolve) => resolvers.push(resolve)),
+    )
+    const first = store.addPublishedProject(published('p1'))
+    const second = store.addPublishedProject(published('p1'))
+    expect(resolvers).toHaveLength(2)
+    resolvers[0](projectDetail('index.html'))
+    await first
+    resolvers[1](projectDetail('index.html'))
+    await expect(second).rejects.toThrow('项目已添加或已达到 5 个上限')
+    expect(store.mine.items).toHaveLength(1)
+  })
+
+  it('marks saving immediately and clears after the debounce', async () => {
+    vi.useFakeTimers()
+    try {
+      const store = useCardStore()
+      store.load()
+      store.setHeadline('hello')
+      expect(store.saving).toBe(true)
+      await vi.runAllTimersAsync()
+      expect(store.saving).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

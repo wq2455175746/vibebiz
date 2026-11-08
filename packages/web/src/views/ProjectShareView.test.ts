@@ -20,7 +20,7 @@ vi.mock('@/stores/card', () => ({
         description: '',
         coverUrl: null,
         type: currentType,
-        shareUrl: '/share/project/demo-1-p1',
+        shareUrl: '/p/demo-1-p1',
         previewUrl: 'https://example.com/demo',
         addedAt: '2026-11-08T00:00:00.000Z',
       },
@@ -50,6 +50,18 @@ describe('ProjectShareView', () => {
   it('renders html in an iframe', () => {
     mount('html')
     expect(host.querySelector('iframe')).not.toBeNull()
+  })
+
+  it('does not grant same-origin to html iframes', () => {
+    mount('html')
+    const sandbox = host.querySelector('iframe')?.getAttribute('sandbox') ?? ''
+    expect(sandbox).not.toContain('allow-same-origin')
+    expect(sandbox).toContain('allow-scripts')
+  })
+
+  it('sandboxes the pdf iframe', () => {
+    mount('pdf')
+    expect(host.querySelector('iframe')?.getAttribute('sandbox')).toBe('')
   })
 
   it('renders an image', () => {

@@ -18,6 +18,7 @@ import {
   decodeCard,
   decodeCards,
   emptyCard,
+  isPdfFile,
   normalizeCard,
   pageCards,
   readFileAsDataUrl,
@@ -61,12 +62,16 @@ export const useCardStore = defineStore('card', () => {
 
   function saveNow() {
     saving.value = true
-    mine.value = { ...mine.value, updatedAt: new Date().toISOString() }
-    persistMine()
-    saving.value = false
+    try {
+      mine.value = { ...mine.value, updatedAt: new Date().toISOString() }
+      persistMine()
+    } finally {
+      saving.value = false
+    }
   }
 
   function scheduleSave() {
+    saving.value = true
     if (saveTimer) window.clearTimeout(saveTimer)
     saveTimer = window.setTimeout(saveNow, 300)
   }
@@ -129,6 +134,9 @@ export const useCardStore = defineStore('card', () => {
     } catch {
       type = 'html'
     }
+    if (!canAddCardItem(mine.value.items, published.projectId)) {
+      throw new Error('项目已添加或已达到 5 个上限')
+    }
     const item: CardProjectItem = {
       projectId: published.projectId,
       name: published.name,
@@ -156,7 +164,7 @@ export const useCardStore = defineStore('card', () => {
     const message = validateCardUpload(file)
     if (message) throw new Error(message)
     const dataUrl = await readFileAsDataUrl(file)
-    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+    const isPdf = isPdfFile(file)
     setFeatured({
       kind: 'file',
       fileType: isPdf ? 'pdf' : 'image',

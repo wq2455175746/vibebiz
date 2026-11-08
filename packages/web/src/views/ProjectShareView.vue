@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { DEMO_DOCUMENT, DEMO_HTML, DEMO_IMAGE, DEMO_PDF, DEMO_VIDEO } from '@/mocks/cards'
@@ -13,9 +13,8 @@ const route = useRoute()
 const store = useCardStore()
 
 store.load()
-const ready = ref(true)
 
-const found = computed(() => (ready.value ? store.findProject(String(route.params.projectId ?? '')) : null))
+const found = computed(() => store.findProject(String(route.params.projectId ?? '')))
 const item = computed(() => found.value?.item ?? null)
 const card = computed(() => found.value?.card ?? null)
 const type = computed<CardContentType>(() => item.value?.type ?? 'html')
@@ -41,8 +40,7 @@ const documentHTML = computed(() => renderMarkdown(item.value?.previewUrl || DEM
 
 <template>
   <main class="share-page">
-    <div v-if="!ready" class="card-empty">加载中…</div>
-    <div v-else-if="!item" class="share-empty">
+    <div v-if="!item" class="share-empty">
       <h1>项目不存在或已下线</h1>
       <a class="card-primary" href="/">返回首页</a>
     </div>
@@ -63,7 +61,7 @@ const documentHTML = computed(() => renderMarkdown(item.value?.previewUrl || DEM
           v-if="type === 'html' && htmlExternal"
           :src="htmlSource"
           title="HTML 游戏预览"
-          sandbox="allow-scripts allow-forms allow-same-origin"
+          sandbox="allow-scripts allow-forms"
         />
         <iframe
           v-else-if="type === 'html'"
@@ -72,7 +70,7 @@ const documentHTML = computed(() => renderMarkdown(item.value?.previewUrl || DEM
           sandbox="allow-scripts allow-forms"
         />
         <img v-else-if="type === 'image'" :src="mediaSource" :alt="item.name" />
-        <iframe v-else-if="type === 'pdf'" :src="mediaSource" title="PDF 预览" />
+        <iframe v-else-if="type === 'pdf'" :src="mediaSource" title="PDF 预览" sandbox="" />
         <video v-else-if="type === 'video'" :src="mediaSource" controls playsinline />
         <article v-else class="share-document" v-html="documentHTML" />
       </section>

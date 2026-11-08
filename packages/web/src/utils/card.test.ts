@@ -9,6 +9,7 @@ import {
   decodeCard,
   decodeCards,
   emptyCard,
+  isPdfFile,
   normalizeCard,
   pageCards,
   sortDiscoverCards,
@@ -143,5 +144,19 @@ describe('validateCardUpload', () => {
     expect(
       validateCardUpload({ name: 'a.png', size: 3 * 1024 * 1024, type: 'image/png' }),
     ).toContain('2MB')
+  })
+
+  it('rejects empty files', () => {
+    expect(validateCardUpload({ name: 'a.pdf', size: 0, type: 'application/pdf' })).toBe(
+      '文件为空或超过 2MB',
+    )
+  })
+})
+
+describe('isPdfFile', () => {
+  it('requires the pdf MIME type', () => {
+    expect(isPdfFile({ name: 'a.pdf', type: 'application/pdf' })).toBe(true)
+    expect(isPdfFile({ name: 'evil.pdf', type: 'text/html' })).toBe(false)
+    expect(isPdfFile({ name: 'a.txt', type: 'text/plain' })).toBe(false)
   })
 })

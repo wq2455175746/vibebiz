@@ -3,6 +3,8 @@ import { createApp, type App } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import MyCardPanel from './MyCardPanel.vue'
+import { emptyCard } from '@/utils/card'
+import type { CardProjectItem } from '@/types'
 
 vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({
@@ -69,5 +71,24 @@ describe('MyCardPanel', () => {
     host.querySelector<HTMLButtonElement>('.card-add-btn')?.click()
     await flush()
     expect(host.textContent).toContain('添加已发布项目')
+  })
+
+  it('shows remove buttons in the editor project list', async () => {
+    const item: CardProjectItem = {
+      projectId: 'p1',
+      name: '作品一',
+      description: '',
+      coverUrl: null,
+      type: 'html',
+      shareUrl: '/p/p1',
+      addedAt: '2026-11-08T00:00:00.000Z',
+    }
+    localStorage.setItem(
+      'vibebiz:cards:mine:v1',
+      JSON.stringify({ ...emptyCard(), ownerName: 'alice', items: [item] }),
+    )
+    mount()
+    await flush()
+    expect(host.querySelectorAll('.card-project-remove')).toHaveLength(1)
   })
 })

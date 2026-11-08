@@ -4,7 +4,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import CardShareView from './CardShareView.vue'
 
-vi.mock('vue-router', () => ({ useRoute: () => ({ params: { id: 'demo-1' } }) }))
+const routeState = vi.hoisted(() => ({ id: 'demo-1' }))
+
+vi.mock('vue-router', () => ({ useRoute: () => ({ params: { id: routeState.id } }) }))
 
 vi.mock('@/stores/card', () => ({
   useCardStore: () => ({
@@ -51,6 +53,7 @@ afterEach(() => {
   app?.unmount()
   app = null
   host?.remove()
+  routeState.id = 'demo-1'
 })
 
 describe('CardShareView', () => {
@@ -66,5 +69,24 @@ describe('CardShareView', () => {
     mount()
     expect(host.querySelector<HTMLButtonElement>('.card-social-comment')?.disabled).toBe(true)
     expect(host.querySelector<HTMLButtonElement>('.card-social-message')?.disabled).toBe(true)
+  })
+
+  it('does not render remove buttons on the public share page', () => {
+    mount()
+    expect(host.querySelectorAll('.card-project-remove')).toHaveLength(0)
+  })
+
+  it('shows an edit entry only for the own card', () => {
+    routeState.id = 'demo-1'
+    mount()
+    expect(host.textContent).not.toContain('编辑名片')
+    app?.unmount()
+    host.remove()
+    routeState.id = 'me'
+    mount()
+    const edit = Array.from(host.querySelectorAll<HTMLAnchorElement>('a')).find(
+      (link) => link.textContent === '编辑名片',
+    )
+    expect(edit?.getAttribute('href')).toBe('/my-card')
   })
 })

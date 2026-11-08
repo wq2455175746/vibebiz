@@ -13,17 +13,13 @@ const notice = ref('')
 const copied = ref(false)
 
 store.load()
-const ready = ref(true)
 
-const card = computed(() => (ready.value ? store.getCardById(String(route.params.id ?? '')) : null))
+const card = computed(() => store.getCardById(String(route.params.id ?? '')))
+const isOwnCard = computed(() => route.params.id === 'me')
 const shareUrl = computed(() => window.location.href)
 
 function openProject(projectId: string) {
   window.open(`/share/project/${encodeURIComponent(projectId)}`, '_blank', 'noopener,noreferrer')
-}
-
-function comingSoon(label: string) {
-  notice.value = `${label}即将上线`
 }
 
 async function copyLink() {
@@ -41,8 +37,7 @@ async function copyLink() {
 
 <template>
   <main class="share-page">
-    <div v-if="!ready" class="card-empty">加载中…</div>
-    <div v-else-if="!card" class="share-empty">
+    <div v-if="!card" class="share-empty">
       <h1>名片不存在或已下线</h1>
       <a class="card-primary" href="/">返回首页</a>
     </div>
@@ -59,10 +54,13 @@ async function copyLink() {
             </div>
           </div>
         </div>
-        <button class="card-secondary" type="button" @click="copyLink">
-          <i class="pi pi-copy" />
-          {{ copied ? '已复制' : '复制分享链接' }}
-        </button>
+        <div class="card-share-actions">
+          <a v-if="isOwnCard" class="card-primary" href="/my-card">编辑名片</a>
+          <button class="card-secondary" type="button" @click="copyLink">
+            <i class="pi pi-copy" />
+            {{ copied ? '已复制' : '复制分享链接' }}
+          </button>
+        </div>
       </header>
 
       <p v-if="notice" class="share-notice">{{ notice }}</p>
@@ -79,18 +77,18 @@ async function copyLink() {
             v-for="item in card.items"
             :key="item.projectId"
             :item="item"
+            :removable="false"
             @open="openProject(item.projectId)"
-            @remove="() => undefined"
           />
         </div>
       </section>
 
       <footer class="share-social">
-        <button class="card-social-comment" type="button" disabled @click="comingSoon('评论')">
+        <button class="card-social-comment" type="button" disabled>
           <i class="pi pi-comment" />
           评论 · {{ card.commentCount }}
         </button>
-        <button class="card-social-message" type="button" disabled @click="comingSoon('私信')">
+        <button class="card-social-message" type="button" disabled>
           <i class="pi pi-send" />
           私信
         </button>

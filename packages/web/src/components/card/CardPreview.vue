@@ -32,12 +32,12 @@ const resolved = computed(() => {
   <div class="card-preview" :class="{ large }">
     <template v-if="resolved">
       <div v-if="large && resolved.kind === 'pdf'" class="card-preview-pdf">
-        <iframe :src="resolved.src" title="PDF 预览" />
+        <iframe :src="resolved.src" title="PDF 预览" sandbox="" />
         <span>{{ resolved.name }}</span>
       </div>
       <img v-else-if="resolved.kind === 'image'" :src="resolved.src" :alt="resolved.name" />
       <div v-else class="card-preview-file">
-        <i class="pi pi-file-pdf" />
+        <i :class="resolved.kind === 'pdf' ? 'pi pi-file-pdf' : 'pi pi-file'" />
         <span>{{ resolved.name }}</span>
       </div>
     </template>

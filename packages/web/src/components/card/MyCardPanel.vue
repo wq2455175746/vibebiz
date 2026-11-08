@@ -30,6 +30,7 @@ async function addProject(published: PublishedProject) {
   actionError.value = ''
   try {
     await store.addPublishedProject(published)
+    actionError.value = ''
     addOpen.value = false
   } catch (err) {
     actionError.value = err instanceof Error ? err.message : '添加项目失败'
@@ -124,6 +125,7 @@ async function copyLink() {
       v-if="addOpen"
       :existing-ids="store.items.map((item) => item.projectId)"
       :full="store.items.length >= 5"
+      :error="actionError"
       @close="addOpen = false"
       @add="addProject"
     />
