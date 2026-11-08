@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -166,6 +167,69 @@ func TestExtractZipRejectsSymlinkEntry(t *testing.T) {
 	err = ExtractZip(context.Background(), &buf, t.TempDir(), ExtractLimits{MaxBytes: 1024, MaxFiles: 10})
 	if !errors.Is(err, ErrUnsafeArchive) {
 		t.Fatalf("err = %v, want ErrUnsafeArchive", err)
+	}
+}
+
+type countingReader struct {
+	r io.Reader
+	n int64
+}
+
+func (c *countingReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.n += int64(n)
+	return n, err
+}
+
+func TestExtractZipBoundsArchiveRead(t *testing.T) {
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	w, err := zw.Create("a.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Write([]byte("x")); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	src := &countingReader{r: io.MultiReader(
+		bytes.NewReader(buf.Bytes()),
+		bytes.NewReader(bytes.Repeat([]byte("x"), 64<<10)),
+	)}
+	err = ExtractZip(context.Background(), src, t.TempDir(), ExtractLimits{MaxBytes: 1024, MaxFiles: 10})
+	if !errors.Is(err, ErrArchiveTooLarge) {
+		t.Fatalf("err = %v, want ErrArchiveTooLarge", err)
+	}
+	if src.n > 1025 {
+		t.Fatalf("read %d bytes, want at most 1025", src.n)
+	}
+}
+
+func TestExtractZipRejectsSpecialFileModes(t *testing.T) {
+	for _, mode := range []os.FileMode{os.ModeNamedPipe, os.ModeSocket, os.ModeDevice} {
+		t.Run(mode.String(), func(t *testing.T) {
+			var buf bytes.Buffer
+			zw := zip.NewWriter(&buf)
+			h := &zip.FileHeader{Name: "special", Method: zip.Store}
+			h.SetMode(mode | 0o644)
+			w, err := zw.CreateHeader(h)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := w.Write([]byte("x")); err != nil {
+				t.Fatal(err)
+			}
+			if err := zw.Close(); err != nil {
+				t.Fatal(err)
+			}
+			err = ExtractZip(context.Background(), &buf, t.TempDir(), ExtractLimits{MaxBytes: 1024, MaxFiles: 10})
+			if !errors.Is(err, ErrUnsafeArchive) {
+				t.Fatalf("err = %v, want ErrUnsafeArchive", err)
+			}
+		})
 	}
 }
 

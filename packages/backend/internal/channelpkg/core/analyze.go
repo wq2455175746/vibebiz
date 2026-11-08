@@ -12,13 +12,16 @@ var ErrInvalidSource = errors.New("invalid channel package source")
 
 const maxAnalyzeFileSize = 2 << 20
 
-var domMarkers = []string{
-	"document.querySelector",
-	"document.querySelectorAll",
-	"innerHTML",
-	"document.createElement",
-	"addEventListener",
-	"localStorage",
+// countDOMDependencies counts bytes that strongly couple the source to the DOM.
+func countDOMDependencies(text string) int {
+	queryAll := strings.Count(text, "document.querySelectorAll")
+	withoutQueryAll := strings.ReplaceAll(text, "document.querySelectorAll", "")
+	return queryAll +
+		strings.Count(withoutQueryAll, "document.querySelector") +
+		strings.Count(text, "innerHTML") +
+		strings.Count(text, "document.createElement") +
+		strings.Count(text, "addEventListener") +
+		strings.Count(text, "localStorage")
 }
 
 // AnalyzeHTML classifies an HTML5 source by how portable it is to mini-game channels.
@@ -62,9 +65,7 @@ func AnalyzeHTML(dir, entry string) (Report, error) {
 		if strings.Contains(strings.ToLower(text), "<canvas") {
 			canvas = true
 		}
-		for _, marker := range domMarkers {
-			domCount += strings.Count(text, marker)
-		}
+		domCount += countDOMDependencies(text)
 		if strings.Count(text, "http://") > 0 || strings.Count(text, "https://") > 0 {
 			externalURL = true
 		}

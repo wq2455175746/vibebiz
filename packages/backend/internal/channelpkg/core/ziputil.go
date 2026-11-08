@@ -102,7 +102,7 @@ func ExtractZip(ctx context.Context, src io.Reader, dst string, limits ExtractLi
 	if err := os.MkdirAll(dst, 0o755); err != nil {
 		return err
 	}
-	data, err := io.ReadAll(src)
+	data, err := readArchive(src, limits)
 	if err != nil {
 		return err
 	}
@@ -117,7 +117,7 @@ func ExtractZip(ctx context.Context, src io.Reader, dst string, limits ExtractLi
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if f.Mode()&os.ModeSymlink != 0 {
+		if f.Mode()&(os.ModeSymlink|os.ModeDevice|os.ModeCharDevice|os.ModeNamedPipe|os.ModeSocket|os.ModeIrregular) != 0 {
 			return ErrUnsafeArchive
 		}
 		clean, err := safeArchiveName(f.Name)
@@ -168,6 +168,20 @@ func ExtractZip(ctx context.Context, src io.Reader, dst string, limits ExtractLi
 		total += written
 	}
 	return nil
+}
+
+func readArchive(src io.Reader, limits ExtractLimits) ([]byte, error) {
+	if limits.MaxBytes <= 0 {
+		return io.ReadAll(src)
+	}
+	data, err := io.ReadAll(io.LimitReader(src, limits.MaxBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limits.MaxBytes {
+		return nil, ErrArchiveTooLarge
+	}
+	return data, nil
 }
 
 func extractFile(target string, f *zip.File, remaining int64) (int64, error) {

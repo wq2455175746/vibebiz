@@ -102,3 +102,16 @@ func TestAnalyzeHTMLWarnsAboutExternalAndFetch(t *testing.T) {
 		}
 	}
 }
+
+func TestAnalyzeHTMLDoesNotDoubleCountQuerySelectorAll(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "index.html", `<canvas id="game"></canvas><script src="app.js"></script>`)
+	write(t, dir, "app.js", `document.querySelectorAll('div'); document.querySelectorAll('span');`)
+	report, err := AnalyzeHTML(dir, "index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Level != LevelB {
+		t.Fatalf("level = %s, want B; report=%+v", report.Level, report)
+	}
+}
