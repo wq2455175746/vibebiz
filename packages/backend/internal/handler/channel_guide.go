@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -155,7 +156,14 @@ func (h *ChannelGuideHandler) UploadMarkdown(c echo.Context) error {
 	c.Request().Body = http.MaxBytesReader(c.Response(), c.Request().Body, channelguide.MaxMarkdownBytes+64<<10)
 	file, err := c.FormFile("file")
 	if err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			return response.Fail(c, http.StatusRequestEntityTooLarge, 41303, "channel guide markdown is too large")
+		}
 		return response.Fail(c, http.StatusBadRequest, 40001, "invalid markdown file")
+	}
+	if !allowedMarkdownContentType(file.Header.Get("Content-Type")) {
+		return response.Fail(c, http.StatusBadRequest, 40001, "invalid markdown file type")
 	}
 	src, err := file.Open()
 	if err != nil {
@@ -171,6 +179,18 @@ func (h *ChannelGuideHandler) UploadMarkdown(c echo.Context) error {
 		return channelGuideError(c, err)
 	}
 	return response.OK(c, toChannelGuideDetailResponse(item))
+}
+
+func allowedMarkdownContentType(value string) bool {
+	if semicolon := strings.IndexByte(value, ';'); semicolon >= 0 {
+		value = value[:semicolon]
+	}
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "text/markdown", "text/plain", "application/octet-stream":
+		return true
+	default:
+		return false
+	}
 }
 
 func toChannelGuideListResponse(item channelguide.Item) channelGuideListResponse {

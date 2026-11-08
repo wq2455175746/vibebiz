@@ -1,9 +1,13 @@
 package handler
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"strings"
 	"testing"
 
@@ -70,4 +74,117 @@ func TestChannelGuideHandlerUploadMarkdown(t *testing.T) {
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "# Uploaded") {
 		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
 	}
+}
+
+func createDisabledGuide(t *testing.T, h *ChannelGuideHandler) {
+	t.Helper()
+	_, err := h.Service.Create(context.Background(), channelguide.Input{
+		Channel: "taptap_mobile", Title: "TapTap", Markdown: "# TapTap", Enabled: false, SortOrder: 40,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestChannelGuideHandlerListStatusFilter(t *testing.T) {
+	e := echo.New()
+	h := newChannelGuideHandler(t)
+	createDisabledGuide(t, h)
+	e.GET("/guides", h.List)
+
+	cases := []struct {
+		name        string
+		query       string
+		wantGuide   bool
+		wantAnother bool
+	}{
+		{name: "enabled excludes disabled", query: "?status=enabled", wantGuide: false, wantAnother: true},
+		{name: "disabled includes only disabled", query: "?status=disabled", wantGuide: true, wantAnother: false},
+		{name: "all includes both", query: "?status=all", wantGuide: true, wantAnother: true},
+		{name: "empty includes both", query: "", wantGuide: true, wantAnother: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/guides"+tc.query, nil))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+			}
+			if got := strings.Contains(rec.Body.String(), "taptap_mobile"); got != tc.wantGuide {
+				t.Fatalf("contains disabled guide = %v, want %v: %s", got, tc.wantGuide, rec.Body.String())
+			}
+			if got := strings.Contains(rec.Body.String(), "wechat_minigame"); got != tc.wantAnother {
+				t.Fatalf("contains enabled guide = %v, want %v: %s", got, tc.wantAnother, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestChannelGuideHandlerPublicListExcludesDisabled(t *testing.T) {
+	e := echo.New()
+	h := newChannelGuideHandler(t)
+	createDisabledGuide(t, h)
+	e.GET("/guides", h.PublicList)
+
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/guides", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "taptap_mobile") {
+		t.Fatalf("public list contains disabled guide: %s", rec.Body.String())
+	}
+}
+
+func TestChannelGuideHandlerUploadOversizedBody(t *testing.T) {
+	e := echo.New()
+	h := newChannelGuideHandler(t)
+	e.POST("/guides/:channel/markdown", h.UploadMarkdown)
+
+	data := bytes.Repeat([]byte("a"), channelguide.MaxMarkdownBytes+(128<<10))
+	contentType, body := multipartGuideBody(t, "guide.md", "text/markdown", data)
+	req := httptest.NewRequest(http.MethodPost, "/guides/wechat_minigame/markdown", bytes.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, contentType)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusRequestEntityTooLarge || !strings.Contains(rec.Body.String(), "41303") {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestChannelGuideHandlerUploadRejectsUnsupportedContentType(t *testing.T) {
+	e := echo.New()
+	h := newChannelGuideHandler(t)
+	e.POST("/guides/:channel/markdown", h.UploadMarkdown)
+
+	contentType, body := multipartGuideBody(t, "guide.md", "image/png", []byte("# Uploaded"))
+	req := httptest.NewRequest(http.MethodPost, "/guides/wechat_minigame/markdown", bytes.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, contentType)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "40001") {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+}
+
+func multipartGuideBody(t *testing.T, filename, contentType string, data []byte) (string, []byte) {
+	t.Helper()
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	header := textproto.MIMEHeader{}
+	header.Set("Content-Disposition", fmt.Sprintf(`form-data; name="file"; filename="%s"`, filename))
+	if contentType != "" {
+		header.Set("Content-Type", contentType)
+	}
+	part, err := w.CreatePart(header)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write(data); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return w.FormDataContentType(), buf.Bytes()
 }
