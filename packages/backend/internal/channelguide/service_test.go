@@ -7,7 +7,17 @@ import (
 	"testing"
 
 	"vibebiz/internal/channelpkg/core"
+	"vibebiz/internal/dao"
+	"vibebiz/internal/dao/model"
 )
+
+type daoNotFoundRepository struct {
+	*MemoryRepository
+}
+
+func (daoNotFoundRepository) Get(context.Context, string) (*model.ChannelGuide, error) {
+	return nil, dao.ErrNotFound
+}
 
 func newTestService(t *testing.T) *Service {
 	t.Helper()
@@ -124,5 +134,19 @@ func TestMarkdownFallsBackToEmbedded(t *testing.T) {
 	}
 	if !strings.Contains(got, "微信") {
 		t.Fatalf("markdown = %q", got)
+	}
+}
+
+func TestServiceMapsDAOErrNotFound(t *testing.T) {
+	svc := NewService(daoNotFoundRepository{NewMemoryRepository()})
+	got, err := svc.Markdown(context.Background(), core.ChannelWeChat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "微信") {
+		t.Fatalf("markdown = %q", got)
+	}
+	if _, err := svc.Get(context.Background(), core.ChannelWeChat); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("err = %v, want ErrNotFound", err)
 	}
 }

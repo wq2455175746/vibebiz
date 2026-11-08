@@ -13,6 +13,7 @@ import (
 
 	"vibebiz/internal/channelpkg/core"
 	"vibebiz/internal/channelpkg/guides"
+	"vibebiz/internal/dao"
 	"vibebiz/internal/dao/model"
 )
 
@@ -103,6 +104,9 @@ func (s *Service) List(ctx context.Context, includeDisabled bool, keyword string
 func (s *Service) Get(ctx context.Context, channel string) (Item, error) {
 	item, err := s.repo.Get(ctx, channel)
 	if err != nil {
+		if isNotFound(err) {
+			return Item{}, ErrNotFound
+		}
 		return Item{}, err
 	}
 	return toItem(item), nil
@@ -125,6 +129,9 @@ func (s *Service) Create(ctx context.Context, input Input) (Item, error) {
 func (s *Service) Update(ctx context.Context, channel string, input Input) (Item, error) {
 	item, err := s.repo.Get(ctx, channel)
 	if err != nil {
+		if isNotFound(err) {
+			return Item{}, ErrNotFound
+		}
 		return Item{}, err
 	}
 	normalized, err := s.apply(item, input)
@@ -140,12 +147,21 @@ func (s *Service) Update(ctx context.Context, channel string, input Input) (Item
 func (s *Service) Delete(ctx context.Context, channel string) error {
 	item, err := s.repo.Get(ctx, channel)
 	if err != nil {
+		if isNotFound(err) {
+			return ErrNotFound
+		}
 		return err
 	}
 	if item.Builtin {
 		return ErrBuiltinDelete
 	}
-	return s.repo.Delete(ctx, channel)
+	if err := s.repo.Delete(ctx, channel); err != nil {
+		if isNotFound(err) {
+			return ErrNotFound
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *Service) UploadMarkdown(ctx context.Context, channel, filename string, data []byte) (Item, error) {
@@ -162,10 +178,16 @@ func (s *Service) UploadMarkdown(ctx context.Context, channel, filename string, 
 	}
 	item, err := s.repo.Get(ctx, channel)
 	if err != nil {
+		if isNotFound(err) {
+			return Item{}, ErrNotFound
+		}
 		return Item{}, err
 	}
 	item.Markdown = text
 	if err := s.repo.Update(ctx, item); err != nil {
+		if isNotFound(err) {
+			return Item{}, ErrNotFound
+		}
 		return Item{}, err
 	}
 	return toItem(item), nil
@@ -173,7 +195,7 @@ func (s *Service) UploadMarkdown(ctx context.Context, channel, filename string, 
 
 func (s *Service) Markdown(ctx context.Context, channel string) (string, error) {
 	item, err := s.repo.Get(ctx, channel)
-	if errors.Is(err, ErrNotFound) {
+	if isNotFound(err) {
 		return guides.Markdown(channel), nil
 	}
 	if err != nil {
@@ -254,6 +276,10 @@ func normalizeMarkdown(data []byte) (string, error) {
 	text := strings.ReplaceAll(string(data), "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\r", "\n")
 	return text, nil
+}
+
+func isNotFound(err error) bool {
+	return errors.Is(err, ErrNotFound) || errors.Is(err, dao.ErrNotFound)
 }
 
 func isDuplicate(err error) bool {
