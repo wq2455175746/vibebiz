@@ -81,6 +81,9 @@ func (s *ResourceSource) Materialize(ctx context.Context) (core.SourceInfo, erro
 		}
 		return core.SourceInfo{}, err
 	}
+	if body == nil {
+		return core.SourceInfo{}, ErrInvalidSource
+	}
 	defer body.Close()
 
 	dir, err := os.MkdirTemp(s.TempRoot, ".channel-src-"+s.ResourceID+"-")
@@ -116,7 +119,7 @@ func materializeDir(ctx context.Context, dir string) (core.SourceInfo, error) {
 	}
 	report, err := core.AnalyzeHTML(dir, entry)
 	if err != nil {
-		return core.SourceInfo{}, err
+		return core.SourceInfo{}, normalizeSourceErr(err)
 	}
 	count, total, version, err := dirStats(ctx, dir)
 	if err != nil {
@@ -130,6 +133,13 @@ func materializeDir(ctx context.Context, dir string) (core.SourceInfo, error) {
 		TotalBytes: total,
 		Report:     report,
 	}, nil
+}
+
+func normalizeSourceErr(err error) error {
+	if errors.Is(err, core.ErrInvalidSource) {
+		return fmt.Errorf("%w: %v", ErrInvalidSource, err)
+	}
+	return err
 }
 
 func findEntry(dir string) (string, error) {
@@ -187,16 +197,24 @@ func dirStats(ctx context.Context, dir string) (int, int64, string, error) {
 		if err != nil {
 			return err
 		}
-		data, err := os.ReadFile(path)
+		file, err := os.Open(path)
 		if err != nil {
 			return err
 		}
-		sum := sha256.Sum256(data)
-		if _, err := fmt.Fprintf(hasher, "%s\x00%d\x00%s\n", filepath.ToSlash(rel), len(data), hex.EncodeToString(sum[:])); err != nil {
+		fileHasher := sha256.New()
+		size, copyErr := io.Copy(fileHasher, file)
+		closeErr := file.Close()
+		if copyErr != nil {
+			return copyErr
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+		if _, err := fmt.Fprintf(hasher, "%s\x00%d\x00%s\n", filepath.ToSlash(rel), size, hex.EncodeToString(fileHasher.Sum(nil))); err != nil {
 			return err
 		}
 		count++
-		total += int64(len(data))
+		total += size
 		return nil
 	})
 	if err != nil {

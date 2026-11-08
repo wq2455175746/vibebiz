@@ -203,3 +203,67 @@ func TestResourceSourceRejectsInvalidIDs(t *testing.T) {
 		}
 	}
 }
+
+func TestResourceSourceRejectsNilBody(t *testing.T) {
+	opener := func(context.Context, string, string) (io.ReadCloser, int64, error) {
+		return nil, 0, nil
+	}
+	src := NewResourceSource("p1", "r1", opener, t.TempDir())
+	if _, err := src.Materialize(context.Background()); !errors.Is(err, ErrInvalidSource) {
+		t.Fatalf("err = %v, want ErrInvalidSource", err)
+	}
+}
+
+func TestWorkspaceSourceMissingEntryReturnsChannelpkgInvalidSource(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "p1")
+	write(t, dir, "README.md", "no entry")
+	src, err := NewWorkspaceSource(root, "p1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := src.Materialize(context.Background()); !errors.Is(err, ErrInvalidSource) {
+		t.Fatalf("err = %v, want ErrInvalidSource", err)
+	}
+}
+
+func TestNormalizeSourceErrMapsCoreInvalidSource(t *testing.T) {
+	err := normalizeSourceErr(fmt.Errorf("analyze: %w", core.ErrInvalidSource))
+	if !errors.Is(err, ErrInvalidSource) {
+		t.Fatalf("err = %v, want ErrInvalidSource", err)
+	}
+}
+
+func TestWorkspaceSourceVersionStreamsLargeFileContent(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "p1")
+	payload := strings.Repeat("0123456789abcdef", 32*1024)
+	write(t, dir, "index.html", `<canvas></canvas>`)
+	write(t, dir, "assets/data.js", payload)
+	src, err := NewWorkspaceSource(root, "p1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := src.Materialize(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := src.Materialize(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Version != second.Version {
+		t.Fatalf("version changed between reads: %q != %q", first.Version, second.Version)
+	}
+	if first.FileCount != 2 || first.TotalBytes != int64(len(`<canvas></canvas>`)+len(payload)) {
+		t.Fatalf("info = %+v", first)
+	}
+	write(t, dir, "assets/data.js", payload+"x")
+	changed, err := src.Materialize(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed.Version == first.Version {
+		t.Fatal("version did not change after content changed")
+	}
+}
