@@ -1,0 +1,210 @@
+package channelpkg
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+
+	"vibebiz/internal/channelpkg/core"
+	"vibebiz/internal/resource"
+)
+
+var (
+	ErrSourceNotFound = errors.New("channel package source not found")
+	ErrInvalidSource  = errors.New("invalid channel package source")
+)
+
+var projectIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+
+const (
+	maxSourceBytes = 1 << 30
+	maxSourceFiles = 20000
+)
+
+type ResourceOpener func(ctx context.Context, projectID, resourceID string) (io.ReadCloser, int64, error)
+
+type WorkspaceSource struct {
+	Root      string
+	ProjectID string
+}
+
+func NewWorkspaceSource(root, projectID string) (*WorkspaceSource, error) {
+	if !projectIDPattern.MatchString(projectID) {
+		return nil, ErrInvalidSource
+	}
+	return &WorkspaceSource{Root: root, ProjectID: projectID}, nil
+}
+
+func (s *WorkspaceSource) Materialize(ctx context.Context) (core.SourceInfo, error) {
+	dir := filepath.Join(s.Root, s.ProjectID)
+	stat, err := os.Stat(dir)
+	if err != nil || !stat.IsDir() {
+		return core.SourceInfo{}, ErrSourceNotFound
+	}
+	return materializeDir(ctx, dir)
+}
+
+type ResourceSource struct {
+	ProjectID  string
+	ResourceID string
+	Opener     ResourceOpener
+	TempRoot   string
+}
+
+func NewResourceSource(projectID, resourceID string, opener ResourceOpener, tempRoot string) *ResourceSource {
+	return &ResourceSource{
+		ProjectID:  projectID,
+		ResourceID: resourceID,
+		Opener:     opener,
+		TempRoot:   tempRoot,
+	}
+}
+
+func (s *ResourceSource) Materialize(ctx context.Context) (core.SourceInfo, error) {
+	if !projectIDPattern.MatchString(s.ProjectID) || !projectIDPattern.MatchString(s.ResourceID) {
+		return core.SourceInfo{}, ErrInvalidSource
+	}
+	if s.Opener == nil {
+		return core.SourceInfo{}, ErrInvalidSource
+	}
+	body, _, err := s.Opener(ctx, s.ProjectID, s.ResourceID)
+	if err != nil {
+		if errors.Is(err, resource.ErrNotFound) {
+			return core.SourceInfo{}, ErrSourceNotFound
+		}
+		return core.SourceInfo{}, err
+	}
+	defer body.Close()
+
+	dir, err := os.MkdirTemp(s.TempRoot, ".channel-src-"+s.ResourceID+"-")
+	if err != nil {
+		return core.SourceInfo{}, err
+	}
+	ok := false
+	defer func() {
+		if !ok {
+			_ = os.RemoveAll(dir)
+		}
+	}()
+
+	hasher := sha256.New()
+	if err := core.ExtractZip(ctx, io.TeeReader(body, hasher), dir, core.ExtractLimits{MaxBytes: maxSourceBytes, MaxFiles: maxSourceFiles}); err != nil {
+		return core.SourceInfo{}, err
+	}
+	info, err := materializeDir(ctx, dir)
+	if err != nil {
+		return core.SourceInfo{}, err
+	}
+	info.Version = hex.EncodeToString(hasher.Sum(nil))[:16]
+	ok = true
+	return info, nil
+}
+
+func (s *ResourceSource) Cleanup() error { return nil }
+
+func materializeDir(ctx context.Context, dir string) (core.SourceInfo, error) {
+	entry, err := findEntry(dir)
+	if err != nil && !hasMiniGame(dir) {
+		return core.SourceInfo{}, err
+	}
+	report, err := core.AnalyzeHTML(dir, entry)
+	if err != nil {
+		return core.SourceInfo{}, err
+	}
+	count, total, version, err := dirStats(ctx, dir)
+	if err != nil {
+		return core.SourceInfo{}, err
+	}
+	return core.SourceInfo{
+		Dir:        dir,
+		Entry:      entry,
+		Version:    version,
+		FileCount:  count,
+		TotalBytes: total,
+		Report:     report,
+	}, nil
+}
+
+func findEntry(dir string) (string, error) {
+	for _, name := range []string{"index.html", "app.html"} {
+		info, err := os.Stat(filepath.Join(dir, name))
+		if err == nil && info.Mode().IsRegular() {
+			return name, nil
+		}
+	}
+	return "", ErrInvalidSource
+}
+
+func hasMiniGame(dir string) bool {
+	for _, name := range []string{"game.js", "game.json"} {
+		info, err := os.Stat(filepath.Join(dir, name))
+		if err != nil || !info.Mode().IsRegular() {
+			return false
+		}
+	}
+	return true
+}
+
+func dirStats(ctx context.Context, dir string) (int, int64, string, error) {
+	hasher := sha256.New()
+	var count int
+	var total int64
+
+	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if path == dir {
+			return nil
+		}
+		if d.IsDir() {
+			if skipSourceDir(d.Name()) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if d.Type()&os.ModeSymlink != 0 {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		if !info.Mode().IsRegular() {
+			return nil
+		}
+		rel, err := filepath.Rel(dir, path)
+		if err != nil {
+			return err
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		sum := sha256.Sum256(data)
+		if _, err := fmt.Fprintf(hasher, "%s\x00%d\x00%s\n", filepath.ToSlash(rel), len(data), hex.EncodeToString(sum[:])); err != nil {
+			return err
+		}
+		count++
+		total += int64(len(data))
+		return nil
+	})
+	if err != nil {
+		return 0, 0, "", err
+	}
+	return count, total, hex.EncodeToString(hasher.Sum(nil))[:16], nil
+}
+
+func skipSourceDir(name string) bool {
+	return strings.HasPrefix(name, ".") || name == "docs" || name == "node_modules"
+}
