@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -21,25 +22,42 @@ import (
 )
 
 type fakeRepo struct {
-	mu    sync.Mutex
-	items map[string]*daomodel.ProjectChannelPackage
+	mu         sync.Mutex
+	items      map[string]*daomodel.ProjectChannelPackage
+	updates    int
+	lastUpdate *daomodel.ProjectChannelPackage
 }
 
 func newFakeRepo() *fakeRepo {
 	return &fakeRepo{items: map[string]*daomodel.ProjectChannelPackage{}}
 }
 
+func clonePackage(item *daomodel.ProjectChannelPackage) *daomodel.ProjectChannelPackage {
+	if item == nil {
+		return nil
+	}
+	clone := *item
+	if item.SourceResourceID != nil {
+		resourceID := *item.SourceResourceID
+		clone.SourceResourceID = &resourceID
+	}
+	clone.Manifest = append(daomodel.JSON(nil), item.Manifest...)
+	return &clone
+}
+
 func (f *fakeRepo) Create(_ context.Context, item *daomodel.ProjectChannelPackage) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.items[item.PublicID] = item
+	f.items[item.PublicID] = clonePackage(item)
 	return nil
 }
 
 func (f *fakeRepo) Update(_ context.Context, item *daomodel.ProjectChannelPackage) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.items[item.PublicID] = item
+	f.items[item.PublicID] = clonePackage(item)
+	f.updates++
+	f.lastUpdate = clonePackage(item)
 	return nil
 }
 
@@ -83,7 +101,7 @@ func (f *fakeRepo) get(t *testing.T, id string) *daomodel.ProjectChannelPackage 
 	if !ok {
 		t.Fatalf("record %q not found", id)
 	}
-	return item
+	return clonePackage(item)
 }
 
 func (f *fakeRepo) count() int {
@@ -92,14 +110,23 @@ func (f *fakeRepo) count() int {
 	return len(f.items)
 }
 
+func (f *fakeRepo) updateState() (int, *daomodel.ProjectChannelPackage) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.updates, clonePackage(f.lastUpdate)
+}
+
 type fakeAdapter struct {
-	level string
-	build func(ctx context.Context, src core.SourceInfo, out io.Writer) (core.Manifest, error)
+	level    string
+	blockers []string
+	build    func(ctx context.Context, src core.SourceInfo, out io.Writer) (core.Manifest, error)
 }
 
 func (f fakeAdapter) Channel() string { return core.ChannelWeChat }
 
-func (f fakeAdapter) Validate(core.SourceInfo) core.Report { return core.Report{Level: f.level} }
+func (f fakeAdapter) Validate(core.SourceInfo) core.Report {
+	return core.Report{Level: f.level, Blockers: append([]string{}, f.blockers...)}
+}
 
 func (f fakeAdapter) Build(ctx context.Context, src core.SourceInfo, out io.Writer) (core.Manifest, error) {
 	if f.build != nil {
@@ -192,6 +219,68 @@ func TestGenerateRejectsLevelC(t *testing.T) {
 	item := repo.get(t, "pkg-1")
 	if item.Status != daomodel.ChannelPackageStatusFailed || item.ErrorMessage == "" {
 		t.Fatalf("status = %s error = %q", item.Status, item.ErrorMessage)
+	}
+}
+
+func TestGenerateRejectsAdapterBlockers(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "p1"), "index.html", `<canvas></canvas>`)
+	repo := newFakeRepo()
+	svc := newTestService(repo, root, fakeAdapter{level: core.LevelB, blockers: []string{"dom_dependency"}})
+	if _, err := svc.Generate(context.Background(), &model.Project{ID: "p1", WorkspaceID: 3}, GenerateInput{Channel: core.ChannelWeChat, SourceType: core.SourceHTML5}); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("err = %v, want ErrUnsupported", err)
+	}
+	item := repo.get(t, "pkg-1")
+	if item.Status != daomodel.ChannelPackageStatusFailed || item.ErrorMessage == "" {
+		t.Fatalf("item = %+v", item)
+	}
+}
+
+func TestGenerateRejectsOversizedHTML5Source(t *testing.T) {
+	const limit int64 = 200 << 20
+	root := t.TempDir()
+	dir := filepath.Join(root, "p1")
+	write(t, dir, "index.html", `<canvas></canvas>`)
+	f, err := os.Create(filepath.Join(dir, "large.bin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Truncate(limit + 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	repo := newFakeRepo()
+	svc := newTestService(repo, root, fakeAdapter{level: core.LevelB})
+	if _, err := svc.Generate(context.Background(), &model.Project{ID: "p1", WorkspaceID: 3}, GenerateInput{Channel: core.ChannelWeChat, SourceType: core.SourceHTML5}); !errors.Is(err, ErrPackageTooLarge) {
+		t.Fatalf("err = %v, want ErrPackageTooLarge", err)
+	}
+	item := repo.get(t, "pkg-1")
+	if item.Status != daomodel.ChannelPackageStatusFailed {
+		t.Fatalf("status = %s", item.Status)
+	}
+}
+
+func TestGenerateRejectsHTML5SourceWithTooManyFiles(t *testing.T) {
+	const limit = 20000
+	root := t.TempDir()
+	dir := filepath.Join(root, "p1")
+	write(t, dir, "index.html", `<canvas></canvas>`)
+	for i := 0; i < limit; i++ {
+		name := filepath.Join(dir, fmt.Sprintf("asset-%05d.bin", i))
+		if err := os.WriteFile(name, nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	repo := newFakeRepo()
+	svc := newTestService(repo, root, fakeAdapter{level: core.LevelB})
+	if _, err := svc.Generate(context.Background(), &model.Project{ID: "p1", WorkspaceID: 3}, GenerateInput{Channel: core.ChannelWeChat, SourceType: core.SourceHTML5}); !errors.Is(err, ErrPackageTooLarge) {
+		t.Fatalf("err = %v, want ErrPackageTooLarge", err)
+	}
+	item := repo.get(t, "pkg-1")
+	if item.Status != daomodel.ChannelPackageStatusFailed {
+		t.Fatalf("status = %s", item.Status)
 	}
 }
 
@@ -342,9 +431,18 @@ func TestGenerateUpdatePreservesFullRecord(t *testing.T) {
 	if _, err := svc.Generate(context.Background(), &model.Project{ID: "p1", WorkspaceID: 3}, GenerateInput{Channel: core.ChannelWeChat, SourceType: core.SourceHTML5}); err != nil {
 		t.Fatal(err)
 	}
-	item := repo.get(t, "pkg-1")
-	if item.WorkspaceID != 3 || item.ProjectPublicID != "p1" || item.SourceType != core.SourceHTML5 || item.Channel != core.ChannelWeChat {
+	updates, item := repo.updateState()
+	if updates != 1 {
+		t.Fatalf("update calls = %d, want 1", updates)
+	}
+	if item == nil {
+		t.Fatal("update received no record")
+	}
+	if item.Status != daomodel.ChannelPackageStatusReady || item.WorkspaceID != 3 || item.ProjectPublicID != "p1" || item.SourceType != core.SourceHTML5 || item.Channel != core.ChannelWeChat {
 		t.Fatalf("record lost fields on update: %+v", item)
+	}
+	if item.FilePath == "" || item.FileSizeBytes == 0 || len(item.Manifest) == 0 {
+		t.Fatalf("update did not carry generated fields: %+v", item)
 	}
 	if !item.CreatedAt.Equal(now) {
 		t.Fatalf("createdAt = %v, want %v", item.CreatedAt, now)
@@ -423,6 +521,53 @@ func TestDeleteRejectsForeignProject(t *testing.T) {
 	}
 	if repo.count() != 1 {
 		t.Fatal("foreign record must not be deleted")
+	}
+}
+
+func TestDeleteRejectsAnotherProjectsFile(t *testing.T) {
+	root := t.TempDir()
+	packages := filepath.Join(root, "packages")
+	file := filepath.Join(packages, "p2", core.ChannelWeChat, "pkg-1.zip")
+	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, []byte("zip"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	repo := newFakeRepo()
+	repo.items["pkg-1"] = &daomodel.ProjectChannelPackage{
+		PublicID: "pkg-1", ProjectPublicID: "p1",
+		FilePath: filepath.ToSlash(filepath.Join("p2", core.ChannelWeChat, "pkg-1.zip")),
+	}
+	svc := NewService(ServiceConfig{Repo: repo, PackagesDir: packages})
+	if err := svc.Delete(context.Background(), "p1", "pkg-1"); !errors.Is(err, ErrInvalidSource) {
+		t.Fatalf("err = %v, want ErrInvalidSource", err)
+	}
+	if _, err := os.Stat(file); err != nil {
+		t.Fatalf("another project's file was removed: %v", err)
+	}
+	if repo.count() != 1 {
+		t.Fatal("record must not be deleted")
+	}
+}
+
+func TestDeleteSucceedsWhenFileAlreadyMissing(t *testing.T) {
+	root := t.TempDir()
+	packages := filepath.Join(root, "packages")
+	if err := os.MkdirAll(filepath.Join(packages, "p1", core.ChannelWeChat), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	repo := newFakeRepo()
+	repo.items["pkg-1"] = &daomodel.ProjectChannelPackage{
+		PublicID: "pkg-1", ProjectPublicID: "p1",
+		FilePath: filepath.ToSlash(filepath.Join("p1", core.ChannelWeChat, "missing.zip")),
+	}
+	svc := NewService(ServiceConfig{Repo: repo, PackagesDir: packages})
+	if err := svc.Delete(context.Background(), "p1", "pkg-1"); err != nil {
+		t.Fatal(err)
+	}
+	if repo.count() != 0 {
+		t.Fatal("record was not deleted")
 	}
 }
 

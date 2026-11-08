@@ -26,6 +26,11 @@ var (
 	ErrBusy              = errors.New("channel package builder is busy")
 )
 
+const (
+	maxHTML5SourceBytes int64 = 200 << 20
+	maxHTML5SourceFiles       = 20000
+)
+
 type Repository interface {
 	Create(ctx context.Context, item *daomodel.ProjectChannelPackage) error
 	Update(ctx context.Context, item *daomodel.ProjectChannelPackage) error
@@ -143,6 +148,10 @@ func (s *Service) Generate(ctx context.Context, project *model.Project, input Ge
 		return nil, s.fail(ctx, item, err)
 	}
 
+	if input.SourceType == core.SourceHTML5 && (info.TotalBytes > maxHTML5SourceBytes || info.FileCount > maxHTML5SourceFiles) {
+		return nil, s.fail(ctx, item, fmt.Errorf("%w: HTML5 source exceeds limits", ErrPackageTooLarge))
+	}
+
 	if info.Report.Level == core.LevelC {
 		return nil, s.fail(ctx, item, ErrUnsupported)
 	}
@@ -243,12 +252,16 @@ func (s *Service) Delete(ctx context.Context, projectID, packageID string) error
 		return dao.ErrNotFound
 	}
 	if item.FilePath != "" {
+		if !projectIDPattern.MatchString(projectID) {
+			return ErrInvalidSource
+		}
 		relativePath := filepath.FromSlash(item.FilePath)
 		if filepath.IsAbs(relativePath) || filepath.VolumeName(relativePath) != "" {
 			return ErrInvalidSource
 		}
+		projectRoot := filepath.Join(s.cfg.PackagesDir, projectID)
 		full := filepath.Join(s.cfg.PackagesDir, relativePath)
-		inside, relErr := filepath.Rel(s.cfg.PackagesDir, full)
+		inside, relErr := filepath.Rel(projectRoot, full)
 		if relErr != nil || inside == "." || inside == ".." || strings.HasPrefix(inside, ".."+string(filepath.Separator)) || filepath.IsAbs(inside) {
 			return ErrInvalidSource
 		}
