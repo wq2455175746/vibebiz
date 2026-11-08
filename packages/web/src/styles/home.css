@@ -428,6 +428,43 @@
   border-top: 1px solid var(--line);
 }
 
+.sidebar-card-entry {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 9px 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sidebar-card-entry:hover {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.sidebar-card-entry i {
+  width: 16px;
+  font-size: 14px;
+}
+
+.app-sidebar.collapsed .sidebar-card-entry {
+  justify-content: center;
+  padding: 9px 0;
+}
+
+.app-sidebar.collapsed .sidebar-card-entry span {
+  display: none;
+}
+
 .sidebar-tools {
   display: flex;
   align-items: center;
