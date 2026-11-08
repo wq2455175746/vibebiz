@@ -170,8 +170,23 @@
         var frame = document.getElementById('game-frame');
         var start = document.getElementById('start');
         var exit = document.getElementById('exit');
+        function trackClick() {
+          if (frame.dataset.tracked === '1') return;
+          frame.dataset.tracked = '1';
+          var base = window.location.pathname.replace(/\/index\.html$/, '/').replace(/\/?$/, '/');
+          var endpoint = base + 'track/click';
+          var payload = new Blob([], { type: 'text/plain' });
+          if (navigator.sendBeacon) {
+            if (!navigator.sendBeacon(endpoint, payload)) {
+              fetch(endpoint, { method: 'POST', keepalive: true }).catch(function () {});
+            }
+          } else {
+            fetch(endpoint, { method: 'POST', keepalive: true }).catch(function () {});
+          }
+        }
         function play() {
           if (!frame.src) frame.src = frame.dataset.src;
+          trackClick();
           document.body.classList.add('playing');
         }
         start.addEventListener('click', play);

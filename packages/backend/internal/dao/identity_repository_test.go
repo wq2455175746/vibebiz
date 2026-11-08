@@ -198,3 +198,25 @@ func TestTouchOpsLogin(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestUsernames(t *testing.T) {
+	db, mock := newMockDB(t)
+	repo := NewIdentityRepository(db)
+
+	mock.ExpectQuery("SELECT .* FROM `user` WHERE id IN").
+		WithArgs(int64(1), int64(2)).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username"}).
+			AddRow(1, "alice").
+			AddRow(2, "bob"))
+
+	names, err := repo.Usernames(context.Background(), []int64{1, 2})
+	if err != nil {
+		t.Fatalf("usernames: %v", err)
+	}
+	if names[1] != "alice" || names[2] != "bob" {
+		t.Fatalf("names = %+v", names)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}

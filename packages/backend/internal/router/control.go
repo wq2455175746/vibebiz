@@ -15,7 +15,7 @@ import (
 	"vibebiz/internal/usage"
 )
 
-func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.ProjectStore, provisioner handler.ProjectInitializer, obs *observability.Provider, authn *auth.Authenticator, authHandler *handler.AuthHandler, settingsHandler *handler.SettingsHandler, storageHandler *handler.StorageHandler, metas auth.ProjectMetaStore, notifications *handler.NotificationHandler, registry *handler.SandboxRegistryHandler, models *handler.ModelHandler, roles *handler.RoleHandler, coverSigner handler.CoverURLSigner, coverExpiry time.Duration, adminSandbox handler.AdminSandbox, templates *handler.TemplateHandler, harness handler.HarnessImporter, stageStore projectstage.Store, stageSandbox handler.StageSandbox, notificationChannels *handler.NotificationChannelHandler, fdeResources *handler.FdeResourceHandler, publishApp *handler.PublishHandler, cloneHandler *handler.CloneHandler, usageService *usage.Service, accessLogs *handler.AccessLogHandler, skillManager *handler.SkillManager) {
+func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.ProjectStore, provisioner handler.ProjectInitializer, obs *observability.Provider, authn *auth.Authenticator, authHandler *handler.AuthHandler, settingsHandler *handler.SettingsHandler, storageHandler *handler.StorageHandler, metas auth.ProjectMetaStore, notifications *handler.NotificationHandler, registry *handler.SandboxRegistryHandler, models *handler.ModelHandler, roles *handler.RoleHandler, coverSigner handler.CoverURLSigner, coverExpiry time.Duration, adminSandbox handler.AdminSandbox, templates *handler.TemplateHandler, harness handler.HarnessImporter, stageStore projectstage.Store, stageSandbox handler.StageSandbox, notificationChannels *handler.NotificationChannelHandler, fdeResources *handler.FdeResourceHandler, publishApp *handler.PublishHandler, cloneHandler *handler.CloneHandler, usageService *usage.Service, accessLogs *handler.AccessLogHandler, skillManager *handler.SkillManager, leaderboardHandler *handler.LeaderboardHandler) {
 	var roleStore handler.AgentRoleStore
 	if roles != nil {
 		roleStore = roles.Service
@@ -68,6 +68,7 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 	}
 	if publishApp != nil {
 		meAPI.GET("/published-projects", publishApp.ListPublished)
+		meAPI.GET("/published-projects/stats", publishApp.PublishedStats)
 	}
 	meAPI.PUT("/profile", settingsHandler.UpdateProfile)
 	meAPI.POST("/avatar/presign", settingsHandler.PresignAvatar)
@@ -103,6 +104,7 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 	if publishApp != nil {
 		e.GET("/p/:slug", publishApp.Preview)
 		e.GET("/p/:slug/*", publishApp.Preview)
+		e.POST("/p/:slug/track/click", publishApp.TrackClick)
 	}
 
 	projectsAPI := api.Group("/projects", authn.RequireUser)
@@ -127,6 +129,10 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 		clonesAPI.GET("", cloneHandler.List)
 		clonesAPI.GET("/:id", cloneHandler.Get)
 		clonesAPI.DELETE("/:id", cloneHandler.Delete)
+	}
+
+	if leaderboardHandler != nil {
+		api.GET("/leaderboard", leaderboardHandler.ListPublic, authn.RequireUser)
 	}
 
 	adminAPI := api.Group("/admin")
@@ -164,6 +170,11 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 	if accessLogs != nil {
 		adminProtected.GET("/access-logs", accessLogs.List)
 		adminProtected.GET("/access-logs/ip-stats", accessLogs.IPStats)
+	}
+	if leaderboardHandler != nil {
+		adminProtected.GET("/leaderboard", leaderboardHandler.ListAdmin)
+		adminProtected.PUT("/leaderboard/:projectId/hidden", leaderboardHandler.Hide)
+		adminProtected.DELETE("/leaderboard/:projectId", leaderboardHandler.Delete)
 	}
 	if models != nil {
 		adminProtected.GET("/models", models.List)

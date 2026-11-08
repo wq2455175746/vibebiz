@@ -33,6 +33,21 @@ func (r *IdentityRepository) FindUserByIdentifier(ctx context.Context, identifie
 	return &user, nil
 }
 
+func (r *IdentityRepository) Usernames(ctx context.Context, ids []int64) (map[int64]string, error) {
+	out := make(map[int64]string, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+	var rows []model.User
+	if err := r.db.WithContext(ctx).Select("id", "username").Where("id IN ?", ids).Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("usernames: %w", err)
+	}
+	for _, row := range rows {
+		out[row.ID] = row.Username
+	}
+	return out, nil
+}
+
 func (r *IdentityRepository) FindOpsByIdentifier(ctx context.Context, identifier string) (*model.OpsUser, error) {
 	var user model.OpsUser
 	err := r.db.WithContext(ctx).

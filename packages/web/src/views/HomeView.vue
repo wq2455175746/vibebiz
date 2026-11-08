@@ -12,6 +12,7 @@ import EnterpriseRoadmap from '@/components/enterprise/EnterpriseRoadmap.vue'
 import HomeDiscovery from '@/components/home/HomeDiscovery.vue'
 import HomeHero from '@/components/home/HomeHero.vue'
 import HomeSidebar from '@/components/home/HomeSidebar.vue'
+import LeaderboardPanel from '@/components/home/LeaderboardPanel.vue'
 import ProjectCard from '@/components/home/ProjectCard.vue'
 import TemplateCard from '@/components/home/TemplateCard.vue'
 import ProjectPickerDialog from '@/components/home/ProjectPickerDialog.vue'
@@ -48,6 +49,7 @@ const isResourcesPage = computed(() => route.name === 'resources')
 const isScheduledPage = computed(() => route.name === 'scheduled-tasks')
 const isEnterprisePage = computed(() => route.name === 'enterprise')
 const isClonesPage = computed(() => route.name === 'clones')
+const isLeaderboardPage = computed(() => route.name === 'leaderboard')
 const enterpriseProjects = computed(() =>
   projects.value.filter((project) => isEnterpriseProject(project)),
 )
@@ -322,6 +324,8 @@ onMounted(async () => {
       <ClonePanel v-else-if="isClonesPage" />
 
       <ScheduledTasksPanel v-else-if="isScheduledPage" />
+
+      <LeaderboardPanel v-else-if="isLeaderboardPage" />
 
       <div v-else class="home-main-inner">
         <HomeHero

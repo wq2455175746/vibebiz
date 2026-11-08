@@ -65,6 +65,18 @@ export interface AdminProject {
   createdAt: string
 }
 
+export interface AdminLeaderboardRow {
+  rank: number
+  projectId: string
+  name: string
+  author: string
+  visits: number
+  exposure: number
+  clicks: number
+  hidden: boolean
+  publishedAt: string
+}
+
 export interface ProjectFile {
   path: string
   type: string

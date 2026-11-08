@@ -14,6 +14,7 @@ const router = createRouter({
   routes: [
     { path: '/login', name: 'login', component: LoginView, meta: { public: true } },
     { path: '/', name: 'home', component: HomeView },
+    { path: '/leaderboard', name: 'leaderboard', component: HomeView },
     { path: '/enterprise', name: 'enterprise', component: HomeView },
     { path: '/projects', name: 'projects', component: HomeView },
     { path: '/resources', name: 'resources', component: HomeView },
@@ -57,7 +58,9 @@ router.afterEach((to) => {
             ? 'Vibebiz · 设置'
             : name === 'clones'
               ? 'Vibebiz · 克隆'
-              : 'Vibebiz'
+              : name === 'leaderboard'
+                ? 'Vibebiz · 排行榜'
+                : 'Vibebiz'
 })
 
 export default router

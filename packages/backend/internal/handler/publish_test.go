@@ -10,8 +10,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/labstack/echo/v4"
+	"github.com/redis/go-redis/v9"
 
+	"vibebiz/internal/leaderboard"
 	"vibebiz/internal/model"
 	"vibebiz/internal/publish"
 	"vibebiz/internal/store"
@@ -308,5 +311,104 @@ func TestDeletePublishedRemovesSharePageAndRejectsForeignWorkspace(t *testing.T)
 	e.ServeHTTP(rec, httptest.NewRequest(http.MethodDelete, "/cp/api/v1/projects/p1/publish", nil))
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("second delete status = %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func newPublishedHandlerWithLeaderboard(t *testing.T) (*echo.Echo, *leaderboard.Service) {
+	t.Helper()
+	root := t.TempDir()
+	workspaces := filepath.Join(root, "workspaces")
+	published := filepath.Join(root, "published")
+	source := filepath.Join(workspaces, "p1")
+	if err := os.MkdirAll(source, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "index.html"), []byte("<h1>game</h1>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	projects := store.NewMemoryProjectStore()
+	if err := projects.Create(context.Background(), &model.Project{
+		ID: "p1", Name: "Demo", WorkspaceID: 3, OwnerUserID: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	mr := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = client.Close() })
+	svc := leaderboard.NewService(
+		leaderboard.NewStore(client, "vibebiz"),
+		publish.NewService(workspaces, published),
+		projects,
+		leaderboardUsers{},
+	)
+	h := NewPublishHandler(publish.NewService(workspaces, published), projects, "https://play.example.com")
+	h.Leaderboard = svc
+	e := echo.New()
+	routeWithSession(e, http.MethodPost, "/cp/api/v1/projects/:id/publish", h.Publish, sessionForTest(3))
+	routeWithSession(e, http.MethodGet, "/cp/api/v1/me/published-projects/stats", h.PublishedStats, sessionForTest(3))
+	e.GET("/p/:slug/*", h.Preview)
+	e.POST("/p/:slug/track/click", h.TrackClick)
+	return e, svc
+}
+
+func TestPublishTracksViewAndClick(t *testing.T) {
+	e, svc := newPublishedHandlerWithLeaderboard(t)
+	ctx := context.Background()
+
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, newPublishRequest("/cp/api/v1/projects/p1/publish", `{"title":"小游戏"}`))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("publish status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	meta, _ := svc.Store.Meta(ctx, []string{"p1"})
+	if meta["p1"].Title != "小游戏" || meta["p1"].Author != "alice" {
+		t.Fatalf("meta = %+v", meta["p1"])
+	}
+
+	rec = httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/p/p1/", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("preview status = %d", rec.Code)
+	}
+	ranked, _ := svc.Store.Top(ctx, 10)
+	if len(ranked) != 1 || ranked[0].Visits != 1 {
+		t.Fatalf("ranked = %+v", ranked)
+	}
+
+	rec = httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/p/p1/game/index.html", nil))
+	ranked, _ = svc.Store.Top(ctx, 10)
+	if ranked[0].Visits != 1 {
+		t.Fatalf("asset request must not add PV: %+v", ranked)
+	}
+
+	rec = httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/p/p1/track/click", nil))
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("click status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	counters, _ := svc.Store.Counters(ctx, []string{"p1"})
+	if counters["p1"].Clicks != 1 {
+		t.Fatalf("counters = %+v", counters["p1"])
+	}
+
+	if _, err := svc.ListPublic(ctx, 50); err != nil {
+		t.Fatal(err)
+	}
+
+	rec = httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/cp/api/v1/me/published-projects/stats", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"exposure":1`) ||
+		!strings.Contains(rec.Body.String(), `"clicks":1`) {
+		t.Fatalf("stats status = %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestTrackClickRejectsUnknownSlug(t *testing.T) {
+	e, _ := newPublishedHandlerWithLeaderboard(t)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/p/missing/track/click", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
 	}
 }

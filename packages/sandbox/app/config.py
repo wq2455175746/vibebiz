@@ -16,6 +16,7 @@ class Settings:
     anthropic_auth_token: str = ""
     anthropic_api_key: str = ""
     agent_model: str = "deepseek-flash"
+    agent_model_check: bool = True
     agent_skills: str = "all"
     agent_plugins: str = ""
     agent_max_turns: int = 100
@@ -84,6 +85,7 @@ def load_settings() -> Settings:
             or os.getenv("LLM_MODEL_NAME", "deepseek-flash").strip()
             or "deepseek-flash"
         ),
+        agent_model_check=_bool("AGENT_MODEL_CHECK", True),
         agent_skills=os.getenv("AGENT_SKILLS", "all").strip(),
         agent_plugins=os.getenv("AGENT_PLUGINS", "").strip(),
         agent_max_turns=int(os.getenv("AGENT_MAX_TURNS", "100")),

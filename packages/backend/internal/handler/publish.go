@@ -10,6 +10,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"vibebiz/internal/auth"
+	"vibebiz/internal/leaderboard"
 	"vibebiz/internal/model"
 	"vibebiz/internal/publish"
 	"vibebiz/internal/response"
@@ -22,6 +23,7 @@ type PublishHandler struct {
 	PublicBaseURL string
 	Covers        CoverURLSigner
 	CoverExpiry   time.Duration
+	Leaderboard   *leaderboard.Service
 }
 
 func NewPublishHandler(service *publish.Service, projects store.ProjectStore, publicBaseURL string) *PublishHandler {
@@ -77,6 +79,9 @@ func (h *PublishHandler) Publish(c echo.Context) error {
 	})
 	if err != nil {
 		return publishError(c, err)
+	}
+	if h.Leaderboard != nil {
+		_ = h.Leaderboard.UpsertMeta(c.Request().Context(), project, req.Title)
 	}
 	return response.OK(c, publishResponse{
 		URL:         h.publicBase(c) + "/p/" + result.Slug + "/",
@@ -171,6 +176,9 @@ func (h *PublishHandler) DeletePublished(c echo.Context) error {
 			return response.Fail(c, http.StatusInternalServerError, 50012, "delete published project failed")
 		}
 	}
+	if h.Leaderboard != nil {
+		_ = h.Leaderboard.Delete(c.Request().Context(), project.ID)
+	}
 	return response.OK(c, map[string]string{"id": project.ID})
 }
 
@@ -182,6 +190,9 @@ func (h *PublishHandler) Preview(c echo.Context) error {
 	if err != nil {
 		return publishError(c, err)
 	}
+	if h.Leaderboard != nil && isEntryDocument(c.Param("*")) {
+		_ = h.Leaderboard.RecordView(c.Request().Context(), c.Param("slug"))
+	}
 	c.Response().Header().Set("Cache-Control", "no-cache")
 	c.Response().Header().Set("X-Content-Type-Options", "nosniff")
 	c.Response().Header().Set("Access-Control-Allow-Origin", "*")
@@ -190,6 +201,73 @@ func (h *PublishHandler) Preview(c echo.Context) error {
 		"sandbox allow-scripts allow-forms allow-modals allow-popups allow-downloads",
 	)
 	return c.File(path)
+}
+
+func isEntryDocument(wildcard string) bool {
+	path := strings.Trim(strings.TrimSpace(wildcard), "/")
+	return path == "" || path == "index.html"
+}
+
+func (h *PublishHandler) TrackClick(c echo.Context) error {
+	slug := c.Param("slug")
+	if _, err := h.Service.FilePath(slug, ""); err != nil {
+		return publishError(c, err)
+	}
+	if h.Leaderboard != nil {
+		_ = h.Leaderboard.RecordClick(c.Request().Context(), slug)
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+func (h *PublishHandler) PublishedStats(c echo.Context) error {
+	session, ok := auth.SessionFrom(c)
+	if !ok {
+		return response.Fail(c, http.StatusUnauthorized, 40101, "unauthorized")
+	}
+	ctx := c.Request().Context()
+	published, err := h.Service.List(ctx)
+	if err != nil {
+		return response.Fail(c, http.StatusInternalServerError, 50011, "list published projects failed")
+	}
+	allowed := make(map[string]*model.Project)
+	for _, project := range h.Projects.ListByWorkspaces(ctx, session.WorkspaceIDs) {
+		if project.IsHidden {
+			continue
+		}
+		allowed[project.ID] = project
+	}
+	inputs := make([]leaderboard.StatInput, 0, len(published))
+	for _, item := range published {
+		project, exists := allowed[item.ProjectID]
+		if !exists {
+			continue
+		}
+		name := item.Title
+		if name == "" {
+			name = project.Name
+		}
+		inputs = append(inputs, leaderboard.StatInput{ProjectID: item.ProjectID, Name: name})
+	}
+	stats := make([]leaderboard.ProjectStat, 0, len(inputs))
+	if h.Leaderboard != nil {
+		stats, err = h.Leaderboard.Stats(ctx, inputs)
+		if err != nil {
+			return response.Fail(c, http.StatusInternalServerError, 50015, "load published stats failed")
+		}
+	} else {
+		for _, input := range inputs {
+			stats = append(stats, leaderboard.ProjectStat{ProjectID: input.ProjectID, Name: input.Name})
+		}
+	}
+	var totals leaderboard.ProjectStat
+	for _, item := range stats {
+		totals.Exposure += item.Exposure
+		totals.Clicks += item.Clicks
+	}
+	return response.OK(c, map[string]any{
+		"exposure": totals.Exposure, "clicks": totals.Clicks,
+		"dwellSeconds": 0, "spend": 0, "projects": stats,
+	})
 }
 
 func (h *PublishHandler) publicBase(c echo.Context) string {

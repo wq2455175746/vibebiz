@@ -1,5 +1,5 @@
 import { cpHttp, request } from './client'
-import type { PublishedProject } from '@/types'
+import type { PublishedProject, PublishedStats } from '@/types'
 
 export interface PublishInput {
   title: string
@@ -33,5 +33,12 @@ export function publishProject(projectId: string, input: PublishInput): Promise<
     method: 'post',
     url: `/projects/${encodeURIComponent(projectId)}/publish`,
     data: input,
+  })
+}
+
+export async function getPublishedStats(): Promise<PublishedStats> {
+  return request<PublishedStats>(cpHttp, {
+    method: 'get',
+    url: '/me/published-projects/stats',
   })
 }

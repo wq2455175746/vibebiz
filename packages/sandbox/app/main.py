@@ -15,6 +15,7 @@ from app.services.agent import build_agent
 from app.services.chat_history import ChatHistory
 from app.services.chat_turns import ChatTurnManager
 from app.services.clone import CloneService
+from app.services.model_check import check_agent_model
 from app.services.project_lock import ProjectLock
 from app.services.project_logs import ProjectLogStore
 from app.services.registry import ActiveRequestCounter, ActiveRequestsMiddleware, run_heartbeat
@@ -40,6 +41,7 @@ def create_app(
                 "skills.root.unavailable",
                 extra={"status": "disabled", "error": str(exc)},
             )
+        await check_agent_model(settings)
         heartbeat = None
         if settings.cp_registry_url:
             heartbeat = asyncio.create_task(run_heartbeat(settings, active_requests))

@@ -3,7 +3,7 @@ import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import { computed, onMounted, ref } from 'vue'
 
-import { deletePublishedProject, listPublishedProjects } from '@/api/publish'
+import { deletePublishedProject, getPublishedStats, listPublishedProjects } from '@/api/publish'
 import {
   confirmAvatar,
   getProfile,
@@ -14,8 +14,9 @@ import {
 } from '@/api/settings'
 import ProjectCard from '@/components/home/ProjectCard.vue'
 import AvatarUploader from '@/components/settings/AvatarUploader.vue'
+import PublishedStatsPanel from '@/components/settings/PublishedStatsPanel.vue'
 import { useAuthStore } from '@/stores/auth'
-import type { Presign, PublishedProject } from '@/types'
+import type { Presign, PublishedProject, PublishedStats } from '@/types'
 import { publishedToProject } from '@/utils/publish'
 import '@/styles/home.css'
 
@@ -35,6 +36,9 @@ const publishedError = ref('')
 const publishedCards = computed(() =>
   published.value.map((item) => ({ item, project: publishedToProject(item) })),
 )
+const stats = ref<PublishedStats | null>(null)
+const statsLoading = ref(true)
+const statsError = ref('')
 
 function startEdit() {
   draft.value = user.value?.username ?? ''
@@ -97,6 +101,7 @@ async function removePublished(item: PublishedProject) {
   try {
     await deletePublishedProject(item.projectId)
     published.value = published.value.filter((entry) => entry.projectId !== item.projectId)
+    void loadStats()
   } catch (err) {
     publishedError.value = err instanceof Error ? err.message : '删除发布失败'
   }
@@ -114,8 +119,21 @@ async function loadPublished() {
   }
 }
 
+async function loadStats() {
+  statsLoading.value = true
+  statsError.value = ''
+  try {
+    stats.value = await getPublishedStats()
+  } catch (err) {
+    statsError.value = err instanceof Error ? err.message : '发布数据加载失败'
+  } finally {
+    statsLoading.value = false
+  }
+}
+
 onMounted(async () => {
   void loadPublished()
+  void loadStats()
   try {
     auth.applyUser(await getProfile())
   } catch (err) {
@@ -196,6 +214,8 @@ onMounted(async () => {
 
       <p v-if="notice" class="settings-notice settings-row-notice" role="status">{{ notice }}</p>
     </div>
+
+    <PublishedStatsPanel :stats="stats" :loading="statsLoading" :error="statsError" />
 
     <section class="settings-published">
       <header class="settings-published-head">

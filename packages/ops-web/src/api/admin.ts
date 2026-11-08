@@ -5,6 +5,7 @@ import type {
   AccessLogQuery,
   AdminAgentRole,
   AdminFdeResource,
+  AdminLeaderboardRow,
   AdminLLMModel,
   AdminProject,
   AdminQuota,
@@ -175,6 +176,32 @@ export async function updateProjectHidden(id: string, hidden: boolean): Promise<
     method: 'put',
     url: `/projects/${id}/hidden`,
     data: { hidden },
+  })
+}
+
+export async function getLeaderboard(
+  query: PageQuery = {},
+): Promise<PageResult<AdminLeaderboardRow>> {
+  const result = await request<Record<string, unknown>>({
+    method: 'get',
+    url: '/leaderboard',
+    params: pageParams(query),
+  })
+  return toPage<AdminLeaderboardRow>(result, 'items')
+}
+
+export async function updateLeaderboardHidden(projectId: string, hidden: boolean): Promise<void> {
+  await request<{ projectId: string; hidden: boolean }>({
+    method: 'put',
+    url: `/leaderboard/${encodeURIComponent(projectId)}/hidden`,
+    data: { hidden },
+  })
+}
+
+export async function deleteLeaderboardEntry(projectId: string): Promise<void> {
+  await request<{ projectId: string }>({
+    method: 'delete',
+    url: `/leaderboard/${encodeURIComponent(projectId)}`,
   })
 }
 

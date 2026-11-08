@@ -25,6 +25,7 @@ import (
 	"vibebiz/internal/fderesource"
 	"vibebiz/internal/handler"
 	harnesssvc "vibebiz/internal/harness"
+	"vibebiz/internal/leaderboard"
 	"vibebiz/internal/llmmodel"
 	"vibebiz/internal/notification"
 	"vibebiz/internal/notificationchannel"
@@ -250,6 +251,16 @@ func main() {
 	publishHandler := handler.NewPublishHandler(publishService, projectStore, cfg.PublicBaseURL)
 	publishHandler.Covers = avatarPresigner
 	publishHandler.CoverExpiry = cfg.S3PresignExpiry()
+	leaderboardService := leaderboard.NewService(
+		leaderboard.NewStore(redisClient, redisPrefix),
+		publishService,
+		projectStore,
+		identity,
+	)
+	leaderboardService.Covers = avatarPresigner
+	leaderboardService.CoverExpiry = cfg.S3PresignExpiry()
+	publishHandler.Leaderboard = leaderboardService
+	leaderboardHandler := handler.NewLeaderboardHandler(leaderboardService, cfg.PublicBaseURL)
 
 	healthChecker := sandboxregistry.NewHealthChecker(registryRepo, cfg.SandboxHeartbeatTTL, cfg.SandboxHealthTimeout, obs)
 	asynqLogger := sandboxregistry.NewAsyncLogger(obs.Logger)
@@ -315,7 +326,7 @@ func main() {
 	templateHandler := handler.NewTemplateHandler(templateService, projectStore, provisioner, sandboxRouter)
 	templateHandler.Metas = metas
 
-	router.RegisterControl(e, adminRepo, projectStore, provisioner, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler, registryHandler, modelHandler, roleHandler, avatarPresigner, cfg.S3PresignExpiry(), sandboxRouter, templateHandler, harnessImporter, stageStore, sandboxRouter, notificationChannelHandler, fdeResourceHandler, publishHandler, cloneHandler, usageService, accessLogHandler, skillManager)
+	router.RegisterControl(e, adminRepo, projectStore, provisioner, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler, registryHandler, modelHandler, roleHandler, avatarPresigner, cfg.S3PresignExpiry(), sandboxRouter, templateHandler, harnessImporter, stageStore, sandboxRouter, notificationChannelHandler, fdeResourceHandler, publishHandler, cloneHandler, usageService, accessLogHandler, skillManager, leaderboardHandler)
 	router.RegisterScheduledTasks(e, scheduledHandler, authn)
 	router.RegisterChatHistory(e, handler.NewChatHistoryHandler(sandboxRouter, projectStore), authn)
 

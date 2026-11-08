@@ -178,6 +178,7 @@ async function logout() {
 
 const navigation = [
   { label: '首页', icon: 'pi pi-home', route: 'home', visible: true },
+  { label: '排行榜', icon: 'pi pi-trophy', route: 'leaderboard', visible: true },
   { label: '企业工程开发', icon: 'pi pi-sitemap', route: 'enterprise', visible: true },
   { label: '克隆', icon: 'pi pi-copy', route: 'clones', visible: true },
   { label: '资源', icon: 'pi pi-book', route: 'resources', visible: true },

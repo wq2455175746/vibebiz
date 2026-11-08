@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { cpHttp, request } from './client'
-import { deletePublishedProject, listPublishedProjects, publishProject } from './publish'
+import { deletePublishedProject, getPublishedStats, listPublishedProjects, publishProject } from './publish'
 
 vi.mock('./client', () => ({
   cpHttp: {},
@@ -53,6 +53,21 @@ describe('publish api', () => {
       method: 'post',
       url: '/projects/p1/publish',
       data: { title: '小游戏', description: '介绍', tags: ['答题'] },
+    })
+  })
+
+  it('loads published stats', async () => {
+    requestMock.mockResolvedValue({
+      exposure: 9,
+      clicks: 3,
+      dwellSeconds: 0,
+      spend: 0,
+      projects: [],
+    })
+    await expect(getPublishedStats()).resolves.toMatchObject({ exposure: 9, clicks: 3 })
+    expect(requestMock).toHaveBeenCalledWith(cpHttp, {
+      method: 'get',
+      url: '/me/published-projects/stats',
     })
   })
 })

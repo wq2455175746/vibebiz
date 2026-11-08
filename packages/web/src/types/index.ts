@@ -91,6 +91,33 @@ export interface PublishedProject {
   url: string
 }
 
+export interface LeaderboardEntry {
+  rank: number
+  projectId: string
+  name: string
+  author: string
+  visits: number
+  coverUrl: string
+  url: string
+}
+
+export interface PublishedProjectStats {
+  projectId: string
+  name: string
+  exposure: number
+  clicks: number
+  dwellSeconds: number
+  spend: number
+}
+
+export interface PublishedStats {
+  exposure: number
+  clicks: number
+  dwellSeconds: number
+  spend: number
+  projects: PublishedProjectStats[]
+}
+
 export type ProjectStageStatus = 'locked' | 'active' | 'done' | 'placeholder'
 export type ProjectStageWorkspace = 'document' | 'development' | 'test' | 'artifact' | 'placeholder'
 

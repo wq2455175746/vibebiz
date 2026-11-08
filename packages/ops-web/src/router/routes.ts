@@ -3,6 +3,7 @@ import type { RouteRecordRaw } from 'vue-router'
 import AccessLogsView from '@/views/AccessLogsView.vue'
 import AuditView from '@/views/AuditView.vue'
 import FdeResourcesView from '@/views/FdeResourcesView.vue'
+import LeaderboardView from '@/views/LeaderboardView.vue'
 import ModelsView from '@/views/ModelsView.vue'
 import RolesView from '@/views/RolesView.vue'
 import NotificationsView from '@/views/NotificationsView.vue'
@@ -21,6 +22,12 @@ export const childRoutes: RouteRecordRaw[] = [
   { path: '', name: 'overview', component: OverviewView, meta: { title: '概览' } },
   { path: 'users', name: 'users', component: UsersView, meta: { title: '用户' } },
   { path: 'projects', name: 'projects', component: ProjectsView, meta: { title: '项目' } },
+  {
+    path: 'leaderboard',
+    name: 'leaderboard',
+    component: LeaderboardView,
+    meta: { title: '排行榜' },
+  },
   {
     path: 'sandboxes',
     name: 'sandboxes',

@@ -1,10 +1,10 @@
 {
   "service": "all",
-  "task_id": "user-usage-metrics",
-  "task_name": "用户按日使用指标、每日额度与监控图表",
+  "task_id": "published-leaderboard",
+  "task_name": "发布作品排行榜与发布数据统计",
   "status": "completed",
-  "started_at": "2026-11-06",
-  "description": "MySQL 按日用量、Prometheus /metrics/usage、每日额度、ops-web ECharts 概览、web 额度超限弹窗。",
+  "started_at": "2026-11-07",
+  "description": "已发布作品 Redis PV 排行榜、分享页曝光/点击埋点、web 排行榜与账户设置统计、ops-web 榜单管理。",
   "milestones": {
     "根目录与开发命令": "2026-10-28 - 根聚合 Makefile / 各 package Makefile+.env.example / docker-compose / scripts/dev.sh",
     "Go 网关骨架": "2026-10-28 - 项目、文件、SSE、预览代理 + httptest",
@@ -28,7 +28,8 @@
     "设置与存储": "2026-10-29 - 设置页四模块 + 工作区切换 + S3 头像 + 磁盘统计 + 成员邀请",
     "克隆前端": "2026-10-31 - 菜单 / 空态 / 创建 Dialog / 附件 / 5 阶段编辑器 / localStorage / vitest 19 + store 6",
     "克隆后端": "2026-10-31 - mode=clone / 5 阶段 / CP clones CRUD / DP assets / purpose limits / migration v23 / 单测通过",
-    "克隆端到端": "2026-10-31 - sandbox clone source/tests + 前端真实接口 + E2E 创建/附件/阶段启动/单测报告"
+    "克隆端到端": "2026-10-31 - sandbox clone source/tests + 前端真实接口 + E2E 创建/附件/阶段启动/单测报告",
+    "发布作品排行榜": "2026-11-07 - Redis 候选集 200/对外 50 + CP 榜单 API + web 两列卡片 + ops 表格隐藏删除 + 设置页曝光点击统计"
   },
   "completed_tasks": [
     "根目录：README / AGENTS / Makefile / docker-compose.yml / .gitignore / scripts/dev.sh；配置在 packages/*/.env.example",
@@ -81,7 +82,11 @@
     "sandbox：Assistant/Result usage 采集与顶层 usage 事件",
     "web：全局额度超限 Dialog（axios + SSE fetch）",
     "ops-web：ECharts 7/30/90 天趋势、用户筛选、每日额度编辑",
-    "验证：go test、pytest 105、web 203、ops-web 76、make validate 通过"
+    "验证：go test、pytest 105、web 203、ops-web 76、make validate 通过",
+    "排行榜后端：internal/leaderboard Store/Service，候选集 200、对外 50、曝光/点击/隐藏/删除/统计",
+    "排行榜 API：用户榜、admin 列表/隐藏/删除、发布统计、PV 埋点、点击 beacon",
+    "排行榜前端：web 左侧菜单与两列卡片页、账户设置发布数据面板、ops-web 表格管理页",
+    "验证：go test/vet、web 227、ops-web 94、make validate 全部通过"
   ],
   "next_tasks": [
     "克隆制品空间：源码归档、镜像构建与版本说明",

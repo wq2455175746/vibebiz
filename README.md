@@ -119,6 +119,52 @@ make dev
 
 测试账号通过 `packages/web/.env` 与 `packages/ops-web/.env` 中的 `VITE_DEMO_IDENTIFIER` / `VITE_DEMO_PASSWORD` 注入；生产环境请设置 `VITE_DEMO_LOGIN=false` 并删除默认账号。
 
+## TODO
+
+> 按主题归并的未完成项；详细验收与状态见 [.ai/TODO.md](.ai/TODO.md)。
+
+### 1. E2B 沙箱迁移（大任务）
+
+- [ ] 将共享 Docker sandbox 迁移为每项目一个 E2B Embed Firecracker microVM + 独立 volume，保持 CP/DP 现有 HTTP/SSE 契约不变。
+- [ ] CP：`SANDBOX_PROVIDER=local|e2b`、E2B REST client / provisioner / resolver、项目绑定与 `sandbox_instance.provider` 字段。
+- [ ] DP：按项目解析 E2B endpoint、`e2b-traffic-access-token` 内存缓存、403 重新 connect、preview token 转发。
+- [ ] Sandbox/部署：E2B template、去掉宿主 bind mount、egress/LLM proxy、staging smoke、灰度切流与 local 回滚。
+- [ ] 迁移工具：`cmd/sandbox-migrate` 逐项目导入工作区，双运行期间按 `provider` 路由。
+- 设计/计划：[E2B 迁移设计](docs/superpowers/specs/2026-11-07-e2b-embed-sandbox-migration-design.md)、[实施计划](docs/superpowers/plans/2026-11-07-e2b-sandbox-migration.md)
+
+### 2. 运行时隔离与安全
+
+- [ ] local provider 落到每项目容器 + 卷持久化；预热池与 running / warm / sleeping / archived 分层回收。
+- [ ] 预览独立 origin，并收紧 iframe sandbox 白名单（当前预览与主站同 origin）。
+- [ ] 出网白名单代理，禁内网与云 metadata。
+- [ ] 文件 API 支持 Range / 流式读取，避免全量读入内存。
+- [ ] 工作区关系登录快照与成员变更 Session 失效；ops-web 生产接入 SSO + RBAC。
+- [ ] Agent `Read` 大文件拦截（`canUseTool`，>5MB 引导 `grep/head/tail`）。
+
+### 3. 编辑器与聊天体验
+
+- [ ] 文件树 CRUD（新建 / 删除 / 重命名）与项目重命名。
+- [ ] 保存 409 冲突提供「覆盖 / 重新加载」操作，而不只是提示重新打开。
+- [ ] AI 修改高亮与 Ctrl+Z 撤销。
+- [ ] 大文件分级降级（>256KB / 2MB / 20MB）。
+- [ ] 聊天流刷新恢复（方案 2）：sandbox 保留进行中 turn 的事件缓冲，新增 `GET /internal/projects/:id/chat/stream?turnId=&from=`，DP 透传，web 按 `turnId` 重连续流并去重。
+  - [ ] 刷新 / 多标签页继续显示 Agent 输出与工具状态
+  - [ ] turn 结束后回退到 chat history
+  - [ ] 断线重连带 `from=lastSeq+1`，SSE 增加 15s heartbeat
+  - [ ] sandbox / DP / web 测试覆盖 backlog 回放、去重、turn 结束竞态
+
+### 4. 项目版本与协作
+
+- [ ] 版本列表、diff、回滚、Remix（fork session）。
+
+### 5. 交付、可观测与工程效率
+
+- [ ] CI/CD：构建、测试、镜像发布。
+- [ ] 指标：首 token 延迟、单轮耗时、冷启动、HMR 断连；降低 `project_id` 指标基数。
+- [ ] 可选交付 Collector / Jaeger / Grafana / 告警规则。
+- [ ] Docker 镜像在真实环境构建与验证。
+- [ ] `.ai` 自动更新接入 opencode 事件（当前手动 `make harness-update`）。
+
 ## 文档
 
 - [技术说明](docs/TECHNICAL.md)：架构、服务职责、常用命令、配置、API、部署与安全限制
