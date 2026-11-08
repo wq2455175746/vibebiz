@@ -39,12 +39,17 @@ type Repository interface {
 	Delete(ctx context.Context, publicID string) error
 }
 
+type GuideProvider interface {
+	Markdown(ctx context.Context, channel string) (string, error)
+}
+
 type ServiceConfig struct {
 	Repo          Repository
 	WorkspacesDir string
 	PackagesDir   string
 	OpenResource  ResourceOpener
 	Adapters      map[string]core.Adapter
+	Guides        GuideProvider
 	MaxBytes      int64
 	Timeout       time.Duration
 	Concurrency   int
@@ -155,6 +160,11 @@ func (s *Service) Generate(ctx context.Context, project *model.Project, input Ge
 	report := adapter.Validate(info)
 	if report.Level == core.LevelC || len(report.Blockers) > 0 {
 		return nil, s.fail(ctx, item, ErrUnsupported)
+	}
+	if s.cfg.Guides != nil {
+		if guide, guideErr := s.cfg.Guides.Markdown(buildCtx, input.Channel); guideErr == nil && strings.TrimSpace(guide) != "" {
+			info.Guide = guide
+		}
 	}
 	info.Report = report
 

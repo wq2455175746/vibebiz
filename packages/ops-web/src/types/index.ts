@@ -406,6 +406,39 @@ export interface RoleAvatarPresign {
   headers: Record<string, string>
 }
 
+export type ChannelGuideStatus = 'all' | 'enabled' | 'disabled'
+
+export interface AdminChannelGuide {
+  channel: string
+  title: string
+  summary: string
+  enabled: boolean
+  builtin: boolean
+  sortOrder: number
+  markdownBytes: number
+  updatedAt: string
+}
+
+export interface AdminChannelGuideDetail extends AdminChannelGuide {
+  markdown: string
+  steps: string[]
+  requirements: string[]
+}
+
+export interface ChannelGuideInput {
+  title: string
+  summary: string
+  markdown: string
+  steps: string[]
+  requirements: string[]
+  enabled: boolean
+  sortOrder: number
+}
+
+export interface ChannelGuideCreateInput extends ChannelGuideInput {
+  channel: string
+}
+
 export interface AdminScheduledTask {
   id: number
   userId: number

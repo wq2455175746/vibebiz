@@ -21,6 +21,10 @@ const guides: ChannelGuide[] = [
     steps: ['生成渠道包', '注册小游戏 AppID', '导入微信开发者工具', '真机调试', '上传提审'],
     requirements: ['企业主体', '软件著作权', '对应类目资质'],
     updatedAt: '2026-11-07',
+    enabled: true,
+    builtin: true,
+    packageable: true,
+    sortOrder: 10,
   },
   {
     channel: 'douyin_minigame',
@@ -30,6 +34,10 @@ const guides: ChannelGuide[] = [
     steps: ['生成渠道包', '注册小游戏 AppID', '导入抖音开发者工具', '真机调试', '上传提审'],
     requirements: ['企业主体', '软件著作权'],
     updatedAt: '2026-11-07',
+    enabled: true,
+    builtin: true,
+    packageable: true,
+    sortOrder: 20,
   },
   {
     channel: 'steam_desktop',
@@ -39,6 +47,10 @@ const guides: ChannelGuide[] = [
     steps: ['生成渠道包', '注册 Steamworks', '本地构建 Electron 壳', '配置 Depot 和 VDF', 'SteamPipe 上传并提审'],
     requirements: ['Steamworks 账号', '100 美元 App 费', '商店页素材'],
     updatedAt: '2026-11-07',
+    enabled: true,
+    builtin: true,
+    packageable: true,
+    sortOrder: 30,
   },
 ]
 

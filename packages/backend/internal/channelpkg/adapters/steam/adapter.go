@@ -132,7 +132,10 @@ func (a *Adapter) Build(ctx context.Context, source core.SourceInfo, out io.Writ
 		_ = zw.Close()
 		return core.Manifest{}, err
 	}
-	guide := guides.Markdown(core.ChannelSteam)
+	guide := source.Guide
+	if strings.TrimSpace(guide) == "" {
+		guide = guides.Markdown(core.ChannelSteam)
+	}
 	if strings.TrimSpace(guide) == "" {
 		_ = zw.Close()
 		return core.Manifest{}, errors.New("steam: missing channel guide")

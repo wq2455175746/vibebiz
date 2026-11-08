@@ -23,6 +23,7 @@ export const navItems: NavItem[] = [
   { name: 'fde-resources', label: 'FDE 资源', path: '/fde-resources', icon: 'pi pi-id-card' },
   { name: 'topics', label: '类别管理', path: '/topics', icon: 'pi pi-sitemap' },
   { name: 'templates', label: '模板管理', path: '/templates', icon: 'pi pi-th-large' },
+  { name: 'channel-guides', label: '发布渠道', path: '/channel-guides', icon: 'pi pi-share-alt' },
   { name: 'scheduled-tasks', label: '定时任务', path: '/scheduled-tasks', icon: 'pi pi-clock' },
   { name: 'quotas', label: '配额', path: '/quotas', icon: 'pi pi-gauge' },
   { name: 'audit', label: '审计日志', path: '/audit', icon: 'pi pi-list' },

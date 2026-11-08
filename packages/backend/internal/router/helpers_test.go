@@ -13,6 +13,7 @@ import (
 	"vibebiz/internal/admin"
 	"vibebiz/internal/agentrole"
 	"vibebiz/internal/auth"
+	"vibebiz/internal/channelguide"
 	"vibebiz/internal/client"
 	"vibebiz/internal/config"
 	"vibebiz/internal/dao"
@@ -281,7 +282,12 @@ func newCP(t *testing.T, projects store.ProjectStore) (*echo.Echo, *observabilit
 	obs := newProvider(t, "cp")
 	authState := newRouterAuth(t)
 	e := server.New(config.Config{Plane: "cp", ServiceName: "vibebiz-cp"}, obs)
-	RegisterControl(e, admin.NewMemoryRepository(), projects, staticProvisioner{id: 1}, obs, authState.authn, authState.handler, &handler.SettingsHandler{}, &handler.StorageHandler{}, authState.metas, newNotificationHandler(t), nil, newModelHandler(t), newRoleHandler(t), nil, 0, nil, nil, nil, nil, nil, nil, nil, nil, handler.NewChannelPackageHandler(nil, projects), nil, nil, nil, nil, nil)
+	guideService := channelguide.NewService(channelguide.NewMemoryRepository())
+	if err := guideService.EnsureDefaults(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	guideHandler := handler.NewChannelGuideHandler(guideService)
+	RegisterControl(e, admin.NewMemoryRepository(), projects, staticProvisioner{id: 1}, obs, authState.authn, authState.handler, &handler.SettingsHandler{}, &handler.StorageHandler{}, authState.metas, newNotificationHandler(t), nil, newModelHandler(t), newRoleHandler(t), nil, 0, nil, nil, nil, nil, nil, nil, nil, nil, handler.NewChannelPackageHandler(nil, projects), guideHandler, nil, nil, nil, nil, nil)
 	return e, obs, authState
 }
 

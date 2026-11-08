@@ -171,6 +171,81 @@ func newTestService(repo Repository, root string, adapter core.Adapter, opts ...
 	return NewService(cfg)
 }
 
+type fakeGuideProvider struct {
+	markdown string
+	err      error
+}
+
+func (f fakeGuideProvider) Markdown(context.Context, string) (string, error) {
+	return f.markdown, f.err
+}
+
+func TestGenerateUsesProvidedGuide(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "p1")
+	write(t, dir, "index.html", `<canvas></canvas><script src="game.js"></script>`)
+	write(t, dir, "game.js", `document.getElementById('c')`)
+	repo := newFakeRepo()
+	var got string
+	adapter := fakeAdapter{level: core.LevelB, build: func(_ context.Context, src core.SourceInfo, out io.Writer) (core.Manifest, error) {
+		got = src.Guide
+		return writeFakePackage(out, src)
+	}}
+	svc := newTestService(repo, root, adapter, func(cfg *ServiceConfig) {
+		cfg.Guides = fakeGuideProvider{markdown: "database guide"}
+	})
+	if _, err := svc.Generate(context.Background(), &model.Project{ID: "p1", WorkspaceID: 3}, GenerateInput{Channel: core.ChannelWeChat, SourceType: core.SourceHTML5}); err != nil {
+		t.Fatal(err)
+	}
+	if got != "database guide" {
+		t.Fatalf("guide = %q, want database guide", got)
+	}
+}
+
+func TestGenerateFallsBackWhenGuideProviderErrors(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "p1")
+	write(t, dir, "index.html", `<canvas></canvas><script src="game.js"></script>`)
+	write(t, dir, "game.js", `document.getElementById('c')`)
+	repo := newFakeRepo()
+	var got string
+	adapter := fakeAdapter{level: core.LevelB, build: func(_ context.Context, src core.SourceInfo, out io.Writer) (core.Manifest, error) {
+		got = src.Guide
+		return writeFakePackage(out, src)
+	}}
+	svc := newTestService(repo, root, adapter, func(cfg *ServiceConfig) {
+		cfg.Guides = fakeGuideProvider{err: errors.New("db down")}
+	})
+	if _, err := svc.Generate(context.Background(), &model.Project{ID: "p1", WorkspaceID: 3}, GenerateInput{Channel: core.ChannelWeChat, SourceType: core.SourceHTML5}); err != nil {
+		t.Fatal(err)
+	}
+	if got != "" {
+		t.Fatalf("guide = %q, want empty fallback marker", got)
+	}
+}
+
+func TestGenerateFallsBackWhenGuideProviderReturnsBlank(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "p1")
+	write(t, dir, "index.html", `<canvas></canvas><script src="game.js"></script>`)
+	write(t, dir, "game.js", `document.getElementById('c')`)
+	repo := newFakeRepo()
+	var got string
+	adapter := fakeAdapter{level: core.LevelB, build: func(_ context.Context, src core.SourceInfo, out io.Writer) (core.Manifest, error) {
+		got = src.Guide
+		return writeFakePackage(out, src)
+	}}
+	svc := newTestService(repo, root, adapter, func(cfg *ServiceConfig) {
+		cfg.Guides = fakeGuideProvider{markdown: "   \n"}
+	})
+	if _, err := svc.Generate(context.Background(), &model.Project{ID: "p1", WorkspaceID: 3}, GenerateInput{Channel: core.ChannelWeChat, SourceType: core.SourceHTML5}); err != nil {
+		t.Fatal(err)
+	}
+	if got != "" {
+		t.Fatalf("guide = %q, want empty fallback marker", got)
+	}
+}
+
 func TestGenerateWritesPackageAndRecord(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, "p1")

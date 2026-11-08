@@ -4,11 +4,18 @@ import { onMounted, ref } from 'vue'
 import {
   downloadChannelPackage,
   generateChannelPackage,
+  listChannelGuides,
   listChannelPackages,
 } from '@/api/channelPackages'
 import { adoptResource, presignResource, uploadStaging, uploadToS3 } from '@/api/resources'
 import type { ChannelPackage, ChannelPackageChannel, ChannelPackageSourceType } from '@/types'
-import { channelLabel, channelOptions, levelLabel } from '@/utils/channelPackages'
+import type { ChannelOption } from '@/utils/channelPackages'
+import {
+  channelLabel,
+  channelOptions,
+  levelLabel,
+  packageableChannelOptions,
+} from '@/utils/channelPackages'
 import { formatBytes } from '@/utils/storage'
 
 const props = defineProps<{ projectId: string }>()
@@ -18,6 +25,7 @@ const artifactResourceId = ref('')
 const artifactName = ref('')
 const uploading = ref(false)
 const channel = ref<ChannelPackageChannel>('wechat_minigame')
+const options = ref<ChannelOption[]>(channelOptions)
 const packages = ref<ChannelPackage[]>([])
 const generating = ref(false)
 const error = ref('')
@@ -32,6 +40,15 @@ async function load() {
   } catch (err) {
     error.value = errorMessage(err, '加载渠道包失败')
   }
+}
+
+async function loadChannels() {
+  try {
+    options.value = packageableChannelOptions(await listChannelGuides())
+  } catch {
+    options.value = channelOptions
+  }
+  channel.value = options.value[0]?.value ?? 'wechat_minigame'
 }
 
 async function onArtifactChange(event: Event) {
@@ -109,7 +126,10 @@ function openGuide(item: ChannelPackage) {
   window.open(item.guideUrl, '_blank', 'noopener,noreferrer')
 }
 
-onMounted(load)
+onMounted(() => {
+  void load()
+  void loadChannels()
+})
 </script>
 
 <template>
@@ -118,7 +138,7 @@ onMounted(load)
       <p class="channel-package-label">发布渠道</p>
       <div class="channel-package-channels">
         <button
-          v-for="item in channelOptions"
+          v-for="item in options"
           :key="item.value"
           type="button"
           class="channel-package-chip"

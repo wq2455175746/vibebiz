@@ -347,7 +347,7 @@ type GuideProvider interface {
 
 ### 9.4 验收
 
-1. `make db-migrate-up` 后三渠道自动补种。
+1. `make db-migrate-up` 只创建表；CP 启动后三渠道自动补种。
 2. ops-web 修改微信指引后，web 设置页立即显示新内容。
 3. 重新生成微信渠道包，`CHANNEL_GUIDE.md` 与修改后内容一致。
 4. 停用抖音渠道后，设置页和发布弹窗都不再展示抖音，但 API 生成仍可用。

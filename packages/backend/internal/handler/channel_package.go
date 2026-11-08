@@ -15,7 +15,6 @@ import (
 	"vibebiz/internal/auth"
 	"vibebiz/internal/channelpkg"
 	"vibebiz/internal/channelpkg/core"
-	"vibebiz/internal/channelpkg/guides"
 	"vibebiz/internal/dao"
 	daomodel "vibebiz/internal/dao/model"
 	"vibebiz/internal/model"
@@ -165,10 +164,6 @@ func (h *ChannelPackageHandler) Delete(c echo.Context) error {
 		return channelPackageError(c, err)
 	}
 	return response.OK(c, map[string]any{"deleted": true})
-}
-
-func (h *ChannelPackageHandler) Guides(c echo.Context) error {
-	return response.OK(c, map[string]any{"guides": guides.List()})
 }
 
 func (h *ChannelPackageHandler) loadProject(c echo.Context, session *auth.Session) (*model.Project, bool) {

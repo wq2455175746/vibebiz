@@ -138,13 +138,17 @@ export interface ChannelPackage {
 }
 
 export interface ChannelGuide {
-  channel: ChannelPackageChannel
+  channel: string
   title: string
   summary: string
   markdown: string
   steps: string[]
   requirements: string[]
   updatedAt: string
+  enabled: boolean
+  builtin: boolean
+  packageable: boolean
+  sortOrder: number
 }
 
 export type ChannelGuideItem = ChannelGuide

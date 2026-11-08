@@ -2,7 +2,6 @@ import type { RouteRecordRaw } from 'vue-router'
 
 import AccessLogsView from '@/views/AccessLogsView.vue'
 import AuditView from '@/views/AuditView.vue'
-import EvolutionAdminView from '@/views/EvolutionAdminView.vue'
 import FdeResourcesView from '@/views/FdeResourcesView.vue'
 import LeaderboardView from '@/views/LeaderboardView.vue'
 import ModelsView from '@/views/ModelsView.vue'
@@ -28,12 +27,6 @@ export const childRoutes: RouteRecordRaw[] = [
     name: 'leaderboard',
     component: LeaderboardView,
     meta: { title: '排行榜' },
-  },
-  {
-    path: 'evolution',
-    name: 'evolution',
-    component: EvolutionAdminView,
-    meta: { title: '集思进化' },
   },
   {
     path: 'sandboxes',

@@ -88,6 +88,24 @@ func TestWeChatBuildWritesMiniGameFiles(t *testing.T) {
 	}
 }
 
+func TestWeChatBuildUsesProvidedGuide(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "index.html", `<canvas id="game"></canvas><script src="game.js"></script>`)
+	write(t, dir, "game.js", `document.getElementById('game').getContext('2d')`)
+	var buf bytes.Buffer
+	_, err := New().Build(context.Background(), core.SourceInfo{
+		Dir: dir, Entry: "index.html", Version: "v1",
+		Report: core.Report{Level: core.LevelB},
+		Guide:  "# database guide",
+	}, &buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := zipContent(t, buf.Bytes(), "CHANNEL_GUIDE.md"); got != "# database guide" {
+		t.Fatalf("guide = %q", got)
+	}
+}
+
 func TestWeChatBuildRejectsDomGame(t *testing.T) {
 	adapter := New()
 	report := adapter.Validate(core.SourceInfo{Report: core.Report{Level: core.LevelC}})

@@ -4,6 +4,8 @@ import type {
   AccessLog,
   AccessLogQuery,
   AdminAgentRole,
+  AdminChannelGuide,
+  AdminChannelGuideDetail,
   AdminFdeResource,
   AdminLeaderboardRow,
   AdminLLMModel,
@@ -15,6 +17,9 @@ import type {
   AdminUser,
   AdminUserDetail,
   AuditEvent,
+  ChannelGuideCreateInput,
+  ChannelGuideInput,
+  ChannelGuideStatus,
   FdeResourceInput,
   IPStats,
   ModelInput,
@@ -422,5 +427,60 @@ export async function deleteSkill(input: {
     method: 'delete',
     url: `/skills/${encodeURIComponent(input.name)}`,
     params: { scope: input.scope, userId: input.userId || undefined },
+  })
+}
+
+export async function getChannelGuides(
+  query: { keyword?: string; status?: ChannelGuideStatus } = {},
+): Promise<AdminChannelGuide[]> {
+  const result = await request<{ guides: AdminChannelGuide[] }>({
+    method: 'get',
+    url: '/channel-guides',
+    params: { keyword: query.keyword || undefined, status: query.status || undefined },
+  })
+  return result.guides ?? []
+}
+
+export function getChannelGuide(channel: string): Promise<AdminChannelGuideDetail> {
+  return request<AdminChannelGuideDetail>({
+    method: 'get',
+    url: `/channel-guides/${encodeURIComponent(channel)}`,
+  })
+}
+
+export function createChannelGuide(
+  input: ChannelGuideCreateInput,
+): Promise<AdminChannelGuideDetail> {
+  return request<AdminChannelGuideDetail>({ method: 'post', url: '/channel-guides', data: input })
+}
+
+export function updateChannelGuide(
+  channel: string,
+  input: ChannelGuideInput,
+): Promise<AdminChannelGuideDetail> {
+  return request<AdminChannelGuideDetail>({
+    method: 'put',
+    url: `/channel-guides/${encodeURIComponent(channel)}`,
+    data: input,
+  })
+}
+
+export async function deleteChannelGuide(channel: string): Promise<void> {
+  await request<{ deleted: boolean }>({
+    method: 'delete',
+    url: `/channel-guides/${encodeURIComponent(channel)}`,
+  })
+}
+
+export function uploadChannelGuideMarkdown(
+  channel: string,
+  file: File,
+): Promise<AdminChannelGuideDetail> {
+  const form = new FormData()
+  form.set('file', file)
+  return request<AdminChannelGuideDetail>({
+    method: 'post',
+    url: `/channel-guides/${encodeURIComponent(channel)}/markdown`,
+    data: form,
   })
 }

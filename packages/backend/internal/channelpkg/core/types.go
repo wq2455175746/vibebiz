@@ -34,6 +34,7 @@ type SourceInfo struct {
 	FileCount  int    `json:"fileCount"`
 	TotalBytes int64  `json:"totalBytes"`
 	Report     Report `json:"report"`
+	Guide      string `json:"-"`
 }
 
 type FileSummary struct {
