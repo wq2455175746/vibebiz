@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { EvolutionVersion } from '@/types/evolution'
 import {
   OFFICIAL_USER_ID,
-  buildEvolutionPreviewUrl,
+  evolutionProjectID,
   groupVersionsByUser,
   nextTaskStatus,
   statusLabel,
@@ -38,22 +38,15 @@ describe('ops evolution utils', () => {
     expect(groups.map((group) => group.userId)).toEqual(['2', '1', OFFICIAL_USER_ID])
   })
 
+  it('derives the hidden sandbox project id from a user id', () => {
+    expect(evolutionProjectID('7')).toBe('evolve-7')
+  })
+
   it('advances task status up to released', () => {
     expect(nextTaskStatus('queued')).toBe('coding')
     expect(nextTaskStatus('coding')).toBe('ci')
     expect(nextTaskStatus('ci')).toBe('released')
     expect(nextTaskStatus('released')).toBe('released')
-  })
-
-  it('builds the preview URL with scenario and version', () => {
-    const url = buildEvolutionPreviewUrl(
-      'http://localhost:5173/evolution/origin_version/index.html',
-      version('v1', '7', '2026-11-08T00:00:00.000Z'),
-      '运营预览',
-    )
-    expect(url).toContain('scenario=baseline')
-    expect(url).toContain('version=v1')
-    expect(url).toContain('viewer=')
   })
 
   it('maps coding task statuses', () => {

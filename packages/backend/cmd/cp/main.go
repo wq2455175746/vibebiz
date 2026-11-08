@@ -268,7 +268,14 @@ func main() {
 	leaderboardService.CoverExpiry = cfg.S3PresignExpiry()
 	publishHandler.Leaderboard = leaderboardService
 	leaderboardHandler := handler.NewLeaderboardHandler(leaderboardService, cfg.PublicBaseURL)
-	evolutionHandler := handler.NewEvolutionHandler(evolution.NewService(evolution.NewMySQLStore(db)))
+	evolutionService := evolution.NewService(evolution.NewMySQLStore(db))
+	evolutionService.Workspaces = &evolution.WorkspaceProvisioner{
+		Projects:    projectStore,
+		Initializer: provisioner,
+		Files:       sandboxRouter,
+		Metas:       metas,
+	}
+	evolutionHandler := handler.NewEvolutionHandler(evolutionService)
 
 	channelGuideService := channelguide.NewService(dao.NewChannelGuideRepository(db))
 	if err := channelGuideService.EnsureDefaults(ctx); err != nil {

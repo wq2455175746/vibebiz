@@ -4,6 +4,8 @@ import type { EvolutionVersion } from '@/types/evolution'
 import {
   OFFICIAL_USER_ID,
   buildEvolutionPreviewUrl,
+  buildVersionPreviewUrl,
+  evolutionProjectID,
   formatRelative,
   groupMessagesByDay,
   groupVersionsByUser,
@@ -56,6 +58,22 @@ describe('groupVersionsByUser', () => {
 })
 
 describe('preview URL', () => {
+  it('derives the hidden sandbox project id from a user id', () => {
+    expect(evolutionProjectID('7')).toBe('evolve-7')
+  })
+
+  it('uses the static baseline for the official version', () => {
+    const url = buildVersionPreviewUrl(
+      version('v-official-1', OFFICIAL_USER_ID, '2026-11-08T00:00:00.000Z'),
+    )
+    expect(url).toContain('/evolution/origin_version/index.html')
+  })
+
+  it('uses the hidden sandbox project for user versions', () => {
+    const url = buildVersionPreviewUrl(version('v1', '7', '2026-11-08T00:00:00.000Z'))
+    expect(url).toBe('/dp/api/v1/projects/evolve-7/preview/')
+  })
+
   it('appends query parameters without losing the path', () => {
     expect(withQuery('/a/b.html', { scenario: 'soft-cards', user: '林 岚' })).toBe(
       '/a/b.html?scenario=soft-cards&user=%E6%9E%97+%E5%B2%9A',

@@ -6,9 +6,13 @@ import type {
 } from '@/types/evolution'
 
 export const EVOLUTION_PROJECT_ID = 'vibebiz-evolve'
-export const EVOLUTION_PREVIEW_BASE = 'http://localhost:5173/evolution/origin_version/index.html'
+export const EVOLUTION_PROJECT_PREFIX = 'evolve-'
 export const OFFICIAL_USER_ID = 'official'
 export const OFFICIAL_VERSION_LABEL = 'v1.2026.11'
+
+export function evolutionProjectID(userId: string): string {
+  return `${EVOLUTION_PROJECT_PREFIX}${userId}`
+}
 
 export function latestVersionsByUser(
   versions: EvolutionVersion[],
@@ -51,37 +55,6 @@ export function groupVersionsByUser(
     if (a.userId === OFFICIAL_USER_ID) return 1
     if (b.userId === OFFICIAL_USER_ID) return -1
     return Date.parse(b.latest.updatedAt) - Date.parse(a.latest.updatedAt)
-  })
-}
-
-export function withQuery(base: string, params: Record<string, string | undefined>): string {
-  const hashIndex = base.indexOf('#')
-  const hash = hashIndex >= 0 ? base.slice(hashIndex) : ''
-  const withoutHash = hashIndex >= 0 ? base.slice(0, hashIndex) : base
-  const queryIndex = withoutHash.indexOf('?')
-  const path = queryIndex >= 0 ? withoutHash.slice(0, queryIndex) : withoutHash
-  const query = new URLSearchParams(queryIndex >= 0 ? withoutHash.slice(queryIndex + 1) : '')
-  for (const [key, value] of Object.entries(params)) {
-    if (value === undefined || value === '') {
-      query.delete(key)
-      continue
-    }
-    query.set(key, value)
-  }
-  const search = query.toString()
-  return `${path}${search ? `?${search}` : ''}${hash}`
-}
-
-export function buildEvolutionPreviewUrl(
-  base: string,
-  version: EvolutionVersion,
-  viewerName = '',
-): string {
-  return withQuery(base, {
-    scenario: version.scenario,
-    version: version.label,
-    user: version.userName,
-    viewer: viewerName,
   })
 }
 

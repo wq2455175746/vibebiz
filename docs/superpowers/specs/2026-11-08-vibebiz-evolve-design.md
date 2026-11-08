@@ -276,3 +276,13 @@ Phase 1 前端通过 `api/evolution.ts` 门面隔离，Phase 2 只替换门面�
 - CI/CD 自动编码、任务下发与回传。
 - 真实版本文件快照、版本 diff、回滚。
 - 真实 LLM Agent 与 SSE（继续使用确定性规则引擎）。
+
+## 13. Phase 2B 实施范围（2026-11-08 确认）
+
+- 每个真实用户在 sandbox 使用一个隐藏项目 `evolve-<userId>`，首次进入 `/evolve` 时创建，基于 `origin_version` 静态交互页初始化，不出现在普通项目列表。
+- 用户提交 `bug` / `visual` 提议：CP 记录提议和版本；web 通过现有 DP SSE 调用 sandbox Agent 修改 `index.html`，完成后刷新预览。
+- `feature` 提议仍只给风险说明，不直接生成版本。
+- web 预览使用 `/dp/api/v1/projects/evolve-<userId>/preview/`；ops-web 预览使用 `/cp/api/v1/admin/projects/evolve-<userId>/live/`。
+- 删除 1001-1004 的 seed 演示版本、提议、对话、任务，只保留 official 基线；由 `00032_remove_evolution_seed.sql` 清理。
+- 不做版本文件快照，预览始终对应用户当前 sandbox 状态。
+- ops-web 移除「添加到编码计划」按钮和编码计划表格；后端任务接口保留但暂不调用。

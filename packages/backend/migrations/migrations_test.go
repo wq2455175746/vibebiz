@@ -219,8 +219,8 @@ func TestGooseCanCollectMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("collect migrations: %v", err)
 	}
-	if len(migs) != 31 {
-		t.Fatalf("collected %d migrations, want 31", len(migs))
+	if len(migs) != 32 {
+		t.Fatalf("collected %d migrations, want 32", len(migs))
 	}
 	for i, mig := range migs {
 		want := int64(i + 1)
@@ -450,6 +450,22 @@ func TestChannelGuideMigration(t *testing.T) {
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("channel guide migration missing %q", want)
+		}
+	}
+}
+
+func TestRemoveEvolutionSeedMigration(t *testing.T) {
+	body, err := fs.ReadFile(FS, "00032_remove_evolution_seed.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	for _, want := range []string{
+		"t-seed-1", "v-1001-2", "p-1001-1", "c-1001-1",
+		"DELETE FROM `evolution_version`", "-- +goose Up", "-- +goose Down",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("evolution seed cleanup missing %q", want)
 		}
 	}
 }

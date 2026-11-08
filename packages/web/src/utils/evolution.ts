@@ -4,10 +4,17 @@ import type {
   EvolutionVersionGroup,
 } from '@/types/evolution'
 
+import { buildPreviewUrl } from './preview'
+
 export const EVOLUTION_PROJECT_ID = 'vibebiz-evolve'
 export const EVOLUTION_PREVIEW_PATH = '/evolution/origin_version/index.html'
+export const EVOLUTION_PROJECT_PREFIX = 'evolve-'
 export const OFFICIAL_USER_ID = 'official'
 export const OFFICIAL_VERSION_LABEL = 'v1.2026.11'
+
+export function evolutionProjectID(userId: string): string {
+  return `${EVOLUTION_PROJECT_PREFIX}${userId}`
+}
 
 export function latestVersionsByUser(
   versions: EvolutionVersion[],
@@ -82,6 +89,13 @@ export function buildEvolutionPreviewUrl(
     user: version.userName,
     viewer: viewerName,
   })
+}
+
+export function buildVersionPreviewUrl(version: EvolutionVersion, viewerName = ''): string {
+  if (version.userId === OFFICIAL_USER_ID) {
+    return buildEvolutionPreviewUrl(EVOLUTION_PREVIEW_PATH, version, viewerName)
+  }
+  return buildPreviewUrl(evolutionProjectID(version.userId))
 }
 
 export function statusLabel(status: string): string {

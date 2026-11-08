@@ -43,6 +43,7 @@ const (
 var (
 	ErrNotFound         = errors.New("evolution record not found")
 	ErrUnknownUser      = errors.New("evolution viewer is required")
+	ErrNoWorkspace      = errors.New("evolution workspace is required")
 	ErrEmptyContent     = errors.New("evolution content is empty")
 	ErrContentTooLong   = errors.New("evolution content is too long")
 	ErrOfficialReadonly = errors.New("official version is readonly")
@@ -51,8 +52,10 @@ var (
 )
 
 type Viewer struct {
-	ID   string
-	Name string
+	ID          string
+	InternalID  int64
+	Name        string
+	WorkspaceID int64
 }
 
 type Store interface {

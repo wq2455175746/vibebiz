@@ -101,6 +101,7 @@ export async function* streamChat(
   message: string,
   signal?: AbortSignal,
   references: ChatReferenceInput[] = [],
+  systemPrompt = '',
 ): AsyncGenerator<StreamEvent> {
   const response = await fetch(`${API_BASE}/projects/${encodeURIComponent(projectId)}/chat`, {
     method: 'POST',
@@ -109,7 +110,7 @@ export async function* streamChat(
       Accept: 'text/event-stream',
       ...deviceHeader(),
     },
-    body: JSON.stringify({ message, references }),
+    body: JSON.stringify({ message, references, ...(systemPrompt ? { systemPrompt } : {}) }),
     credentials: 'include',
     signal,
   })

@@ -183,13 +183,20 @@ func evolutionViewer(c echo.Context) (evolution.Viewer, bool) {
 	if name == "" {
 		name = id
 	}
-	return evolution.Viewer{ID: id, Name: name}, true
+	return evolution.Viewer{
+		ID:          id,
+		InternalID:  session.UserID,
+		Name:        name,
+		WorkspaceID: session.CurrentWorkspaceID,
+	}, true
 }
 
 func evolutionError(c echo.Context, err error) error {
 	switch {
 	case errors.Is(err, evolution.ErrUnknownUser):
 		return response.Fail(c, http.StatusBadRequest, 40001, "userId is required")
+	case errors.Is(err, evolution.ErrNoWorkspace):
+		return response.Fail(c, http.StatusForbidden, 40305, "no workspace available")
 	case errors.Is(err, evolution.ErrEmptyContent):
 		return response.Fail(c, http.StatusBadRequest, 40001, "content is required")
 	case errors.Is(err, evolution.ErrContentTooLong):

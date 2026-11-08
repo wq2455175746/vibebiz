@@ -19,10 +19,15 @@ type Snapshot struct {
 	Tasks     []model.EvolutionTask
 }
 
+type WorkspaceEnsurer interface {
+	Ensure(ctx context.Context, viewer Viewer) (string, error)
+}
+
 type Service struct {
-	Store Store
-	Now   func() time.Time
-	NewID func(prefix string) string
+	Store      Store
+	Workspaces WorkspaceEnsurer
+	Now        func() time.Time
+	NewID      func(prefix string) string
 }
 
 func NewService(store Store) *Service {
@@ -110,6 +115,9 @@ func (s *Service) EnsureDraft(ctx context.Context, viewer Viewer) (*model.Evolut
 	if viewer.ID == "" {
 		return nil, ErrUnknownUser
 	}
+	if err := s.ensureWorkspace(ctx, viewer); err != nil {
+		return nil, err
+	}
 	versions, err := s.Store.ListVersions(ctx)
 	if err != nil {
 		return nil, err
@@ -146,6 +154,9 @@ func (s *Service) SubmitProposal(ctx context.Context, viewer Viewer, content str
 	}
 	content, err := normalizeContent(content)
 	if err != nil {
+		return nil, nil, err
+	}
+	if err := s.ensureWorkspace(ctx, viewer); err != nil {
 		return nil, nil, err
 	}
 
@@ -391,6 +402,14 @@ func (s *Service) appendMessages(ctx context.Context, userID, userName string, d
 		}
 	}
 	return nil
+}
+
+func (s *Service) ensureWorkspace(ctx context.Context, viewer Viewer) error {
+	if s.Workspaces == nil {
+		return nil
+	}
+	_, err := s.Workspaces.Ensure(ctx, viewer)
+	return err
 }
 
 func normalizeViewer(viewer Viewer) Viewer {

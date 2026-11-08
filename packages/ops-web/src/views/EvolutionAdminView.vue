@@ -2,16 +2,15 @@
 import { computed, onMounted, ref } from 'vue'
 import Dialog from 'primevue/dialog'
 
+import { projectPreviewURL } from '@/api/admin'
 import { useEvolutionAdminStore } from '@/stores/evolution'
-import type { EvolutionRow, EvolutionTask, EvolutionVersion } from '@/types/evolution'
+import type { EvolutionRow, EvolutionVersion } from '@/types/evolution'
 import {
-  EVOLUTION_PREVIEW_BASE,
-  buildEvolutionPreviewUrl,
+  evolutionProjectID,
   formatRelative,
   formatShortTime,
   initialOf,
   kindLabel,
-  nextTaskStatus,
   roleLabel,
   statusLabel,
 } from '@/utils/evolution'
@@ -27,15 +26,9 @@ const conversationVisible = ref(false)
 const conversationVersion = ref<EvolutionVersion | null>(null)
 const replyText = ref('')
 const sending = ref(false)
-const actionTaskId = ref('')
 
-const previewBase = computed(
-  () => import.meta.env.VITE_EVOLUTION_PREVIEW_URL || EVOLUTION_PREVIEW_BASE,
-)
 const previewUrl = computed(() =>
-  previewVersion.value
-    ? buildEvolutionPreviewUrl(previewBase.value, previewVersion.value, '运营预览')
-    : '',
+  previewVersion.value ? projectPreviewURL(evolutionProjectID(previewVersion.value.userId)) : '',
 )
 const filteredRows = computed(() => {
   const text = keyword.value.trim().toLowerCase()
@@ -92,36 +85,6 @@ async function sendReply(): Promise<void> {
   }
 }
 
-async function addToPlan(row: EvolutionRow): Promise<void> {
-  actionTaskId.value = row.version.id
-  notice.value = ''
-  try {
-    await store.submitTask(row.version.id)
-    notice.value = `已将 ${row.version.userName} 的 ${row.version.label} 加入编码计划`
-  } catch {
-    notice.value = store.error || '加入编码计划失败'
-  } finally {
-    actionTaskId.value = ''
-  }
-}
-
-async function advance(task: EvolutionTask): Promise<void> {
-  actionTaskId.value = task.id
-  notice.value = ''
-  try {
-    await store.advanceTask(task.id, nextTaskStatus(task.status))
-    notice.value = '任务状态已推进'
-  } catch {
-    notice.value = store.error || '推进任务失败'
-  } finally {
-    actionTaskId.value = ''
-  }
-}
-
-function canAdvance(task: EvolutionTask): boolean {
-  return task.status !== 'released' && task.status !== 'failed'
-}
-
 onMounted(async () => {
   try {
     await store.init()
@@ -151,10 +114,6 @@ onMounted(async () => {
           <strong>{{ store.stats.pendingProposals }}</strong>
           <span>待处理提议</span>
         </div>
-        <div class="evo-stat">
-          <strong>{{ store.stats.tasks }}</strong>
-          <span>编码计划</span>
-        </div>
       </div>
     </header>
 
@@ -173,8 +132,6 @@ onMounted(async () => {
             <option value="all">全部状态</option>
             <option value="preview">待确认</option>
             <option value="accepted">已采纳</option>
-            <option value="submitted">已提交</option>
-            <option value="released">已发布</option>
           </select>
         </div>
       </header>
@@ -229,14 +186,6 @@ onMounted(async () => {
                   <button type="button" class="evo-ghost" @click="openConversation(row)">
                     对话
                   </button>
-                  <button
-                    type="button"
-                    class="evo-primary"
-                    :disabled="Boolean(row.task) || actionTaskId === row.version.id"
-                    @click="addToPlan(row)"
-                  >
-                    {{ row.task ? '已在编码计划' : '添加到编码计划' }}
-                  </button>
                 </div>
               </td>
             </tr>
@@ -246,61 +195,6 @@ onMounted(async () => {
           暂无提交变更。用户提交提议后会出现在这里。
         </p>
         <p v-if="store.loading" class="evo-empty">加载中...</p>
-      </div>
-    </section>
-
-    <section class="evo-panel">
-      <header class="evo-panel-head">
-        <div class="evo-panel-title">
-          <strong>编码计划</strong>
-          <span>{{ store.sortedTasks.length }} 个任务 · CI/CD 暂未接入，状态由运营手动推进</span>
-        </div>
-      </header>
-      <div class="evo-table-wrap">
-        <table class="evo-table">
-          <thead>
-            <tr>
-              <th>版本</th>
-              <th>用户</th>
-              <th>对话摘要</th>
-              <th>状态</th>
-              <th>创建时间</th>
-              <th class="right">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="task in store.sortedTasks" :key="task.id">
-              <td>
-                <strong class="evo-version-label">{{ task.versionLabel }}</strong>
-              </td>
-              <td>{{ task.userName }}</td>
-              <td>
-                <p class="evo-summary">{{ task.chatSummary }}</p>
-              </td>
-              <td>
-                <span class="evo-status" :class="task.status">{{ statusLabel(task.status) }}</span>
-              </td>
-              <td>
-                <time class="evo-time">{{ formatShortTime(task.createdAt) }}</time>
-              </td>
-              <td class="right">
-                <button
-                  v-if="canAdvance(task)"
-                  type="button"
-                  class="evo-ghost"
-                  :disabled="actionTaskId === task.id"
-                  @click="advance(task)"
-                >
-                  推进到 {{ statusLabel(nextTaskStatus(task.status)) }}
-                </button>
-                <span v-else class="evo-time">已结束</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <p v-if="!store.sortedTasks.length && !store.loading" class="evo-empty">
-          还没有编码计划任务。
-        </p>
       </div>
     </section>
 
