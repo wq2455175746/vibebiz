@@ -8,7 +8,6 @@ import { useCardStore } from '@/stores/card'
 import type { CardContentType } from '@/types'
 import { CARD_TYPE_LABELS } from '@/utils/card'
 import { renderMarkdown } from '@/utils/markdown'
-import { PREVIEW_SANDBOX } from '@/utils/preview'
 import '@/styles/card.css'
 
 const route = useRoute()
@@ -78,7 +77,6 @@ const pdfUrl = useBlobUrl(pdfSource)
           v-else-if="type === 'pdf'"
           :src="pdfUrl"
           title="PDF 预览"
-          :sandbox="PREVIEW_SANDBOX"
           referrerpolicy="no-referrer"
         />
         <video v-else-if="type === 'video'" :src="mediaSource" controls playsinline />

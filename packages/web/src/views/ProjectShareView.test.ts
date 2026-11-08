@@ -74,11 +74,9 @@ describe('ProjectShareView', () => {
     expect(sandbox).toContain('allow-scripts')
   })
 
-  it('uses a pdf-viewer-compatible sandbox for pdf iframes', () => {
+  it('does not sandbox pdf iframes so Chrome can render them', () => {
     mount('pdf')
-    const sandbox = host.querySelector('iframe')?.getAttribute('sandbox') ?? ''
-    expect(sandbox).toContain('allow-same-origin')
-    expect(sandbox).toContain('allow-scripts')
+    expect(host.querySelector('iframe')?.getAttribute('sandbox')).toBeNull()
   })
 
   it('renders an image', () => {

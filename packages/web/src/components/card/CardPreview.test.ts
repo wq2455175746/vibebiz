@@ -47,7 +47,7 @@ describe('CardPreview', () => {
     expect(host.querySelector('iframe')?.getAttribute('src')?.startsWith('blob:')).toBe(true)
   })
 
-  it('uses a pdf-viewer-compatible sandbox for uploaded pdf previews', () => {
+  it('does not sandbox uploaded pdf previews so Chrome can render them', () => {
     mount({
       large: true,
       items: [],
@@ -59,8 +59,6 @@ describe('CardPreview', () => {
         dataUrl: 'data:application/pdf;base64,AA==',
       },
     })
-    const sandbox = host.querySelector('iframe')?.getAttribute('sandbox') ?? ''
-    expect(sandbox).toContain('allow-same-origin')
-    expect(sandbox).toContain('allow-scripts')
+    expect(host.querySelector('iframe')?.getAttribute('sandbox')).toBeNull()
   })
 })
