@@ -70,7 +70,6 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 		meAPI.GET("/published-projects", publishApp.ListPublished)
 	}
 	if channelPackages != nil {
-		meAPI.GET("/channel-guides", channelPackages.Guides)
 		api.GET("/channel-guides", channelPackages.Guides, authn.RequireUser)
 	}
 	meAPI.PUT("/profile", settingsHandler.UpdateProfile)

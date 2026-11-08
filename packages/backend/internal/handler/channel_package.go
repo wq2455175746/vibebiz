@@ -236,12 +236,13 @@ func confinedPackagePath(packagesDir, projectID string, item *daomodel.ProjectCh
 
 func channelPackageError(c echo.Context, err error) error {
 	switch {
-	case errors.Is(err, channelpkg.ErrInvalidChannel), errors.Is(err, channelpkg.ErrInvalidSourceType):
+	case errors.Is(err, channelpkg.ErrInvalidChannel), errors.Is(err, channelpkg.ErrInvalidSourceType), errors.Is(err, channelpkg.ErrInvalidSource):
 		return response.Fail(c, http.StatusBadRequest, 40001, err.Error())
 	case errors.Is(err, channelpkg.ErrUnsupported):
 		return response.Fail(c, http.StatusConflict, 40901, err.Error())
 	case errors.Is(err, channelpkg.ErrSourceNotFound):
 		return response.Fail(c, http.StatusNotFound, 40410, "channel source not found")
+	// Unsafe archives are input-validation failures but the plan maps them to the payload-size status.
 	case errors.Is(err, channelpkg.ErrPackageTooLarge), errors.Is(err, core.ErrArchiveTooLarge), errors.Is(err, core.ErrUnsafeArchive):
 		return response.Fail(c, http.StatusRequestEntityTooLarge, 41301, err.Error())
 	case errors.Is(err, channelpkg.ErrBusy):
