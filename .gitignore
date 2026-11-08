@@ -43,3 +43,5 @@ deployment/docker/workspaces/
 deployment/docker/skills/
 deployment/docker/channel-packages/
 /node_modules/
+
+.worktrees/
