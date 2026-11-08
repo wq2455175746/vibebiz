@@ -21,4 +21,8 @@ describe('channel package helpers', () => {
     expect(levelLabel('A')).toContain('直接兼容')
     expect(levelLabel('C')).toContain('需要改造')
   })
+
+  it('returns no level label when the backend omits the level', () => {
+    expect(levelLabel('')).toBe('')
+  })
 })

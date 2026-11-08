@@ -89,26 +89,30 @@ function openURL() {
         </button>
       </header>
 
-      <div class="publish-tabs">
+      <div class="publish-tabs" role="tablist" aria-label="发布方式">
         <button
           type="button"
+          role="tab"
           class="publish-tab"
           :class="{ active: tab === 'share' }"
+          :aria-selected="tab === 'share'"
           @click="tab = 'share'"
         >
           分享页
         </button>
         <button
           type="button"
+          role="tab"
           class="publish-tab"
           :class="{ active: tab === 'channel' }"
+          :aria-selected="tab === 'channel'"
           @click="tab = 'channel'"
         >
           渠道包
         </button>
       </div>
 
-      <template v-if="tab === 'share'">
+      <div v-show="tab === 'share'" class="publish-share-pane" role="tabpanel" aria-label="分享页">
         <template v-if="result">
           <p class="publish-success">分享页已生成，手机打开链接即可体验。</p>
           <div class="publish-link">
@@ -160,9 +164,14 @@ function openURL() {
             </button>
           </div>
         </template>
-      </template>
+      </div>
 
-      <div v-else class="publish-channel-pane">
+      <div
+        v-show="tab === 'channel'"
+        class="publish-channel-pane"
+        role="tabpanel"
+        aria-label="渠道包"
+      >
         <ChannelPackagePanel :project-id="projectId" />
         <div class="publish-actions">
           <button type="button" class="publish-secondary" @click="emit('close')">关闭</button>
@@ -203,6 +212,7 @@ function openURL() {
   color: var(--ink);
 }
 
+.publish-share-pane,
 .publish-channel-pane {
   display: flex;
   flex-direction: column;

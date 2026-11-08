@@ -93,6 +93,7 @@ export interface PublishedProject {
 
 export type ChannelPackageChannel = 'wechat_minigame' | 'douyin_minigame' | 'steam_desktop'
 export type ChannelPackageSourceType = 'html5' | 'engine_artifact'
+export type ChannelPackageLevel = 'A' | 'B' | 'C' | ''
 
 export interface ChannelPackage {
   id: string
@@ -101,7 +102,7 @@ export interface ChannelPackage {
   status: 'building' | 'ready' | 'failed'
   version: string
   fileSizeBytes: number
-  level: 'A' | 'B' | 'C'
+  level: ChannelPackageLevel
   warnings: string[]
   errorMessage: string
   createdAt: string

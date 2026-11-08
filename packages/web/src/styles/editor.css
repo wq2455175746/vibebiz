@@ -1493,6 +1493,11 @@ button.file-row {
   color: var(--ink);
 }
 
+.channel-package-level.level-failed {
+  border-color: var(--line-strong);
+  color: var(--muted);
+}
+
 .channel-package-warnings {
   margin: 0;
   padding-left: 18px;

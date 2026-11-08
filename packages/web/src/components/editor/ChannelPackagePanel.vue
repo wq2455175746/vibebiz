@@ -93,15 +93,12 @@ async function download(item: ChannelPackage) {
   try {
     const result = await downloadChannelPackage(props.projectId, item.id)
     const url = URL.createObjectURL(result.blob)
-    try {
-      const link = document.createElement('a')
-      link.href = url
-      link.download = result.filename
-      link.rel = 'noopener'
-      link.click()
-    } finally {
-      URL.revokeObjectURL(url)
-    }
+    const link = document.createElement('a')
+    link.href = url
+    link.download = result.filename
+    link.rel = 'noopener'
+    link.click()
+    window.setTimeout(() => URL.revokeObjectURL(url), 0)
   } catch (err) {
     error.value = errorMessage(err, '下载失败')
   }
@@ -126,6 +123,7 @@ onMounted(load)
           type="button"
           class="channel-package-chip"
           :class="{ active: channel === item.value }"
+          :aria-pressed="channel === item.value"
           @click="channel = item.value"
         >
           {{ item.label }}
@@ -140,6 +138,7 @@ onMounted(load)
           type="button"
           class="channel-package-chip"
           :class="{ active: sourceType === 'html5' }"
+          :aria-pressed="sourceType === 'html5'"
           @click="sourceType = 'html5'"
         >
           当前工作区
@@ -148,6 +147,7 @@ onMounted(load)
           type="button"
           class="channel-package-chip"
           :class="{ active: sourceType === 'engine_artifact' }"
+          :aria-pressed="sourceType === 'engine_artifact'"
           @click="sourceType = 'engine_artifact'"
         >
           上传引擎成品
@@ -194,7 +194,14 @@ onMounted(load)
               {{ item.sourceType === 'html5' ? '当前工作区' : '引擎成品' }} · v{{ item.version }}
             </small>
           </div>
-          <span class="channel-package-level" :class="`level-${item.level.toLowerCase()}`">
+          <span v-if="item.status === 'failed'" class="channel-package-level level-failed">
+            生成失败
+          </span>
+          <span
+            v-else-if="item.level"
+            class="channel-package-level"
+            :class="`level-${item.level.toLowerCase()}`"
+          >
             {{ levelLabel(item.level) }}
           </span>
         </header>
@@ -205,7 +212,9 @@ onMounted(load)
           <li v-for="(warning, index) in item.warnings" :key="index">{{ warning }}</li>
         </ul>
         <footer class="channel-package-item-foot">
-          <span class="channel-package-size">{{ formatBytes(item.fileSizeBytes) }}</span>
+          <span class="channel-package-size">
+            {{ item.status === 'ready' ? formatBytes(item.fileSizeBytes) : '' }}
+          </span>
           <button
             type="button"
             class="channel-package-link"
@@ -215,7 +224,12 @@ onMounted(load)
             <i class="pi pi-download" />
             下载
           </button>
-          <button type="button" class="channel-package-link" @click="openGuide(item)">
+          <button
+            v-if="item.guideUrl"
+            type="button"
+            class="channel-package-link"
+            @click="openGuide(item)"
+          >
             <i class="pi pi-book" />
             查看指引
           </button>
