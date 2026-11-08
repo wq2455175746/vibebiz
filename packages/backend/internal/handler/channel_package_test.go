@@ -124,22 +124,6 @@ func TestChannelPackageGenerateRequiresWorkspaceMember(t *testing.T) {
 	}
 }
 
-func TestChannelGuidesReturnsThreeChannels(t *testing.T) {
-	h := NewChannelPackageHandler(nil, nil)
-	e := echo.New()
-	routeWithSession(e, http.MethodGet, "/cp/api/v1/channel-guides", h.Guides, sessionForTest(3))
-	rec := httptest.NewRecorder()
-	e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/cp/api/v1/channel-guides", nil))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
-	}
-	for _, channel := range []string{"wechat_minigame", "douyin_minigame", "steam_desktop"} {
-		if !strings.Contains(rec.Body.String(), channel) {
-			t.Errorf("body missing channel %s: %s", channel, rec.Body.String())
-		}
-	}
-}
-
 func TestChannelPackageDownloadRejectsOtherWorkspace(t *testing.T) {
 	project := &model.Project{ID: "p1", WorkspaceID: 3}
 	projects := store.NewMemoryProjectStore()
