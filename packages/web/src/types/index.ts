@@ -352,3 +352,42 @@ export interface ScheduledTask {
   lastError: string
   runCount: number
 }
+
+export type CardContentType = 'html' | 'image' | 'pdf' | 'video' | 'document'
+
+export interface CardProjectItem {
+  projectId: string
+  name: string
+  description: string
+  coverUrl: string | null
+  type: CardContentType
+  shareUrl: string
+  previewUrl?: string
+  addedAt: string
+}
+
+export type CardFeatured =
+  | { kind: 'project'; projectId: string }
+  | {
+      kind: 'file'
+      fileType: 'pdf' | 'image'
+      name: string
+      size: number
+      dataUrl: string
+    }
+  | null
+
+export interface BusinessCard {
+  id: string
+  ownerUserId: number | null
+  ownerName: string
+  avatarUrl: string | null
+  headline: string
+  tags: string[]
+  items: CardProjectItem[]
+  featured: CardFeatured
+  published: boolean
+  commentCount: number
+  createdAt: string
+  updatedAt: string
+}
