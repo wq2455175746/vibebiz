@@ -30,20 +30,24 @@ function open(): void {
   align-items: center;
   gap: 10px;
   padding: 10px 16px 10px 12px;
-  background: var(--ink);
-  border: 1px solid var(--ink);
+  background: rgb(31 41 55 / 30%);
+  border: 1px solid rgb(31 41 55 / 18%);
   border-radius: 999px;
-  box-shadow: 0 12px 30px rgb(17 17 17 / 18%);
-  color: var(--surface);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 10px 24px rgb(17 17 17 / 8%);
+  color: rgb(255 255 255 / 94%);
   cursor: pointer;
   transition:
+    background 160ms ease,
     transform 160ms ease,
     box-shadow 160ms ease;
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .evolution-entry:hover {
+  background: rgb(31 41 55 / 45%);
+  box-shadow: 0 14px 30px rgb(17 17 17 / 14%);
   transform: translateY(-2px);
-  box-shadow: 0 16px 36px rgb(17 17 17 / 24%);
 }
 
 .evolution-entry-icon {
@@ -52,8 +56,9 @@ function open(): void {
   justify-content: center;
   width: 30px;
   height: 30px;
-  background: var(--blue);
+  background: rgb(255 255 255 / 18%);
   border-radius: 999px;
+  color: rgb(255 255 255 / 96%);
   font-size: 13px;
 }
 
@@ -71,7 +76,7 @@ function open(): void {
 }
 
 .evolution-entry-text small {
-  color: rgb(255 255 255 / 68%);
+  color: rgb(255 255 255 / 62%);
   font-size: 11px;
 }
 </style>

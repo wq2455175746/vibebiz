@@ -32,6 +32,29 @@ func TestAnalyzeHTMLClassifiesCanvasGame(t *testing.T) {
 	}
 }
 
+func TestAnalyzeHTMLClassifiesInteractiveCanvasGameAsB(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "index.html", `<canvas id="game"></canvas><script src="game.js"></script>`)
+	write(t, dir, "game.js", `
+		const canvas = document.getElementById('game');
+		const ctx = canvas.getContext('2d');
+		localStorage.setItem('best', '1');
+		window.addEventListener('keydown', () => {});
+		document.getElementById('pause').addEventListener('click', () => {});
+		document.querySelectorAll('.pad-button').forEach((b) => b.addEventListener('click', () => {}));
+	`)
+	report, err := AnalyzeHTML(dir, "index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Level != LevelB {
+		t.Fatalf("level = %s, want B; report=%+v", report.Level, report)
+	}
+	if !strings.Contains(strings.Join(report.Warnings, ","), "dom_query_selectorall_limited") {
+		t.Fatalf("warnings = %v, want dom_query_selectorall_limited", report.Warnings)
+	}
+}
+
 func TestAnalyzeHTMLClassifiesDomGameAsC(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "index.html", `<div id="app"></div><script src="app.js"></script>`)

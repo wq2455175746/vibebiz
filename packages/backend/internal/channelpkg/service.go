@@ -152,9 +152,6 @@ func (s *Service) Generate(ctx context.Context, project *model.Project, input Ge
 		return nil, s.fail(ctx, item, fmt.Errorf("%w: HTML5 source exceeds limits", ErrPackageTooLarge))
 	}
 
-	if info.Report.Level == core.LevelC {
-		return nil, s.fail(ctx, item, ErrUnsupported)
-	}
 	report := adapter.Validate(info)
 	if report.Level == core.LevelC || len(report.Blockers) > 0 {
 		return nil, s.fail(ctx, item, ErrUnsupported)

@@ -50,6 +50,11 @@ func (a *Adapter) Validate(source core.SourceInfo) core.Report {
 			report.Warnings = appendUnique(report.Warnings, "native_build_detected")
 		}
 	}
+	if report.Level == core.LevelC {
+		report.Level = core.LevelB
+		report.Blockers = nil
+		report.Warnings = appendUnique(report.Warnings, "dom_supported_on_desktop")
+	}
 	return report
 }
 

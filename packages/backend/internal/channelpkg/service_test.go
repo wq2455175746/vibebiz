@@ -222,6 +222,22 @@ func TestGenerateRejectsLevelC(t *testing.T) {
 	}
 }
 
+func TestGenerateUsesAdapterReportForCompatibility(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "p1")
+	write(t, dir, "index.html", `<div id="app"></div><script src="app.js"></script>`)
+	write(t, dir, "app.js", `document.querySelector('#app').innerHTML = '<b>x</b>'; document.querySelectorAll('div');`)
+	repo := newFakeRepo()
+	svc := newTestService(repo, root, fakeAdapter{level: core.LevelB})
+	item, err := svc.Generate(context.Background(), &model.Project{ID: "p1", WorkspaceID: 3}, GenerateInput{Channel: core.ChannelWeChat, SourceType: core.SourceHTML5})
+	if err != nil {
+		t.Fatalf("err = %v, want adapter report to allow source", err)
+	}
+	if item.Status != daomodel.ChannelPackageStatusReady {
+		t.Fatalf("status = %s", item.Status)
+	}
+}
+
 func TestGenerateRejectsAdapterBlockers(t *testing.T) {
 	root := t.TempDir()
 	write(t, filepath.Join(root, "p1"), "index.html", `<canvas></canvas>`)

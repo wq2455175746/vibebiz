@@ -110,6 +110,42 @@ func TestSteamBuildDetectsNativeExe(t *testing.T) {
 	}
 }
 
+func TestSteamValidateAllowsDomHeavySource(t *testing.T) {
+	report := New().Validate(core.SourceInfo{
+		Dir: t.TempDir(), Entry: "index.html",
+		Report: core.Report{Level: core.LevelC, Blockers: []string{"dom_dependency"}},
+	})
+	if report.Level == core.LevelC || len(report.Blockers) > 0 {
+		t.Fatalf("report = %+v, want desktop-compatible", report)
+	}
+	found := false
+	for _, warning := range report.Warnings {
+		if warning == "dom_supported_on_desktop" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("warnings = %v, want dom_supported_on_desktop", report.Warnings)
+	}
+}
+
+func TestSteamBuildDomHeavyHTML(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "index.html", `<div id="app"></div><script src="app.js"></script>`)
+	write(t, dir, "app.js", `document.querySelector('#app').innerHTML = '<b>x</b>';`)
+	var buf bytes.Buffer
+	_, err := New().Build(context.Background(), core.SourceInfo{
+		Dir: dir, Entry: "index.html", Version: "v1",
+		Report: core.Report{Level: core.LevelC, Blockers: []string{"dom_dependency"}},
+	}, &buf)
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	if buf.Len() == 0 {
+		t.Fatal("expected non-empty package")
+	}
+}
+
 func TestSteamBuildNativeExeSkipsElectronShell(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "game.exe", "MZ")

@@ -12,16 +12,17 @@ var ErrInvalidSource = errors.New("invalid channel package source")
 
 const maxAnalyzeFileSize = 2 << 20
 
-// countDOMDependencies counts bytes that strongly couple the source to the DOM.
+// countDOMDependencies counts APIs the mini-game adapter cannot emulate well.
+// addEventListener, localStorage and getElementById are supported by the shim,
+// so they must not push an otherwise canvas-first game to Level C.
 func countDOMDependencies(text string) int {
 	queryAll := strings.Count(text, "document.querySelectorAll")
 	withoutQueryAll := strings.ReplaceAll(text, "document.querySelectorAll", "")
 	return queryAll +
 		strings.Count(withoutQueryAll, "document.querySelector") +
-		strings.Count(text, "innerHTML") +
+		strings.Count(text, "innerHTML")*2 +
 		strings.Count(text, "document.createElement") +
-		strings.Count(text, "addEventListener") +
-		strings.Count(text, "localStorage")
+		strings.Count(text, "document.body")
 }
 
 // AnalyzeHTML classifies an HTML5 source by how portable it is to mini-game channels.
@@ -44,6 +45,7 @@ func AnalyzeHTML(dir, entry string) (Report, error) {
 	var domCount int
 	var externalURL bool
 	var networkFetch bool
+	var querySelectorAll bool
 
 	err := filepath.WalkDir(dir, func(current string, d os.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -90,6 +92,9 @@ func AnalyzeHTML(dir, entry string) (Report, error) {
 			canvas = true
 		}
 		domCount += countDOMDependencies(text)
+		if strings.Contains(text, "document.querySelectorAll") {
+			querySelectorAll = true
+		}
 		if strings.Count(text, "http://") > 0 || strings.Count(text, "https://") > 0 {
 			externalURL = true
 		}
@@ -108,6 +113,9 @@ func AnalyzeHTML(dir, entry string) (Report, error) {
 	}
 	if networkFetch {
 		report.Warnings = append(report.Warnings, "network_fetch")
+	}
+	if querySelectorAll {
+		report.Warnings = append(report.Warnings, "dom_query_selectorall_limited")
 	}
 	if canvas && domCount <= 2 {
 		report.Level = LevelB
