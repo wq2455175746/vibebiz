@@ -29,7 +29,7 @@ export const DEMO_DOCUMENT = [
 
 export const DEMO_HTML = [
   '<!doctype html><html><head><meta charset="utf-8">',
-  '<style>body{margin:0;height:100vh;display:grid;place-items:center;background:#111;color:#fff;font-family:sans-serif}',
+  '<style>body{margin:0;height:100vh;display:grid;place-items:center;background:#111111;color:#fff;font-family:sans-serif}',
   'button{padding:12px 24px;border:0;border-radius:999px;background:#2563eb;color:#fff;font-size:16px;cursor:pointer}</style>',
   '</head><body><div><h1>点击小游戏</h1>',
   '<button id="b">点我 +1</button><p id="s">得分：0</p></div>',
