@@ -278,6 +278,23 @@
   border-radius: 8px;
 }
 
+.card-tile-preview .card-preview-pdf {
+  height: 100%;
+  gap: 0;
+  padding: 0;
+}
+
+.card-tile-preview .card-preview-pdf iframe {
+  height: 100%;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.card-tile-preview .card-preview-pdf span {
+  display: none;
+}
+
 .card-preview-file,
 .card-preview-empty {
   display: flex;

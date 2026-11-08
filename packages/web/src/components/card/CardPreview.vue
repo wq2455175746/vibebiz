@@ -35,7 +35,7 @@ const pdfUrl = useBlobUrl(pdfSource)
 <template>
   <div class="card-preview" :class="{ large }">
     <template v-if="resolved">
-      <div v-if="large && resolved.kind === 'pdf'" class="card-preview-pdf">
+      <div v-if="resolved.kind === 'pdf'" class="card-preview-pdf">
         <iframe :src="pdfUrl" title="PDF 预览" referrerpolicy="no-referrer" />
         <span>{{ resolved.name }}</span>
       </div>

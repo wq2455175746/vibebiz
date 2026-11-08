@@ -47,6 +47,24 @@ describe('CardPreview', () => {
     expect(host.querySelector('iframe')?.getAttribute('src')?.startsWith('blob:')).toBe(true)
   })
 
+  it('embeds the pdf viewer even in compact discover cards', () => {
+    mount({
+      items: [],
+      featured: {
+        kind: 'file',
+        fileType: 'pdf',
+        name: 'resume.pdf',
+        size: 1024,
+        dataUrl: 'data:application/pdf;base64,JVBERi0xLjQK',
+      },
+    })
+    const frame = host.querySelector('iframe')
+    expect(frame).not.toBeNull()
+    expect(frame?.getAttribute('src')?.startsWith('blob:')).toBe(true)
+    expect(frame?.getAttribute('sandbox')).toBeNull()
+    expect(host.querySelector('.card-preview-file')).toBeNull()
+  })
+
   it('does not sandbox uploaded pdf previews so Chrome can render them', () => {
     mount({
       large: true,
