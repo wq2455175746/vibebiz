@@ -5,7 +5,10 @@ import CardPreview from './CardPreview.vue'
 import type { BusinessCard, CardFeatured } from '@/types'
 
 const props = defineProps<{ card: BusinessCard }>()
-const emit = defineEmits<{ open: [id: string] }>()
+const emit = defineEmits<{
+  open: [id: string]
+  'open-featured': [id: string]
+}>()
 const initial = computed(() => (props.card.ownerName || '?').charAt(0).toUpperCase())
 
 const previewFeatured = computed<CardFeatured>(() => {
@@ -13,12 +16,22 @@ const previewFeatured = computed<CardFeatured>(() => {
   const first = props.card.items[0]
   return first ? { kind: 'project', projectId: first.projectId } : null
 })
+
+const isFileFeatured = computed(() => props.card.featured?.kind === 'file')
 </script>
 
 <template>
   <article class="card-tile" @click="emit('open', card.id)">
-    <div class="card-tile-preview">
+    <div
+      class="card-tile-preview"
+      role="button"
+      tabindex="0"
+      aria-label="打开预览内容"
+      @click.stop="emit('open-featured', card.id)"
+      @keydown.enter.stop="emit('open-featured', card.id)"
+    >
       <CardPreview :featured="previewFeatured" :items="card.items" />
+      <span v-if="isFileFeatured" class="card-tile-preview-hit" aria-hidden="true" />
     </div>
     <div class="card-tile-body">
       <div class="card-tile-person">

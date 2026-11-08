@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import CardProjectItem from '@/components/card/CardProjectItem.vue'
 import CardPreview from '@/components/card/CardPreview.vue'
 import { useCardStore } from '@/stores/card'
+import type { CardFeatured } from '@/types'
+import { dataUrlToBlob } from '@/utils/media'
 import '@/styles/card.css'
 
 const route = useRoute()
+const router = useRouter()
 const store = useCardStore()
 const notice = ref('')
 const copied = ref(false)
@@ -17,6 +20,25 @@ store.load()
 const card = computed(() => store.getCardById(String(route.params.id ?? '')))
 const isOwnCard = computed(() => route.params.id === 'me')
 const shareUrl = computed(() => window.location.href)
+const effectiveFeatured = computed<CardFeatured>(() => {
+  if (!card.value) return null
+  if (card.value.featured) return card.value.featured
+  const first = card.value.items[0]
+  return first ? { kind: 'project', projectId: first.projectId } : null
+})
+const isFileFeatured = computed(() => card.value?.featured?.kind === 'file')
+
+function openFeatured() {
+  const featured = effectiveFeatured.value
+  if (!featured) return
+  if (featured.kind === 'project') {
+    void router.push({ name: 'project-share', params: { projectId: featured.projectId } })
+    return
+  }
+  const url = URL.createObjectURL(dataUrlToBlob(featured.dataUrl))
+  window.open(url, '_blank', 'noopener,noreferrer')
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+}
 
 function openProject(projectId: string) {
   window.open(`/share/project/${encodeURIComponent(projectId)}`, '_blank', 'noopener,noreferrer')
@@ -65,8 +87,16 @@ async function copyLink() {
 
       <p v-if="notice" class="share-notice">{{ notice }}</p>
 
-      <section class="share-featured">
+      <section
+        class="share-featured"
+        role="button"
+        tabindex="0"
+        aria-label="打开预览内容"
+        @click="openFeatured"
+        @keydown.enter="openFeatured"
+      >
         <CardPreview :featured="card.featured" :items="card.items" large />
+        <span v-if="isFileFeatured" class="share-featured-hit" aria-hidden="true" />
       </section>
 
       <section class="share-projects">

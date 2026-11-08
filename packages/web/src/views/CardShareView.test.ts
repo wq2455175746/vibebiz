@@ -5,8 +5,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import CardShareView from './CardShareView.vue'
 
 const routeState = vi.hoisted(() => ({ id: 'demo-1' }))
+const routerState = vi.hoisted(() => ({ push: vi.fn() }))
 
-vi.mock('vue-router', () => ({ useRoute: () => ({ params: { id: routeState.id } }) }))
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ params: { id: routeState.id } }),
+  useRouter: () => ({ push: routerState.push }),
+}))
 
 vi.mock('@/stores/card', () => ({
   useCardStore: () => ({
@@ -54,6 +58,7 @@ afterEach(() => {
   app = null
   host?.remove()
   routeState.id = 'demo-1'
+  routerState.push.mockReset()
 })
 
 describe('CardShareView', () => {
@@ -69,6 +74,15 @@ describe('CardShareView', () => {
     mount()
     expect(host.querySelector<HTMLButtonElement>('.card-social-comment')?.disabled).toBe(true)
     expect(host.querySelector<HTMLButtonElement>('.card-social-message')?.disabled).toBe(true)
+  })
+
+  it('opens the featured project from the main preview', () => {
+    mount()
+    host.querySelector<HTMLElement>('.share-featured')?.click()
+    expect(routerState.push).toHaveBeenCalledWith({
+      name: 'project-share',
+      params: { projectId: 'demo-1-p1' },
+    })
   })
 
   it('does not render remove buttons on the public share page', () => {

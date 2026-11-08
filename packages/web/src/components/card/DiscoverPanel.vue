@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 import CardTile from './CardTile.vue'
 import { useCardStore } from '@/stores/card'
-import type { BusinessCard } from '@/types'
+import type { BusinessCard, CardFeatured } from '@/types'
+import { dataUrlToBlob } from '@/utils/media'
 import '@/styles/card.css'
 
 const store = useCardStore()
+const router = useRouter()
 const cards = ref<BusinessCard[]>([])
 const page = ref(1)
 const loading = ref(false)
@@ -31,7 +34,27 @@ async function loadMore() {
 }
 
 function open(id: string) {
-  window.open(`/share/card/${encodeURIComponent(id)}`, '_blank', 'noopener,noreferrer')
+  void router.push({ name: 'card-share', params: { id } })
+}
+
+function openFeatured(id: string) {
+  const card = cards.value.find((item) => item.id === id)
+  if (!card) return
+  const featured: CardFeatured =
+    card.featured ??
+    (card.items[0] ? { kind: 'project', projectId: card.items[0].projectId } : null)
+  if (!featured) return
+  if (featured.kind === 'project') {
+    void router.push({ name: 'project-share', params: { projectId: featured.projectId } })
+    return
+  }
+  openFile(featured)
+}
+
+function openFile(file: Extract<CardFeatured, { kind: 'file' }>) {
+  const url = URL.createObjectURL(dataUrlToBlob(file.dataUrl))
+  window.open(url, '_blank', 'noopener,noreferrer')
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }
 
 const sentinel = ref<HTMLElement | null>(null)
@@ -65,7 +88,13 @@ onBeforeUnmount(() => observer?.disconnect())
     <p v-if="!loading && cards.length === 0" class="card-empty">还没有人发布名片。</p>
 
     <div class="discover-grid">
-      <CardTile v-for="card in cards" :key="card.id" :card="card" @open="open" />
+      <CardTile
+        v-for="card in cards"
+        :key="card.id"
+        :card="card"
+        @open="open"
+        @open-featured="openFeatured"
+      />
     </div>
 
     <div ref="sentinel" class="discover-sentinel" />

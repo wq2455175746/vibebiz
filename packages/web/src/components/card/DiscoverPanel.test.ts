@@ -8,6 +8,8 @@ vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({ user: { id: 7, username: 'alice', avatarUrl: null } }),
 }))
 
+vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
+
 function memoryStorage() {
   const values = new Map<string, string>()
   return {

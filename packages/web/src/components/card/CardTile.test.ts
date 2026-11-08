@@ -1,5 +1,5 @@
 import { createApp, type App } from 'vue'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import CardTile from './CardTile.vue'
 import { mockCards } from '@/mocks/cards'
@@ -19,10 +19,10 @@ const item: CardProjectItem = {
   addedAt: '2026-11-08T00:00:00.000Z',
 }
 
-function mount(card: BusinessCard) {
+function mount(card: BusinessCard, listeners: Record<string, unknown> = {}) {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(CardTile, { card })
+  app = createApp(CardTile, { card, ...listeners })
   app.mount(host)
 }
 
@@ -52,6 +52,28 @@ describe('CardTile', () => {
     expect(host.textContent).toContain('林一')
     expect(host.textContent).toContain('前端工程师')
     expect(host.textContent).toContain('Vue')
+  })
+
+  it('opens the card from personal info and the content from the preview', () => {
+    const open = vi.fn()
+    const openFeatured = vi.fn()
+    mount(
+      {
+        ...emptyCard(),
+        id: 'demo-1',
+        ownerName: '林一',
+        items: [item],
+        featured: { kind: 'project', projectId: 'p1' },
+      },
+      { onOpen: open, onOpenFeatured: openFeatured },
+    )
+
+    host.querySelector<HTMLElement>('.card-tile-person')?.click()
+    expect(open).toHaveBeenCalledWith('demo-1')
+    expect(openFeatured).not.toHaveBeenCalled()
+
+    host.querySelector<HTMLElement>('.card-tile-preview')?.click()
+    expect(openFeatured).toHaveBeenCalledWith('demo-1')
   })
 
   it('ships distinct preview covers for the mock cards', () => {
