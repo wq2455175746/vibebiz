@@ -9,6 +9,7 @@ export const navItems: NavItem[] = [
   { name: 'overview', label: '概览', path: '/', icon: 'pi pi-chart-bar' },
   { name: 'users', label: '用户', path: '/users', icon: 'pi pi-users' },
   { name: 'projects', label: '项目', path: '/projects', icon: 'pi pi-folder' },
+  { name: 'cards', label: '名片管理', path: '/cards', icon: 'pi pi-address-book' },
   { name: 'leaderboard', label: '排行榜', path: '/leaderboard', icon: 'pi pi-trophy' },
   {
     name: 'evolution',

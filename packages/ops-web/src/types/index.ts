@@ -448,6 +448,17 @@ export interface ChannelGuideCreateInput extends ChannelGuideInput {
   channel: string
 }
 
+export interface AdminCardSummary {
+  id: string
+  ownerName: string
+  user: string
+  tags: string[]
+  projectCount: number
+  featuredType: string
+  hidden: boolean
+  updatedAt: string
+}
+
 export interface AdminScheduledTask {
   id: number
   userId: number
