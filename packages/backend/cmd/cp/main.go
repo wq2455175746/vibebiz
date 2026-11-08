@@ -284,6 +284,7 @@ func main() {
 			core.ChannelDouyin: douyin.New(),
 			core.ChannelSteam:  steam.New(),
 		},
+		Guides:      channelGuideService,
 		MaxBytes:    cfg.ChannelPackageMaxBytes,
 		Timeout:     cfg.ChannelPackageTimeout,
 		Concurrency: cfg.ChannelPackageConcurrency,

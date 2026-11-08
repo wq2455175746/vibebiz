@@ -169,7 +169,7 @@ func buildLevelA(ctx context.Context, zw *zip.Writer, source core.SourceInfo, wr
 			return err
 		}
 	}
-	return writeGuide(written)
+	return writeGuide(source, written)
 }
 
 func buildLevelB(ctx context.Context, zw *zip.Writer, source core.SourceInfo, written func(string, []byte) error, manifest *core.Manifest) error {
@@ -211,7 +211,7 @@ func buildLevelB(ctx context.Context, zw *zip.Writer, source core.SourceInfo, wr
 	if err := written("project.config.json", data); err != nil {
 		return err
 	}
-	return writeGuide(written)
+	return writeGuide(source, written)
 }
 
 func isLevelA(source core.SourceInfo) bool {
@@ -444,8 +444,11 @@ func projectConfig() map[string]any {
 	}
 }
 
-func writeGuide(written func(string, []byte) error) error {
-	guide := guides.Markdown(core.ChannelWeChat)
+func writeGuide(source core.SourceInfo, written func(string, []byte) error) error {
+	guide := source.Guide
+	if strings.TrimSpace(guide) == "" {
+		guide = guides.Markdown(core.ChannelWeChat)
+	}
 	if strings.TrimSpace(guide) == "" {
 		return errors.New("wechat: missing channel guide")
 	}
