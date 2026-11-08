@@ -10,6 +10,12 @@ export const navItems: NavItem[] = [
   { name: 'users', label: '用户', path: '/users', icon: 'pi pi-users' },
   { name: 'projects', label: '项目', path: '/projects', icon: 'pi pi-folder' },
   { name: 'leaderboard', label: '排行榜', path: '/leaderboard', icon: 'pi pi-trophy' },
+  {
+    name: 'evolution',
+    label: '集思进化',
+    path: '/evolution',
+    icon: 'pi pi-lightbulb',
+  },
   { name: 'sandboxes', label: '沙箱节点', path: '/sandboxes', icon: 'pi pi-server' },
   { name: 'models', label: '模型管理', path: '/models', icon: 'pi pi-box' },
   { name: 'skills', label: '技能', path: '/skills', icon: 'pi pi-sparkles' },
