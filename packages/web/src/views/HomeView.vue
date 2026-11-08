@@ -7,6 +7,8 @@ import { createProject, deleteProject, listProjects } from '@/api/projects'
 import { listScheduledTasks } from '@/api/scheduledTasks'
 import { listTemplates, useTemplate as createFromTemplate } from '@/api/templates'
 import { fetchChatStatus } from '@/api/chat'
+import DiscoverPanel from '@/components/card/DiscoverPanel.vue'
+import MyCardPanel from '@/components/card/MyCardPanel.vue'
 import ClonePanel from '@/components/clone/ClonePanel.vue'
 import EnterpriseRoadmap from '@/components/enterprise/EnterpriseRoadmap.vue'
 import EvolutionEntryButton from '@/components/evolution/EvolutionEntryButton.vue'
@@ -51,6 +53,8 @@ const isScheduledPage = computed(() => route.name === 'scheduled-tasks')
 const isEnterprisePage = computed(() => route.name === 'enterprise')
 const isClonesPage = computed(() => route.name === 'clones')
 const isLeaderboardPage = computed(() => route.name === 'leaderboard')
+const isMyCardPage = computed(() => route.name === 'my-card')
+const isDiscoverPage = computed(() => route.name === 'discover')
 const enterpriseProjects = computed(() =>
   projects.value.filter((project) => isEnterpriseProject(project)),
 )
@@ -327,6 +331,10 @@ onMounted(async () => {
       <ScheduledTasksPanel v-else-if="isScheduledPage" />
 
       <LeaderboardPanel v-else-if="isLeaderboardPage" />
+
+      <MyCardPanel v-else-if="isMyCardPage" />
+
+      <DiscoverPanel v-else-if="isDiscoverPage" />
 
       <div v-else class="home-main-inner">
         <HomeHero

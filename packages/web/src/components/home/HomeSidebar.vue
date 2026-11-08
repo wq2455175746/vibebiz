@@ -178,6 +178,7 @@ async function logout() {
 
 const navigation = [
   { label: '首页', icon: 'pi pi-home', route: 'home', visible: true },
+  { label: '发现', icon: 'pi pi-compass', route: 'discover', visible: true },
   { label: '排行榜', icon: 'pi pi-trophy', route: 'leaderboard', visible: true },
   { label: '企业工程开发', icon: 'pi pi-sitemap', route: 'enterprise', visible: true },
   { label: '克隆', icon: 'pi pi-copy', route: 'clones', visible: true },
@@ -314,6 +315,16 @@ function navigate(name: string) {
     </div>
 
     <div class="sidebar-footer">
+      <button
+        class="sidebar-card-entry"
+        type="button"
+        aria-label="我的名片"
+        :title="collapsed ? '我的名片' : undefined"
+        @click="navigate('my-card')"
+      >
+        <i class="pi pi-id-card" />
+        <span>我的名片</span>
+      </button>
       <div class="sidebar-tools">
         <a
           class="sidebar-icon-btn"
