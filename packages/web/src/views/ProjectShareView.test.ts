@@ -59,9 +59,11 @@ describe('ProjectShareView', () => {
     expect(sandbox).toContain('allow-scripts')
   })
 
-  it('sandboxes the pdf iframe', () => {
+  it('uses a pdf-viewer-compatible sandbox for pdf iframes', () => {
     mount('pdf')
-    expect(host.querySelector('iframe')?.getAttribute('sandbox')).toBe('')
+    const sandbox = host.querySelector('iframe')?.getAttribute('sandbox') ?? ''
+    expect(sandbox).toContain('allow-same-origin')
+    expect(sandbox).toContain('allow-scripts')
   })
 
   it('renders an image', () => {

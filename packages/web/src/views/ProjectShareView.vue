@@ -7,6 +7,7 @@ import { useCardStore } from '@/stores/card'
 import type { CardContentType } from '@/types'
 import { CARD_TYPE_LABELS } from '@/utils/card'
 import { renderMarkdown } from '@/utils/markdown'
+import { PREVIEW_SANDBOX } from '@/utils/preview'
 import '@/styles/card.css'
 
 const route = useRoute()
@@ -70,7 +71,13 @@ const documentHTML = computed(() => renderMarkdown(item.value?.previewUrl || DEM
           sandbox="allow-scripts allow-forms"
         />
         <img v-else-if="type === 'image'" :src="mediaSource" :alt="item.name" />
-        <iframe v-else-if="type === 'pdf'" :src="mediaSource" title="PDF 预览" sandbox="" />
+        <iframe
+          v-else-if="type === 'pdf'"
+          :src="mediaSource"
+          title="PDF 预览"
+          :sandbox="PREVIEW_SANDBOX"
+          referrerpolicy="no-referrer"
+        />
         <video v-else-if="type === 'video'" :src="mediaSource" controls playsinline />
         <article v-else class="share-document" v-html="documentHTML" />
       </section>
