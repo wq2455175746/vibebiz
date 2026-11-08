@@ -342,6 +342,18 @@ func TestChannelPackageDeleteRemovesRecordAndFile(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
 	}
+	var env struct {
+		Code   int `json:"code"`
+		Result struct {
+			Deleted bool `json:"deleted"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatal(err)
+	}
+	if env.Code != 0 || !env.Result.Deleted {
+		t.Fatalf("delete response = %s", rec.Body.String())
+	}
 	if _, ok := repo.items["pkg-1"]; ok {
 		t.Fatal("record still present")
 	}
@@ -374,7 +386,7 @@ func TestChannelPackageErrorMapping(t *testing.T) {
 	}{
 		{name: "invalid source", err: channelpkg.ErrInvalidSource, status: http.StatusBadRequest, code: 40001},
 		{name: "unsupported", err: channelpkg.ErrUnsupported, status: http.StatusConflict, code: 40901},
-		{name: "busy", err: channelpkg.ErrBusy, status: http.StatusTooManyRequests, code: 42901},
+		{name: "busy", err: channelpkg.ErrBusy, status: http.StatusTooManyRequests, code: 42911},
 		{name: "too large", err: channelpkg.ErrPackageTooLarge, status: http.StatusRequestEntityTooLarge, code: 41301},
 		{name: "unsafe archive", err: fmt.Errorf("write: %w", core.ErrUnsafeArchive), status: http.StatusRequestEntityTooLarge, code: 41301},
 	}

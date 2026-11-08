@@ -44,9 +44,12 @@ func NewWorkspaceSource(root, projectID string) (*WorkspaceSource, error) {
 
 func (s *WorkspaceSource) Materialize(ctx context.Context) (core.SourceInfo, error) {
 	dir := filepath.Join(s.Root, s.ProjectID)
-	stat, err := os.Stat(dir)
+	stat, err := core.LstatNoSymlink(dir)
 	if err != nil || !stat.IsDir() {
 		return core.SourceInfo{}, ErrSourceNotFound
+	}
+	if _, err := core.ResolveWithin(s.Root, dir); err != nil {
+		return core.SourceInfo{}, ErrInvalidSource
 	}
 	info, err := materializeDir(ctx, dir)
 	if err != nil {
@@ -171,18 +174,27 @@ func normalizeSourceErr(err error) error {
 
 func findEntry(dir string) (string, error) {
 	for _, name := range []string{"index.html", "app.html"} {
-		info, err := os.Stat(filepath.Join(dir, name))
-		if err == nil && info.Mode().IsRegular() {
-			return name, nil
+		target := filepath.Join(dir, name)
+		info, err := core.LstatNoSymlink(target)
+		if err != nil || !info.Mode().IsRegular() {
+			continue
 		}
+		if _, err := core.ResolveWithin(dir, target); err != nil {
+			continue
+		}
+		return name, nil
 	}
 	return "", ErrInvalidSource
 }
 
 func hasMiniGame(dir string) bool {
 	for _, name := range []string{"game.js", "game.json"} {
-		info, err := os.Stat(filepath.Join(dir, name))
+		target := filepath.Join(dir, name)
+		info, err := core.LstatNoSymlink(target)
 		if err != nil || !info.Mode().IsRegular() {
+			return false
+		}
+		if _, err := core.ResolveWithin(dir, target); err != nil {
 			return false
 		}
 	}
@@ -191,35 +203,39 @@ func hasMiniGame(dir string) bool {
 
 func findExecutable(dir string) (string, error) {
 	var found string
-	err := filepath.WalkDir(dir, func(path string, entry os.DirEntry, walkErr error) error {
+	err := filepath.WalkDir(dir, func(current string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
-		if path == dir {
+		if current == dir {
 			return nil
 		}
-		if entry.IsDir() {
-			if skipSourceDir(entry.Name()) {
+		rel, err := filepath.Rel(dir, current)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		info, err := core.LstatNoSymlink(current)
+		if err != nil {
+			return err
+		}
+		if core.SkipPath(rel) {
+			if info.IsDir() {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		if entry.Type()&os.ModeSymlink != 0 {
+		if info.IsDir() {
 			return nil
-		}
-		info, err := entry.Info()
-		if err != nil {
-			return err
 		}
 		if !info.Mode().IsRegular() {
 			return nil
 		}
-		if strings.EqualFold(filepath.Ext(path), ".exe") {
-			rel, err := filepath.Rel(dir, path)
-			if err != nil {
-				return err
-			}
-			found = filepath.ToSlash(rel)
+		if _, err := core.ResolveWithin(dir, current); err != nil {
+			return err
+		}
+		if strings.EqualFold(filepath.Ext(current), ".exe") {
+			found = rel
 			return filepath.SkipAll
 		}
 		return nil
@@ -235,37 +251,41 @@ func dirStats(ctx context.Context, dir string) (int, int64, string, error) {
 	var count int
 	var total int64
 
-	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, walkErr error) error {
+	err := filepath.WalkDir(dir, func(current string, d os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if path == dir {
+		if current == dir {
 			return nil
 		}
-		if d.IsDir() {
-			if skipSourceDir(d.Name()) {
+		rel, err := filepath.Rel(dir, current)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		info, err := core.LstatNoSymlink(current)
+		if err != nil {
+			return err
+		}
+		if core.SkipPath(rel) {
+			if info.IsDir() {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		if d.Type()&os.ModeSymlink != 0 {
+		if info.IsDir() {
 			return nil
-		}
-		info, err := d.Info()
-		if err != nil {
-			return err
 		}
 		if !info.Mode().IsRegular() {
 			return nil
 		}
-		rel, err := filepath.Rel(dir, path)
-		if err != nil {
+		if _, err := core.ResolveWithin(dir, current); err != nil {
 			return err
 		}
-		file, err := os.Open(path)
+		file, err := os.Open(current)
 		if err != nil {
 			return err
 		}
@@ -289,8 +309,4 @@ func dirStats(ctx context.Context, dir string) (int, int64, string, error) {
 		return 0, 0, "", err
 	}
 	return count, total, hex.EncodeToString(hasher.Sum(nil))[:16], nil
-}
-
-func skipSourceDir(name string) bool {
-	return strings.HasPrefix(name, ".") || name == "docs" || name == "node_modules"
 }

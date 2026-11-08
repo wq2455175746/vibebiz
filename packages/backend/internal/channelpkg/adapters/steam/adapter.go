@@ -207,8 +207,11 @@ func safeEntry(dir, name string) (string, error) {
 	if err != nil || filepath.IsAbs(rel) || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", ErrUnsupportedSource
 	}
-	info, err := os.Stat(target)
+	info, err := core.LstatNoSymlink(target)
 	if err != nil || !info.Mode().IsRegular() {
+		return "", ErrUnsupportedSource
+	}
+	if _, err := core.ResolveWithin(dir, target); err != nil {
 		return "", ErrUnsupportedSource
 	}
 	return filepath.ToSlash(rel), nil
@@ -231,18 +234,24 @@ func findExecutable(dir string) (string, error) {
 			return err
 		}
 		rel = filepath.ToSlash(rel)
+		info, err := core.LstatNoSymlink(current)
+		if err != nil {
+			return err
+		}
 		if skip := skipWorkspacePath(rel); skip {
-			if entry.IsDir() {
+			if info.IsDir() {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 {
+		if info.IsDir() {
 			return nil
 		}
-		info, err := entry.Info()
-		if err != nil || !info.Mode().IsRegular() {
+		if !info.Mode().IsRegular() {
 			return nil
+		}
+		if _, err := core.ResolveWithin(dir, current); err != nil {
+			return err
 		}
 		if strings.EqualFold(filepath.Ext(current), ".exe") {
 			found = rel
@@ -257,16 +266,10 @@ func findExecutable(dir string) (string, error) {
 }
 
 func skipWorkspacePath(rel string) bool {
-	rel = filepath.ToSlash(rel)
-	parts := strings.Split(rel, "/")
-	for _, part := range parts {
-		if strings.HasPrefix(part, ".") {
-			return true
-		}
-	}
-	if len(parts) > 0 && (parts[0] == "docs" || parts[0] == "node_modules") {
+	if core.SkipPath(rel) {
 		return true
 	}
+	parts := strings.Split(filepath.ToSlash(rel), "/")
 	switch parts[len(parts)-1] {
 	case "package-manifest.json", "CHANNEL_GUIDE.md":
 		return true
@@ -275,7 +278,7 @@ func skipWorkspacePath(rel string) bool {
 }
 
 func regularFileExists(dir, name string) bool {
-	info, err := os.Stat(filepath.Join(dir, filepath.FromSlash(name)))
+	info, err := core.LstatNoSymlink(filepath.Join(dir, filepath.FromSlash(name)))
 	return err == nil && info.Mode().IsRegular()
 }
 

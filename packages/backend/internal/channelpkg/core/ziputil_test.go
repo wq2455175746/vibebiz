@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -20,6 +21,27 @@ func TestCopyDirToZipRejectsSymlink(t *testing.T) {
 	zw := zip.NewWriter(&buf)
 	if _, _, err := CopyDirToZip(context.Background(), zw, dir, "", nil); err == nil {
 		t.Fatal("expected symlink error")
+	}
+}
+
+func TestCopyDirToZipRejectsSkippedSymlink(t *testing.T) {
+	parent := t.TempDir()
+	outside := filepath.Join(parent, "secret.js")
+	if err := os.WriteFile(outside, []byte("secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(parent, "source")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(dir, ".leak.js")); err != nil {
+		t.Skip("symlink unsupported")
+	}
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	_, _, err := CopyDirToZip(context.Background(), zw, dir, "", SkipPath)
+	if !errors.Is(err, ErrUnsafePath) {
+		t.Fatalf("err = %v, want ErrUnsafePath", err)
 	}
 }
 
@@ -127,6 +149,52 @@ func TestExtractZipRejectsTooManyFiles(t *testing.T) {
 	err := ExtractZip(context.Background(), &buf, t.TempDir(), ExtractLimits{MaxBytes: 1024, MaxFiles: 1})
 	if !errors.Is(err, ErrArchiveTooLarge) {
 		t.Fatalf("err = %v, want ErrArchiveTooLarge", err)
+	}
+}
+
+func TestExtractZipRejectsTooManyDirectoryEntries(t *testing.T) {
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for i := 0; i < 5; i++ {
+		if _, err := zw.Create(fmt.Sprintf("dir%d/", i)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	err := ExtractZip(context.Background(), &buf, t.TempDir(), ExtractLimits{MaxBytes: 1 << 20, MaxFiles: 3})
+	if !errors.Is(err, ErrArchiveTooLarge) {
+		t.Fatalf("err = %v, want ErrArchiveTooLarge", err)
+	}
+}
+
+func TestExtractZipStreamsStoredEntry(t *testing.T) {
+	payload := bytes.Repeat([]byte("0123456789abcdef"), 256<<10)
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	h := &zip.FileHeader{Name: "big.bin", Method: zip.Store}
+	w, err := zw.CreateHeader(h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Write(payload); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	dst := t.TempDir()
+	if err := ExtractZip(context.Background(), bytes.NewReader(buf.Bytes()), dst, ExtractLimits{MaxBytes: 16 << 20, MaxFiles: 10}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(dst, "big.bin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, payload) {
+		t.Fatalf("extracted size = %d, want %d", len(got), len(payload))
 	}
 }
 

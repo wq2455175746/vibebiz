@@ -2,11 +2,9 @@ package core
 
 import (
 	"archive/zip"
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path"
@@ -61,38 +59,47 @@ func CopyDirToZip(ctx context.Context, zw *zip.Writer, src, prefix string, skip 
 			return err
 		}
 		rel = filepath.ToSlash(rel)
+		info, err := LstatNoSymlink(current)
+		if err != nil {
+			return err
+		}
 		if skip != nil && skip(rel) {
-			if d.IsDir() {
+			if info.IsDir() {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		if d.Type()&os.ModeSymlink != 0 {
-			return fmt.Errorf("channelpkg: refusing symlink %q", rel)
-		}
-		if d.IsDir() {
+		if info.IsDir() {
 			return nil
-		}
-		info, err := d.Info()
-		if err != nil {
-			return err
 		}
 		if !info.Mode().IsRegular() {
 			return nil
 		}
-		data, err := os.ReadFile(current)
-		if err != nil {
+		if _, err := ResolveWithin(src, current); err != nil {
 			return err
 		}
 		name := rel
 		if prefix != "" {
 			name = prefix + "/" + rel
 		}
-		if err := WriteFile(zw, name, data); err != nil {
+		w, err := zw.Create(name)
+		if err != nil {
 			return err
 		}
+		file, err := os.Open(current)
+		if err != nil {
+			return err
+		}
+		written, copyErr := io.Copy(w, file)
+		closeErr := file.Close()
+		if copyErr != nil {
+			return copyErr
+		}
+		if closeErr != nil {
+			return closeErr
+		}
 		count++
-		total += int64(len(data))
+		total += written
 		return nil
 	})
 	return count, total, err
@@ -102,20 +109,29 @@ func ExtractZip(ctx context.Context, src io.Reader, dst string, limits ExtractLi
 	if err := os.MkdirAll(dst, 0o755); err != nil {
 		return err
 	}
-	data, err := readArchive(src, limits)
+	archive, archivePath, err := stageArchive(src, dst, limits.MaxBytes)
 	if err != nil {
 		return err
 	}
-	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
-	if err != nil {
-		return err
+	defer func() {
+		_ = archive.Close()
+		_ = os.Remove(archivePath)
+	}()
+	zr := &archive.Reader
+
+	if limits.MaxFiles > 0 && len(zr.File) > limits.MaxFiles {
+		return ErrArchiveTooLarge
 	}
 
-	var files int
+	var entries int
 	var total int64
 	for _, f := range zr.File {
 		if err := ctx.Err(); err != nil {
 			return err
+		}
+		entries++
+		if limits.MaxFiles > 0 && entries > limits.MaxFiles {
+			return ErrArchiveTooLarge
 		}
 		if f.Mode()&(os.ModeSymlink|os.ModeDevice|os.ModeCharDevice|os.ModeNamedPipe|os.ModeSocket|os.ModeIrregular) != 0 {
 			return ErrUnsafeArchive
@@ -135,10 +151,6 @@ func ExtractZip(ctx context.Context, src io.Reader, dst string, limits ExtractLi
 			continue
 		}
 
-		files++
-		if limits.MaxFiles > 0 && files > limits.MaxFiles {
-			return ErrArchiveTooLarge
-		}
 		if limits.MaxBytes > 0 {
 			uncompressed := int64(f.UncompressedSize64)
 			if uncompressed > limits.MaxBytes || total > limits.MaxBytes-uncompressed {
@@ -170,18 +182,41 @@ func ExtractZip(ctx context.Context, src io.Reader, dst string, limits ExtractLi
 	return nil
 }
 
-func readArchive(src io.Reader, limits ExtractLimits) ([]byte, error) {
-	if limits.MaxBytes <= 0 {
-		return io.ReadAll(src)
-	}
-	data, err := io.ReadAll(io.LimitReader(src, limits.MaxBytes+1))
+func stageArchive(src io.Reader, dst string, maxBytes int64) (*zip.ReadCloser, string, error) {
+	tmp, err := os.CreateTemp(filepath.Dir(dst), ".channel-archive-*")
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	if int64(len(data)) > limits.MaxBytes {
-		return nil, ErrArchiveTooLarge
+	name := tmp.Name()
+	cleanup := func() {
+		_ = tmp.Close()
+		_ = os.Remove(name)
 	}
-	return data, nil
+
+	var written int64
+	if maxBytes > 0 {
+		written, err = io.Copy(tmp, io.LimitReader(src, maxBytes+1))
+	} else {
+		written, err = io.Copy(tmp, src)
+	}
+	if err != nil {
+		cleanup()
+		return nil, "", err
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(name)
+		return nil, "", err
+	}
+	if maxBytes > 0 && written > maxBytes {
+		_ = os.Remove(name)
+		return nil, "", ErrArchiveTooLarge
+	}
+	zr, err := zip.OpenReader(name)
+	if err != nil {
+		_ = os.Remove(name)
+		return nil, "", err
+	}
+	return zr, name, nil
 }
 
 func extractFile(target string, f *zip.File, remaining int64) (int64, error) {

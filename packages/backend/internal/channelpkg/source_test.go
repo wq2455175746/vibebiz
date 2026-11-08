@@ -134,6 +134,48 @@ func TestWorkspaceSourceExcludesDocsNodeModulesAndDotDirs(t *testing.T) {
 	}
 }
 
+func TestWorkspaceSourceRejectsSymlinkOutsideSource(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "p1")
+	write(t, dir, "index.html", `<canvas></canvas>`)
+	outside := filepath.Join(root, "secret.js")
+	if err := os.WriteFile(outside, []byte("secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(dir, ".leak.js")); err != nil {
+		t.Skip("symlink unsupported")
+	}
+	src, err := NewWorkspaceSource(root, "p1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := src.Materialize(context.Background()); !errors.Is(err, core.ErrUnsafePath) {
+		t.Fatalf("err = %v, want ErrUnsafePath", err)
+	}
+}
+
+func TestWorkspaceSourceSkipsOnlyTopLevelDocsAndNodeModules(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "p1")
+	write(t, dir, "index.html", `<canvas></canvas>`)
+	write(t, dir, "docs/readme.md", "docs")
+	write(t, dir, "node_modules/pkg/index.js", "module")
+	write(t, dir, "assets/docs/keep.js", "keep-docs")
+	write(t, dir, "assets/node_modules/keep.js", "keep-module")
+	src, err := NewWorkspaceSource(root, "p1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := src.Materialize(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := int64(len(`<canvas></canvas>`) + len("keep-docs") + len("keep-module"))
+	if info.FileCount != 3 || info.TotalBytes != want {
+		t.Fatalf("info = %+v, want 3 files and %d bytes", info, want)
+	}
+}
+
 func TestResourceSourceExtractsZipAndComputesVersion(t *testing.T) {
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)

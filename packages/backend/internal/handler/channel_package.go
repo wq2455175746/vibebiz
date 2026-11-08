@@ -164,7 +164,7 @@ func (h *ChannelPackageHandler) Delete(c echo.Context) error {
 		}
 		return channelPackageError(c, err)
 	}
-	return response.OK(c, map[string]string{"id": packageID})
+	return response.OK(c, map[string]any{"deleted": true})
 }
 
 func (h *ChannelPackageHandler) Guides(c echo.Context) error {
@@ -246,7 +246,7 @@ func channelPackageError(c echo.Context, err error) error {
 	case errors.Is(err, channelpkg.ErrPackageTooLarge), errors.Is(err, core.ErrArchiveTooLarge), errors.Is(err, core.ErrUnsafeArchive):
 		return response.Fail(c, http.StatusRequestEntityTooLarge, 41301, err.Error())
 	case errors.Is(err, channelpkg.ErrBusy):
-		return response.Fail(c, http.StatusTooManyRequests, 42901, err.Error())
+		return response.Fail(c, http.StatusTooManyRequests, 42911, err.Error())
 	default:
 		return response.Fail(c, http.StatusInternalServerError, 50014, "channel package failed")
 	}

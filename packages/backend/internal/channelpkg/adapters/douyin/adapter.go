@@ -364,12 +364,21 @@ func resolveScript(root, base, src string) (string, error) {
 	if err != nil || filepath.IsAbs(rel) || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("%w: %s", ErrUnsafeScript, src)
 	}
-	info, err := os.Stat(target)
+	info, err := core.LstatNoSymlink(target)
 	if err != nil {
+		if errors.Is(err, core.ErrUnsafePath) {
+			return "", fmt.Errorf("%w: %s", ErrUnsafeScript, src)
+		}
 		return "", fmt.Errorf("douyin: script %q: %w", src, err)
 	}
 	if info.IsDir() {
 		return "", fmt.Errorf("%w: %s", ErrUnsafeScript, src)
+	}
+	if _, err := core.ResolveWithin(root, target); err != nil {
+		if errors.Is(err, core.ErrUnsafePath) {
+			return "", fmt.Errorf("%w: %s", ErrUnsafeScript, src)
+		}
+		return "", fmt.Errorf("douyin: script %q: %w", src, err)
 	}
 	return target, nil
 }
@@ -384,12 +393,21 @@ func safeSourceFile(dir, name string) (string, error) {
 	if err != nil || filepath.IsAbs(rel) || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("%w: %s", ErrUnsafeScript, name)
 	}
-	info, err := os.Stat(target)
+	info, err := core.LstatNoSymlink(target)
 	if err != nil {
+		if errors.Is(err, core.ErrUnsafePath) {
+			return "", fmt.Errorf("%w: %s", ErrUnsafeScript, name)
+		}
 		return "", fmt.Errorf("douyin: source file %q: %w", name, err)
 	}
 	if info.IsDir() {
 		return "", fmt.Errorf("douyin: source file %q is a directory", name)
+	}
+	if _, err := core.ResolveWithin(dir, target); err != nil {
+		if errors.Is(err, core.ErrUnsafePath) {
+			return "", fmt.Errorf("%w: %s", ErrUnsafeScript, name)
+		}
+		return "", fmt.Errorf("douyin: source file %q: %w", name, err)
 	}
 	return target, nil
 }
@@ -443,7 +461,7 @@ func marshalJSON(value any) ([]byte, error) {
 }
 
 func fileExists(dir, name string) bool {
-	info, err := os.Stat(filepath.Join(dir, filepath.FromSlash(name)))
+	info, err := core.LstatNoSymlink(filepath.Join(dir, filepath.FromSlash(name)))
 	return err == nil && !info.IsDir()
 }
 
@@ -457,16 +475,10 @@ func contains(values []string, want string) bool {
 }
 
 func skipWorkspacePath(rel string) bool {
-	rel = filepath.ToSlash(rel)
-	parts := strings.Split(rel, "/")
-	for _, part := range parts {
-		if strings.HasPrefix(part, ".") {
-			return true
-		}
-	}
-	if len(parts) > 0 && (parts[0] == "docs" || parts[0] == "node_modules") {
+	if core.SkipPath(rel) {
 		return true
 	}
+	parts := strings.Split(filepath.ToSlash(rel), "/")
 	switch parts[len(parts)-1] {
 	case "package-manifest.json", "CHANNEL_GUIDE.md":
 		return true
@@ -491,7 +503,7 @@ func summarizeBytes(name string, data []byte) core.FileSummary {
 }
 
 func regularFileExists(dir, name string) bool {
-	info, err := os.Stat(filepath.Join(dir, filepath.FromSlash(name)))
+	info, err := core.LstatNoSymlink(filepath.Join(dir, filepath.FromSlash(name)))
 	return err == nil && info.Mode().IsRegular()
 }
 

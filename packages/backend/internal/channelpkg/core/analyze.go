@@ -45,19 +45,43 @@ func AnalyzeHTML(dir, entry string) (Report, error) {
 	var externalURL bool
 	var networkFetch bool
 
-	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, walkErr error) error {
+	err := filepath.WalkDir(dir, func(current string, d os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
-		if d.IsDir() || d.Type()&os.ModeSymlink != 0 {
+		if current == dir {
 			return nil
 		}
-		switch strings.ToLower(filepath.Ext(path)) {
+		rel, err := filepath.Rel(dir, current)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		info, err := LstatNoSymlink(current)
+		if err != nil {
+			return err
+		}
+		if SkipPath(rel) {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if info.IsDir() {
+			return nil
+		}
+		if !info.Mode().IsRegular() {
+			return nil
+		}
+		if _, err := ResolveWithin(dir, current); err != nil {
+			return err
+		}
+		switch strings.ToLower(filepath.Ext(current)) {
 		case ".html", ".js", ".css":
 		default:
 			return nil
 		}
-		data, err := readFileLimited(path, maxAnalyzeFileSize)
+		data, err := readFileLimited(current, maxAnalyzeFileSize)
 		if err != nil {
 			return err
 		}
@@ -97,15 +121,15 @@ func AnalyzeHTML(dir, entry string) (Report, error) {
 }
 
 func isMiniGameSource(dir string) bool {
-	gameJS := filepath.Join(dir, "game.js")
-	gameJSON := filepath.Join(dir, "game.json")
-	jsInfo, err := os.Stat(gameJS)
-	if err != nil || jsInfo.IsDir() {
-		return false
-	}
-	jsonInfo, err := os.Stat(gameJSON)
-	if err != nil || jsonInfo.IsDir() {
-		return false
+	for _, name := range []string{"game.js", "game.json"} {
+		target := filepath.Join(dir, name)
+		info, err := LstatNoSymlink(target)
+		if err != nil || !info.Mode().IsRegular() {
+			return false
+		}
+		if _, err := ResolveWithin(dir, target); err != nil {
+			return false
+		}
 	}
 	return true
 }
@@ -132,8 +156,11 @@ func secureJoin(dir, name string) (string, error) {
 	if err != nil || filepath.IsAbs(rel) || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", ErrInvalidSource
 	}
-	info, err := os.Stat(target)
+	info, err := LstatNoSymlink(target)
 	if err != nil || info.IsDir() {
+		return "", ErrInvalidSource
+	}
+	if _, err := ResolveWithin(dir, target); err != nil {
 		return "", ErrInvalidSource
 	}
 	return target, nil

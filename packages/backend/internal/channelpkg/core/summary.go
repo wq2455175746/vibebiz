@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -29,24 +28,24 @@ func SummarizeFiles(ctx context.Context, dir string, skip func(rel string) bool)
 			return err
 		}
 		rel = filepath.ToSlash(rel)
+		info, err := LstatNoSymlink(current)
+		if err != nil {
+			return err
+		}
 		if skip != nil && skip(rel) {
-			if entry.IsDir() {
+			if info.IsDir() {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		if entry.Type()&os.ModeSymlink != 0 {
-			return fmt.Errorf("channelpkg: refusing symlink %q", rel)
-		}
-		if entry.IsDir() {
+		if info.IsDir() {
 			return nil
-		}
-		info, err := entry.Info()
-		if err != nil {
-			return err
 		}
 		if !info.Mode().IsRegular() {
 			return nil
+		}
+		if _, err := ResolveWithin(dir, current); err != nil {
+			return err
 		}
 		if len(files) >= maxFileSummaries {
 			return filepath.SkipAll

@@ -2,7 +2,9 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -17,6 +19,43 @@ func skipSummaryTestPath(rel string) bool {
 		}
 	}
 	return len(parts) > 0 && (parts[0] == "docs" || parts[0] == "node_modules")
+}
+
+func TestSkipPathOnlySkipsTopLevelDocsAndNodeModules(t *testing.T) {
+	cases := map[string]bool{
+		".git/config":              true,
+		".leak.js":                 true,
+		"docs/a.md":                true,
+		"node_modules/x.js":        true,
+		"src/.cache/x":             true,
+		"assets/docs/a.md":         false,
+		"assets/node_modules/x.js": false,
+		"keep.js":                  false,
+	}
+	for rel, want := range cases {
+		if got := SkipPath(rel); got != want {
+			t.Errorf("SkipPath(%q) = %v, want %v", rel, got, want)
+		}
+	}
+}
+
+func TestSummarizeFilesRejectsSkippedSymlink(t *testing.T) {
+	parent := t.TempDir()
+	outside := filepath.Join(parent, "secret.js")
+	if err := os.WriteFile(outside, []byte("secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(parent, "source")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(dir, ".leak.js")); err != nil {
+		t.Skip("symlink unsupported")
+	}
+	_, err := SummarizeFiles(context.Background(), dir, SkipPath)
+	if !errors.Is(err, ErrUnsafePath) {
+		t.Fatalf("err = %v, want ErrUnsafePath", err)
+	}
 }
 
 func TestSummarizeFilesSkipsPathsAndReturnsHashes(t *testing.T) {

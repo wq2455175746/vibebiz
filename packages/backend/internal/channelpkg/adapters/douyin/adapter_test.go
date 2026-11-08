@@ -204,6 +204,7 @@ func TestDouyinBuildSkipsWorkspaceArtifacts(t *testing.T) {
 	write(t, dir, ".git/config", "[remote]")
 	write(t, dir, "node_modules/x.js", "module.exports = 1")
 	write(t, dir, "docs/a.md", "# docs")
+	write(t, dir, "assets/docs/keep.js", "keep nested docs")
 	write(t, dir, "package-manifest.json", `{"source":true}`)
 	write(t, dir, "CHANNEL_GUIDE.md", "source guide")
 	var buf bytes.Buffer
@@ -223,8 +224,26 @@ func TestDouyinBuildSkipsWorkspaceArtifacts(t *testing.T) {
 			t.Errorf("workspace artifact %s was copied", bad)
 		}
 	}
-	if !names["game/game.js"] || !names["package-manifest.json"] || !names["CHANNEL_GUIDE.md"] {
+	if !names["game/game.js"] || !names["game/assets/docs/keep.js"] || !names["package-manifest.json"] || !names["CHANNEL_GUIDE.md"] {
 		t.Fatalf("expected generated files in %v", names)
+	}
+}
+
+func TestDouyinResolveScriptRejectsSymlinkOutsideSource(t *testing.T) {
+	parent := t.TempDir()
+	root := filepath.Join(parent, "source")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(parent, "secret.js")
+	if err := os.WriteFile(outside, []byte("secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, ".leak.js")); err != nil {
+		t.Skip("symlink unsupported")
+	}
+	if _, err := resolveScript(root, root, ".leak.js"); !errors.Is(err, ErrUnsafeScript) {
+		t.Fatalf("err = %v, want ErrUnsafeScript", err)
 	}
 }
 

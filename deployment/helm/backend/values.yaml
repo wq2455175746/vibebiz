@@ -62,6 +62,7 @@ config:
   smtpFrom: ""
   smtpSecurity: starttls
   userTraceDir: /app/logs/user-trace
+  channelPackagesDir: /data/channel-packages
   usageTimezone: Asia/Shanghai
   userSkillUploadEnabled: "false"
   otelExporterOtlpEndpoint: ""

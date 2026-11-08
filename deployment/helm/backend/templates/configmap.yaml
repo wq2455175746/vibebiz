@@ -37,6 +37,7 @@ data:
   SMTP_FROM: {{ .Values.config.smtpFrom | quote }}
   SMTP_SECURITY: {{ .Values.config.smtpSecurity | quote }}
   USER_TRACE_DIR: {{ .Values.config.userTraceDir | quote }}
+  CHANNEL_PACKAGES_DIR: {{ .Values.config.channelPackagesDir | quote }}
   USAGE_TIMEZONE: {{ .Values.config.usageTimezone | quote }}
   USER_SKILL_UPLOAD_ENABLED: {{ .Values.config.userSkillUploadEnabled | quote }}
   OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.config.otelExporterOtlpEndpoint | quote }}
