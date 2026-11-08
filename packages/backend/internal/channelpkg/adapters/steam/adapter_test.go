@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -121,8 +122,8 @@ func TestSteamBuildNativeExeSkipsElectronShell(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if manifest.Entry != "game.exe" {
-		t.Fatalf("entry = %q, want game.exe", manifest.Entry)
+	if manifest.Entry != "app/game.exe" {
+		t.Fatalf("entry = %q, want app/game.exe", manifest.Entry)
 	}
 	names := zipNames(t, buf.Bytes())
 	for _, want := range []string{
@@ -256,5 +257,91 @@ func TestSteamBuildRejectsUnsupportedSource(t *testing.T) {
 	}
 	if buf.Len() != 0 {
 		t.Fatalf("partial zip written: %d bytes", buf.Len())
+	}
+}
+
+func TestSteamBuildTemplatesElectronEntry(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "app.html", `<canvas></canvas>`)
+	var buf bytes.Buffer
+	if _, err := New().Build(context.Background(), core.SourceInfo{
+		Dir: dir, Entry: "app.html", Version: "v1",
+		Report: core.Report{Level: core.LevelB},
+	}, &buf); err != nil {
+		t.Fatal(err)
+	}
+	main := zipContent(t, buf.Bytes(), "electron/main.js")
+	if !strings.Contains(main, `"app.html"`) {
+		t.Fatalf("main.js does not reference app.html: %q", main)
+	}
+	if strings.Contains(main, `"index.html"`) {
+		t.Fatalf("main.js still references index.html: %q", main)
+	}
+}
+
+func TestSteamBuildSelectsAppHTMLWhenEntryEmpty(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "app.html", `<canvas></canvas>`)
+	var buf bytes.Buffer
+	manifest, err := New().Build(context.Background(), core.SourceInfo{
+		Dir: dir, Version: "v1", Report: core.Report{Level: core.LevelB},
+	}, &buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if manifest.Entry != "app.html" {
+		t.Fatalf("entry = %q, want app.html", manifest.Entry)
+	}
+	names := zipNames(t, buf.Bytes())
+	if !names["app/app.html"] {
+		t.Fatalf("missing app/app.html in %v", names)
+	}
+}
+
+func TestSteamBuildRejectsUnsafeEntry(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		entry string
+	}{
+		{"parent traversal", "../escape.html"},
+		{"nested traversal", "sub/../../escape.html"},
+		{"absolute path", "/tmp/escape.html"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			write(t, dir, "index.html", `<canvas></canvas>`)
+			var buf bytes.Buffer
+			_, err := New().Build(context.Background(), core.SourceInfo{
+				Dir: dir, Entry: tc.entry, Version: "v1",
+				Report: core.Report{Level: core.LevelB},
+			}, &buf)
+			if !errors.Is(err, ErrUnsupportedSource) {
+				t.Fatalf("err = %v, want ErrUnsupportedSource", err)
+			}
+			if buf.Len() != 0 {
+				t.Fatalf("partial zip written: %d bytes", buf.Len())
+			}
+		})
+	}
+}
+
+func TestSteamBuildNativeManifestEntryUsesPackagedPath(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "Game.EXE", "MZ")
+	var buf bytes.Buffer
+	manifest, err := New().Build(context.Background(), core.SourceInfo{
+		Dir: dir, Version: "v1", Report: core.Report{Level: core.LevelB},
+	}, &buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if manifest.Entry != "app/Game.EXE" {
+		t.Fatalf("entry = %q, want app/Game.EXE", manifest.Entry)
+	}
+}
+
+func TestFindExecutableReturnsWalkError(t *testing.T) {
+	if _, err := findExecutable(filepath.Join(t.TempDir(), "missing")); err == nil {
+		t.Fatal("expected walk error for missing directory")
 	}
 }

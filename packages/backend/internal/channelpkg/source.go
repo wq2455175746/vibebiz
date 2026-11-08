@@ -122,13 +122,32 @@ func (s *ResourceSource) Cleanup() error { return nil }
 
 func materializeDir(ctx context.Context, dir string) (core.SourceInfo, error) {
 	entry, err := findEntry(dir)
-	if err != nil && !hasMiniGame(dir) {
-		return core.SourceInfo{}, err
-	}
-	report, err := core.AnalyzeHTML(dir, entry)
+	native := false
 	if err != nil {
-		return core.SourceInfo{}, normalizeSourceErr(err)
+		if hasMiniGame(dir) {
+			entry = ""
+		} else {
+			exe, exeErr := findExecutable(dir)
+			if exeErr != nil {
+				return core.SourceInfo{}, exeErr
+			}
+			if exe == "" {
+				return core.SourceInfo{}, err
+			}
+			native = true
+		}
 	}
+
+	var report core.Report
+	if native {
+		report = core.Report{Level: core.LevelB, Warnings: []string{"native_build_detected"}}
+	} else {
+		report, err = core.AnalyzeHTML(dir, entry)
+		if err != nil {
+			return core.SourceInfo{}, normalizeSourceErr(err)
+		}
+	}
+
 	count, total, version, err := dirStats(ctx, dir)
 	if err != nil {
 		return core.SourceInfo{}, err
@@ -168,6 +187,47 @@ func hasMiniGame(dir string) bool {
 		}
 	}
 	return true
+}
+
+func findExecutable(dir string) (string, error) {
+	var found string
+	err := filepath.WalkDir(dir, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if path == dir {
+			return nil
+		}
+		if entry.IsDir() {
+			if skipSourceDir(entry.Name()) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		if !info.Mode().IsRegular() {
+			return nil
+		}
+		if strings.EqualFold(filepath.Ext(path), ".exe") {
+			rel, err := filepath.Rel(dir, path)
+			if err != nil {
+				return err
+			}
+			found = filepath.ToSlash(rel)
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+	return found, nil
 }
 
 func dirStats(ctx context.Context, dir string) (int, int64, string, error) {

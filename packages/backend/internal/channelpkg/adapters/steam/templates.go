@@ -1,6 +1,12 @@
 package steam
 
-const mainJS = `const { app, BrowserWindow } = require('electron')
+import (
+	"path/filepath"
+	"strconv"
+)
+
+func mainJS(entry string) string {
+	return `const { app, BrowserWindow } = require('electron')
 const path = require('path')
 
 function createWindow() {
@@ -13,7 +19,7 @@ function createWindow() {
       nodeIntegration: false
     }
   })
-  win.loadFile(path.join(__dirname, '..', 'app', 'index.html'))
+  win.loadFile(path.join(__dirname, '..', 'app', ` + strconv.Quote(filepath.ToSlash(entry)) + `))
   win.setMenuBarVisibility(false)
 }
 
@@ -23,6 +29,7 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 `
+}
 
 const preloadJS = `const { contextBridge } = require('electron')
 

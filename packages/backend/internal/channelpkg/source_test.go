@@ -303,3 +303,63 @@ func TestResourceSourcePopulatesProjectAndSourceType(t *testing.T) {
 		t.Fatalf("info = %+v", info)
 	}
 }
+
+func TestWorkspaceSourceAcceptsExecutableOnly(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "p1")
+	write(t, dir, "game.exe", "MZ")
+	src, err := NewWorkspaceSource(root, "p1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := src.Materialize(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Entry != "" {
+		t.Fatalf("entry = %q, want empty", info.Entry)
+	}
+	if info.Report.Level != core.LevelB {
+		t.Fatalf("level = %q, want B", info.Report.Level)
+	}
+	if !containsWarning(info.Report.Warnings, "native_build_detected") {
+		t.Fatalf("warnings = %v, want native_build_detected", info.Report.Warnings)
+	}
+	if info.FileCount != 1 {
+		t.Fatalf("file count = %d, want 1", info.FileCount)
+	}
+}
+
+func TestResourceSourceAcceptsExecutableOnlyZip(t *testing.T) {
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	w, _ := zw.Create("game.exe")
+	_, _ = w.Write([]byte("MZ"))
+	_ = zw.Close()
+	opener := func(context.Context, string, string) (io.ReadCloser, int64, error) {
+		return io.NopCloser(bytes.NewReader(buf.Bytes())), int64(buf.Len()), nil
+	}
+	src := NewResourceSource("p1", "r1", opener, t.TempDir())
+	info, err := src.Materialize(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Entry != "" || info.Report.Level != core.LevelB {
+		t.Fatalf("info = %+v", info)
+	}
+	if !containsWarning(info.Report.Warnings, "native_build_detected") {
+		t.Fatalf("warnings = %v, want native_build_detected", info.Report.Warnings)
+	}
+	if info.SourceType != core.SourceEngineArtifact || info.Version == "" || info.FileCount != 1 {
+		t.Fatalf("info = %+v", info)
+	}
+}
+
+func containsWarning(warnings []string, want string) bool {
+	for _, warning := range warnings {
+		if warning == want {
+			return true
+		}
+	}
+	return false
+}

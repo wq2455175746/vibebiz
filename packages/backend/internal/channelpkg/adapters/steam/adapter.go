@@ -42,8 +42,13 @@ func (a *Adapter) Validate(source core.SourceInfo) core.Report {
 		Warnings: append([]string{}, source.Report.Warnings...),
 		Blockers: append([]string{}, source.Report.Blockers...),
 	}
-	if source.Entry == "" && findExecutable(source.Dir) != "" {
-		report.Warnings = appendUnique(report.Warnings, "native_build_detected")
+	if source.Entry == "" {
+		exe, err := findExecutable(source.Dir)
+		if err != nil {
+			report.Warnings = appendUnique(report.Warnings, "source_scan_failed")
+		} else if exe != "" {
+			report.Warnings = appendUnique(report.Warnings, "native_build_detected")
+		}
 	}
 	return report
 }
@@ -113,7 +118,7 @@ func (a *Adapter) Build(ctx context.Context, source core.SourceInfo, out io.Writ
 	manifest.TotalBytes += total
 
 	if mode == modeHTML {
-		if err := writeElectronShell(written); err != nil {
+		if err := writeElectronShell(written, entry); err != nil {
 			_ = zw.Close()
 			return core.Manifest{}, err
 		}
@@ -149,12 +154,12 @@ func (a *Adapter) Build(ctx context.Context, source core.SourceInfo, out io.Writ
 	return manifest, nil
 }
 
-func writeElectronShell(written func(string, []byte) error) error {
+func writeElectronShell(written func(string, []byte) error, entry string) error {
 	files := []struct {
 		name string
 		data string
 	}{
-		{"electron/main.js", mainJS},
+		{"electron/main.js", mainJS(entry)},
 		{"electron/preload.js", preloadJS},
 		{"package.json", packageJSON},
 		{"electron-builder.yml", electronBuilderYML},
@@ -182,8 +187,12 @@ func resolveMode(source core.SourceInfo) (buildMode, string, error) {
 			return modeHTML, name, nil
 		}
 	}
-	if exe := findExecutable(source.Dir); exe != "" {
-		return modeNative, exe, nil
+	exe, err := findExecutable(source.Dir)
+	if err != nil {
+		return 0, "", err
+	}
+	if exe != "" {
+		return modeNative, "app/" + exe, nil
 	}
 	return 0, "", ErrUnsupportedSource
 }
@@ -205,12 +214,12 @@ func safeEntry(dir, name string) (string, error) {
 	return filepath.ToSlash(rel), nil
 }
 
-func findExecutable(dir string) string {
+func findExecutable(dir string) (string, error) {
 	if dir == "" {
-		return ""
+		return "", nil
 	}
 	var found string
-	_ = filepath.WalkDir(dir, func(current string, entry os.DirEntry, walkErr error) error {
+	err := filepath.WalkDir(dir, func(current string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
@@ -241,7 +250,10 @@ func findExecutable(dir string) string {
 		}
 		return nil
 	})
-	return found
+	if err != nil {
+		return "", err
+	}
+	return found, nil
 }
 
 func skipWorkspacePath(rel string) bool {
