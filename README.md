@@ -121,7 +121,7 @@ make dev
 
 ## 数据目录
 
-本地开发与 Docker 在仓库根目录 `data/` 下持久化运行时数据，均不入库：
+本地开发（`make dev`）默认把运行时数据写入仓库根目录 `data/`，且不入库；Docker 部署的挂载位置因 compose 而异，以 `deployment/docker/*.yml` 为准。以下为本地开发目录：
 
 ```text
 data/workspaces/        项目工作区（sandbox 读写）
