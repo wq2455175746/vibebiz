@@ -442,6 +442,15 @@ def validate_contracts() -> None:
         ],
     )
     validate_compose_sync()
+    require_contains(
+        "deployment/nginx/published.conf.template",
+        ["location /p/", "proxy_pass http://${CP_UPSTREAM}"],
+    )
+    for compose in (
+        "deployment/docker/docker-compose.yml",
+        "deployment/docker/docker-compose.public.yml",
+    ):
+        require_contains(compose, ["published.conf.template", "CP_UPSTREAM"])
     for compose in (
         "deployment/docker/docker-compose.yml",
         "deployment/docker/docker-compose.public.yml",
