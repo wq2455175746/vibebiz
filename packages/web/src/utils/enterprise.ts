@@ -11,11 +11,7 @@ export type EnterpriseStageKey =
 
 export type EnterpriseStageStatus = 'locked' | 'active' | 'done' | 'placeholder'
 export type EnterpriseStageWorkspace =
-  | 'document'
-  | 'development'
-  | 'artifact'
-  | 'delivery'
-  | 'placeholder'
+  'document' | 'development' | 'artifact' | 'delivery' | 'placeholder'
 
 export interface EnterpriseStageDefinition {
   key: EnterpriseStageKey
@@ -182,7 +178,9 @@ export function stageArtifactReady(
   loadedPath: string,
   content: string,
 ): boolean {
-  return Boolean(stage?.artifactPath) && loadedPath === stage?.artifactPath && Boolean(content.trim())
+  return (
+    Boolean(stage?.artifactPath) && loadedPath === stage?.artifactPath && Boolean(content.trim())
+  )
 }
 
 export function markEnterpriseProject(

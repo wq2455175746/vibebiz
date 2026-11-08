@@ -35,12 +35,13 @@ interface GuideForm {
   stepsText: string
   requirementsText: string
   enabled: boolean
-  sortOrder: number
+  sortOrder: number | null
 }
 
 const rows = ref<AdminChannelGuide[]>([])
 const loading = ref(false)
 const error = ref('')
+const pageError = ref('')
 const notice = ref('')
 const keyword = ref('')
 const status = ref<ChannelGuideStatus>('all')
@@ -136,6 +137,7 @@ function openCreate() {
 async function openEdit(row: TableRow) {
   const item = row as AdminChannelGuide
   actionError.value = ''
+  pageError.value = ''
   notice.value = ''
   try {
     const detail = await getChannelGuide(item.channel)
@@ -152,7 +154,7 @@ async function openEdit(row: TableRow) {
     }
     dialogVisible.value = true
   } catch (err) {
-    notice.value = errorMessage(err, '加载渠道详情失败')
+    pageError.value = errorMessage(err, '加载渠道详情失败')
   }
 }
 
@@ -164,7 +166,7 @@ function payload() {
     steps: splitLines(form.value.stepsText),
     requirements: splitLines(form.value.requirementsText),
     enabled: form.value.enabled,
-    sortOrder: form.value.sortOrder,
+    sortOrder: form.value.sortOrder ?? 100,
   }
 }
 
@@ -199,6 +201,7 @@ async function submit() {
 
 async function toggle(row: TableRow) {
   const item = row as AdminChannelGuide
+  pageError.value = ''
   try {
     const detail = await getChannelGuide(item.channel)
     await updateChannelGuide(item.channel, {
@@ -212,7 +215,7 @@ async function toggle(row: TableRow) {
     })
     await load()
   } catch (err) {
-    notice.value = errorMessage(err, '切换状态失败')
+    pageError.value = errorMessage(err, '切换状态失败')
   }
 }
 
@@ -221,12 +224,13 @@ async function remove(row: TableRow) {
   if (!window.confirm(`确定删除渠道「${item.title}」吗？`)) {
     return
   }
+  pageError.value = ''
   try {
     await deleteChannelGuide(item.channel)
     notice.value = '渠道已删除'
     await load()
   } catch (err) {
-    notice.value = errorMessage(err, '删除失败')
+    pageError.value = errorMessage(err, '删除失败')
   }
 }
 
@@ -280,6 +284,7 @@ onMounted(load)
       </div>
     </header>
 
+    <p v-if="pageError" class="error-text">{{ pageError }}</p>
     <p v-if="notice" class="inline-notice">{{ notice }}</p>
 
     <div class="filters">

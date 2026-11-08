@@ -76,15 +76,11 @@ const activeStage = computed(() => cloneStageDefinition(activeKey.value))
 const displayedKey = computed(() => viewingKey.value ?? activeKey.value)
 const displayedStage = computed(() => cloneStageDefinition(displayedKey.value))
 const activeState = computed(() => stageStates.value[activeKey.value])
-const isHistory = computed(
-  () => Boolean(viewingKey.value && viewingKey.value !== activeKey.value),
-)
+const isHistory = computed(() => Boolean(viewingKey.value && viewingKey.value !== activeKey.value))
 const allDone = computed(() =>
   CLONE_STAGES.every((stage) => stageStates.value[stage.key].status === 'done'),
 )
-const testReady = computed(
-  () => Boolean(testResult.value) || Boolean(report.value?.content.trim()),
-)
+const testReady = computed(() => Boolean(testResult.value) || Boolean(report.value?.content.trim()))
 const canStart = computed(
   () =>
     !isHistory.value &&
@@ -112,14 +108,10 @@ const testHtml = computed(() => {
 })
 const previewRevision = computed(() => chat.revision + files.revision)
 const assets = computed(() => project.value?.assets ?? [])
-const unitTest = computed(
-  () => assets.value.find((asset) => asset.role === 'unit_test') ?? null,
-)
+const unitTest = computed(() => assets.value.find((asset) => asset.role === 'unit_test') ?? null)
 const docs = computed(() => assets.value.filter((asset) => asset.role === 'docs'))
 const imageCount = computed(
-  () =>
-    assets.value.filter((asset) => asset.role === 'cover' || asset.role === 'gallery')
-      .length,
+  () => assets.value.filter((asset) => asset.role === 'cover' || asset.role === 'gallery').length,
 )
 
 function applyMutation(result: StageMutation) {
@@ -219,9 +211,14 @@ async function startStage() {
   try {
     const result = await startProjectStage(id.value, activeKey.value)
     applyMutation(result)
-    const prompt = buildCloneStagePrompt(activeStage.value, project.value ?? {
-      name: '', description: '', sourceUrl: '',
-    })
+    const prompt = buildCloneStagePrompt(
+      activeStage.value,
+      project.value ?? {
+        name: '',
+        description: '',
+        sourceUrl: '',
+      },
+    )
     if (prompt) {
       void chat.send(id.value, prompt, [])
     }
@@ -291,9 +288,7 @@ function stageClass(key: CloneStageKey) {
   return [
     `status-${stageStates.value[key].status}`,
     {
-      viewed: viewingKey.value
-        ? viewingKey.value === key
-        : activeKey.value === key,
+      viewed: viewingKey.value ? viewingKey.value === key : activeKey.value === key,
     },
   ]
 }
@@ -478,7 +473,9 @@ onBeforeUnmount(() => {
             <aside class="clone-test-log">
               <strong>执行日志</strong>
               <pre>{{ testLogs.length ? testLogs.join('\n') : '尚未执行。' }}</pre>
-              <span v-if="!testReady" class="clone-asset-hint">运行单测生成报告后才能确认本阶段。</span>
+              <span v-if="!testReady" class="clone-asset-hint"
+                >运行单测生成报告后才能确认本阶段。</span
+              >
             </aside>
           </div>
         </section>

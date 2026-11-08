@@ -61,6 +61,64 @@ func TestChannelGuideHandlerCreateAndDeleteBuiltin(t *testing.T) {
 	}
 }
 
+func TestChannelGuideHandlerSortOrderDefaultsAndZero(t *testing.T) {
+	e := echo.New()
+	h := newChannelGuideHandler(t)
+	e.POST("/guides", h.Create)
+
+	cases := []struct {
+		name string
+		body string
+		want string
+	}{
+		{name: "omitted defaults to 100", body: `{"channel":"custom_default","title":"Default","markdown":"# x"}`, want: `"sortOrder":100`},
+		{name: "explicit zero preserved", body: `{"channel":"custom_zero","title":"Zero","markdown":"# x","sortOrder":0}`, want: `"sortOrder":0`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/guides", strings.NewReader(tc.body))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			e.ServeHTTP(rec, req)
+			if rec.Code != http.StatusCreated || !strings.Contains(rec.Body.String(), tc.want) {
+				t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestChannelGuideHandlerCreateIgnoresBuiltin(t *testing.T) {
+	e := echo.New()
+	h := newChannelGuideHandler(t)
+	e.POST("/guides", h.Create)
+
+	body := `{"channel":"custom_builtin","title":"Custom","markdown":"# x","builtin":true}`
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/guides", strings.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated || !strings.Contains(rec.Body.String(), `"builtin":false`) {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestChannelGuideHandlerUpdateRejectsBuiltin(t *testing.T) {
+	e := echo.New()
+	h := newChannelGuideHandler(t)
+	e.PUT("/guides/:channel", h.Update)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/guides/wechat_minigame", strings.NewReader(`{"builtin":false}`))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "40001") {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "builtin cannot be changed") {
+		t.Fatalf("body = %s", rec.Body.String())
+	}
+}
+
 func TestChannelGuideHandlerUploadMarkdown(t *testing.T) {
 	e := echo.New()
 	h := newChannelGuideHandler(t)

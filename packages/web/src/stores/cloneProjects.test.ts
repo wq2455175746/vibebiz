@@ -35,7 +35,14 @@ function project(overrides: Partial<CloneProject> = {}): CloneProject {
 }
 
 function image(id: string): CloneDraftAsset {
-  return { id, name: `${id}.png`, size: 100, mime: 'image/png', role: 'image', file: new File(['x'], `${id}.png`, { type: 'image/png' }) }
+  return {
+    id,
+    name: `${id}.png`,
+    size: 100,
+    mime: 'image/png',
+    role: 'image',
+    file: new File(['x'], `${id}.png`, { type: 'image/png' }),
+  }
 }
 
 describe('useCloneProjectsStore', () => {
@@ -62,7 +69,18 @@ describe('useCloneProjectsStore', () => {
 
     const created = await store.create(
       { name: 'Acme', description: 'clone acme', sourceUrl: 'https://acme.example.com' },
-      [image('a'), image('b'), { id: 'doc', name: 'spec.pdf', size: 10, mime: 'application/pdf', role: 'docs', file: new File(['x'], 'spec.pdf') }],
+      [
+        image('a'),
+        image('b'),
+        {
+          id: 'doc',
+          name: 'spec.pdf',
+          size: 10,
+          mime: 'application/pdf',
+          role: 'docs',
+          file: new File(['x'], 'spec.pdf'),
+        },
+      ],
       'b',
     )
 
@@ -80,10 +98,30 @@ describe('useCloneProjectsStore', () => {
     vi.mocked(api.getClone).mockResolvedValue(project({ id: 'c1', assets: [] }))
     vi.mocked(api.stageCloneFile).mockResolvedValue('r1')
     vi.mocked(api.addCloneAsset).mockResolvedValue({
-      id: 'r1', resourceId: 'r1', name: 'a.png', displayName: 'a.png', path: '.resources/a.png', contentType: 'image/png', size: 100, kind: 'image', role: 'gallery', sortOrder: 0, createdAt: '',
+      id: 'r1',
+      resourceId: 'r1',
+      name: 'a.png',
+      displayName: 'a.png',
+      path: '.resources/a.png',
+      contentType: 'image/png',
+      size: 100,
+      kind: 'image',
+      role: 'gallery',
+      sortOrder: 0,
+      createdAt: '',
     })
     vi.mocked(api.setCloneCover).mockResolvedValue({
-      id: 'r1', resourceId: 'r1', name: 'a.png', displayName: 'a.png', path: '.resources/a.png', contentType: 'image/png', size: 100, kind: 'image', role: 'cover', sortOrder: 0, createdAt: '',
+      id: 'r1',
+      resourceId: 'r1',
+      name: 'a.png',
+      displayName: 'a.png',
+      path: '.resources/a.png',
+      contentType: 'image/png',
+      size: 100,
+      kind: 'image',
+      role: 'cover',
+      sortOrder: 0,
+      createdAt: '',
     })
     vi.mocked(api.getClone)
       .mockResolvedValueOnce(project({ id: 'c1', assets: [] }))

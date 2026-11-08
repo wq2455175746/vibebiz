@@ -278,10 +278,7 @@ export function formatCloneSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-export function cloneAssetsByRole<T extends { role: string }>(
-  assets: T[],
-  role: string,
-): T[] {
+export function cloneAssetsByRole<T extends { role: string }>(assets: T[], role: string): T[] {
   return assets.filter((asset) => asset.role === role)
 }
 

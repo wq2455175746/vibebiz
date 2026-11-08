@@ -288,9 +288,13 @@ func isDuplicate(err error) bool {
 }
 
 func toItem(item *model.ChannelGuide) Item {
+	markdown := item.Markdown
+	if strings.TrimSpace(markdown) == "" && item.Builtin && packageableChannels[item.Channel] {
+		markdown = guides.Markdown(item.Channel)
+	}
 	return Item{
 		Channel: item.Channel, Title: item.Title, Summary: item.Summary,
-		Markdown: item.Markdown, Steps: decodeLines(item.Steps), Requirements: decodeLines(item.Requirements),
+		Markdown: markdown, Steps: decodeLines(item.Steps), Requirements: decodeLines(item.Requirements),
 		Enabled: item.Enabled, Builtin: item.Builtin,
 		Packageable: packageableChannels[item.Channel], SortOrder: item.SortOrder, UpdatedAt: item.UpdatedAt,
 	}

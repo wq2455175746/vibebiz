@@ -85,10 +85,7 @@ export async function deleteCloneAsset(projectId: string, resourceId: string): P
   })
 }
 
-export function setCloneCover(
-  projectId: string,
-  resourceId: string,
-): Promise<CloneAssetView> {
+export function setCloneCover(projectId: string, resourceId: string): Promise<CloneAssetView> {
   return request<CloneAssetView>(dpHttp, {
     method: 'put',
     url: `/projects/${encodeURIComponent(projectId)}/clone/assets/${encodeURIComponent(resourceId)}/cover`,

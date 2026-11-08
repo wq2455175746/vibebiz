@@ -16,7 +16,9 @@ const selected = computed<ChannelGuide | null>(() => {
   return guides.value.find((guide) => guide.channel === selectedChannel.value) ?? null
 })
 
-const renderedMarkdown = computed(() => (selected.value ? renderMarkdown(selected.value.markdown) : ''))
+const renderedMarkdown = computed(() =>
+  selected.value ? renderMarkdown(selected.value.markdown) : '',
+)
 
 function requestedChannel() {
   const query = route.query.channel

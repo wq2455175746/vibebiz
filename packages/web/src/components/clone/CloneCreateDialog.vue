@@ -95,13 +95,7 @@ function addImages(files: File[]) {
       assetError.value = error
       break
     }
-    const asset = createCloneAsset(
-      newId(),
-      file,
-      'image',
-      URL.createObjectURL(file),
-      file,
-    )
+    const asset = createCloneAsset(newId(), file, 'image', URL.createObjectURL(file), file)
     assets.value = addCloneAsset(assets.value, asset)
     if (!coverAssetId.value) {
       coverAssetId.value = asset.id
@@ -117,7 +111,10 @@ function setUnitTest(file: File) {
     return
   }
   assets.value = removeCloneAsset(assets.value, unitTest.value?.id ?? '')
-  assets.value = addCloneAsset(assets.value, createCloneAsset(newId(), file, 'unit_test', undefined, file))
+  assets.value = addCloneAsset(
+    assets.value,
+    createCloneAsset(newId(), file, 'unit_test', undefined, file),
+  )
 }
 
 function setDocs(file: File) {
@@ -131,7 +128,10 @@ function setDocs(file: File) {
     revoke(docs.value)
     assets.value = removeCloneAsset(assets.value, docs.value.id)
   }
-  assets.value = addCloneAsset(assets.value, createCloneAsset(newId(), file, 'docs', undefined, file))
+  assets.value = addCloneAsset(
+    assets.value,
+    createCloneAsset(newId(), file, 'docs', undefined, file),
+  )
 }
 
 function removeAsset(id: string) {
@@ -139,11 +139,7 @@ function removeAsset(id: string) {
   if (asset) {
     revoke(asset)
   }
-  coverAssetId.value = nextCoverAfterRemoval(
-    assets.value,
-    coverAssetId.value,
-    id,
-  )
+  coverAssetId.value = nextCoverAfterRemoval(assets.value, coverAssetId.value, id)
   assets.value = removeCloneAsset(assets.value, id)
 }
 

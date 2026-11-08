@@ -26,7 +26,7 @@ const stageStates = computed(() => cloneStagesFromProject(selectedStages.value))
 const currentStageTitle = computed(
   () =>
     CLONE_STAGES.find((stage) => stageStates.value[stage.key].status === 'active')?.title ??
-    (selected.value?.state === 'ready' ? '待开始' : selected.value?.state ?? '—'),
+    (selected.value?.state === 'ready' ? '待开始' : (selected.value?.state ?? '—')),
 )
 
 function doneCount(): number {
@@ -69,9 +69,7 @@ function formatDate(value: string): string {
 }
 
 function imageCount(project: CloneProject): number {
-  return project.assets.filter(
-    (asset) => asset.role === 'cover' || asset.role === 'gallery',
-  ).length
+  return project.assets.filter((asset) => asset.role === 'cover' || asset.role === 'gallery').length
 }
 
 function docsOf(project: CloneProject) {
@@ -238,14 +236,19 @@ onMounted(async () => {
               <p>
                 <strong>单元测试</strong>
                 <span v-if="unitTestOf(selected)">
-                  {{ unitTestOf(selected)?.name }} · {{ formatCloneSize(unitTestOf(selected)?.size ?? 0) }}
+                  {{ unitTestOf(selected)?.name }} ·
+                  {{ formatCloneSize(unitTestOf(selected)?.size ?? 0) }}
                 </span>
                 <span v-else>未上传</span>
               </p>
               <p>
                 <strong>文档说明</strong>
                 <span v-if="docsOf(selected).length > 0">
-                  {{ docsOf(selected).map((doc) => doc.name).join('、') }}
+                  {{
+                    docsOf(selected)
+                      .map((doc) => doc.name)
+                      .join('、')
+                  }}
                 </span>
                 <span v-else>未上传</span>
               </p>

@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import type { ChannelGuide } from '@/types'
-import { channelLabel, channelOptions, levelLabel, packageableChannelOptions } from './channelPackages'
+import {
+  channelLabel,
+  channelOptions,
+  levelLabel,
+  packageableChannelOptions,
+} from './channelPackages'
 
 describe('channel package helpers', () => {
   it('exposes three channels in display order', () => {

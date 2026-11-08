@@ -48,7 +48,11 @@ onMounted(load)
     <p v-else-if="error" class="error-text" role="alert">{{ error }}</p>
     <p v-else-if="entries.length === 0" class="discovery-empty">暂无排行榜数据</p>
     <div v-else class="leaderboard-grid">
-      <article v-for="entry in entries" :key="entry.projectId" class="project-card leaderboard-card">
+      <article
+        v-for="entry in entries"
+        :key="entry.projectId"
+        class="project-card leaderboard-card"
+      >
         <button class="project-card-open" type="button" @click="open(entry)">
           <span class="project-cover leaderboard-cover" :class="{ empty: !hasCover(entry) }">
             <img

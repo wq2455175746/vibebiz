@@ -48,9 +48,7 @@ async function loadChannels() {
   } catch {
     options.value = channelOptions
   }
-  if (!options.value.some((item) => item.value === channel.value)) {
-    channel.value = options.value[0]?.value ?? 'wechat_minigame'
-  }
+  channel.value = options.value[0]?.value ?? 'wechat_minigame'
 }
 
 async function onArtifactChange(event: Event) {

@@ -137,6 +137,79 @@ func TestMarkdownFallsBackToEmbedded(t *testing.T) {
 	}
 }
 
+func TestServiceRejectsInvalidInput(t *testing.T) {
+	svc := NewService(NewMemoryRepository())
+	steps := make([]string, 21)
+	for i := range steps {
+		steps[i] = "step"
+	}
+	cases := []struct {
+		name  string
+		input Input
+	}{
+		{name: "blank title", input: Input{Channel: "custom_channel", Title: "   "}},
+		{name: "too many steps", input: Input{Channel: "custom_channel", Title: "ok", Steps: steps}},
+		{name: "step too long", input: Input{Channel: "custom_channel", Title: "ok", Steps: []string{strings.Repeat("a", 121)}}},
+		{name: "sort order too large", input: Input{Channel: "custom_channel", Title: "ok", SortOrder: 10000}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := svc.Create(context.Background(), tc.input); !errors.Is(err, ErrInvalid) {
+				t.Fatalf("err = %v, want ErrInvalid", err)
+			}
+		})
+	}
+}
+
+func TestBuiltinBlankMarkdownFallsBackToEmbedded(t *testing.T) {
+	svc := newTestService(t)
+	if _, err := svc.Update(context.Background(), core.ChannelWeChat, Input{
+		Title: "微信小游戏", Summary: "s", Markdown: "", Enabled: true, SortOrder: 10,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := svc.Get(context.Background(), core.ChannelWeChat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(got.Markdown) == "" {
+		t.Fatal("builtin blank markdown must fall back to embedded content")
+	}
+	items, err := svc.List(context.Background(), true, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range items {
+		if item.Channel == core.ChannelWeChat && strings.TrimSpace(item.Markdown) == "" {
+			t.Fatal("list returned blank builtin markdown")
+		}
+	}
+
+	created, err := svc.Create(context.Background(), Input{Channel: "custom_blank", Title: "自定义", Markdown: ""})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.Markdown != "" {
+		t.Fatalf("custom blank markdown = %q, want empty", created.Markdown)
+	}
+}
+
+func TestMarkdownIgnoresDisabledBuiltin(t *testing.T) {
+	svc := newTestService(t)
+	if _, err := svc.Update(context.Background(), core.ChannelWeChat, Input{
+		Title: "微信小游戏", Summary: "s", Markdown: "# disabled guide", Enabled: false, SortOrder: 10,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := svc.Markdown(context.Background(), core.ChannelWeChat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "# disabled guide" {
+		t.Fatalf("markdown = %q, want DB content", got)
+	}
+}
+
 func TestServiceMapsDAOErrNotFound(t *testing.T) {
 	svc := NewService(daoNotFoundRepository{NewMemoryRepository()})
 	got, err := svc.Markdown(context.Background(), core.ChannelWeChat)

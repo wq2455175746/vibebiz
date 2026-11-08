@@ -5,11 +5,7 @@ import { RouterLink } from 'vue-router'
 import { useEnterpriseConnectionsStore } from '@/stores/enterpriseConnections'
 import { useEnterpriseFlowStore } from '@/stores/enterpriseFlow'
 import { useFdeResourcesStore } from '@/stores/fdeResources'
-import type {
-  DeliveryFlowState,
-  DeliveryMethodKind,
-  MockStepStatus,
-} from '@/types/enterpriseSpace'
+import type { DeliveryFlowState, DeliveryMethodKind, MockStepStatus } from '@/types/enterpriseSpace'
 import { createEmptyStep, deliveryReady } from '@/utils/enterpriseFlow'
 
 const props = defineProps<{
@@ -98,7 +94,8 @@ function execute() {
     return
   }
   if (!selectedTarget.value) {
-    error.value = props.flow.method === 'fde' ? '所选 FDE 已停用，请重新选择' : '所选配置已失效，请重新选择'
+    error.value =
+      props.flow.method === 'fde' ? '所选 FDE 已停用，请重新选择' : '所选配置已失效，请重新选择'
     return
   }
   if (running.value) return
@@ -185,7 +182,10 @@ onBeforeUnmount(() => {
       >
         <strong>{{ method.title }}</strong>
         <span>{{ method.description }}</span>
-        <small>{{ targets(method.key).length }} {{ method.key === 'fde' ? '位可用人员' : '个可用配置' }}</small>
+        <small
+          >{{ targets(method.key).length }}
+          {{ method.key === 'fde' ? '位可用人员' : '个可用配置' }}</small
+        >
       </button>
     </div>
 
@@ -250,7 +250,9 @@ onBeforeUnmount(() => {
             运营尚未配置可用的 FDE 人员，请联系运营。
           </template>
           <template v-else>
-            请先在设置中配置{{ selectedLabel }}。<RouterLink to="/settings/delivery-space">去配置</RouterLink>
+            请先在设置中配置{{ selectedLabel }}。<RouterLink to="/settings/delivery-space"
+              >去配置</RouterLink
+            >
           </template>
         </p>
         <p v-if="fdeResources.error && flow.method === 'fde'" class="pipeline-hint">

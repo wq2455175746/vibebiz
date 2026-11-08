@@ -29,7 +29,8 @@ type channelGuideRequest struct {
 	Steps        []string `json:"steps"`
 	Requirements []string `json:"requirements"`
 	Enabled      *bool    `json:"enabled"`
-	SortOrder    int      `json:"sortOrder"`
+	SortOrder    *int     `json:"sortOrder"`
+	Builtin      *bool    `json:"builtin"`
 }
 
 func (r channelGuideRequest) input() channelguide.Input {
@@ -37,9 +38,13 @@ func (r channelGuideRequest) input() channelguide.Input {
 	if r.Enabled != nil {
 		enabled = *r.Enabled
 	}
+	sortOrder := 100
+	if r.SortOrder != nil {
+		sortOrder = *r.SortOrder
+	}
 	return channelguide.Input{
 		Channel: r.Channel, Title: r.Title, Summary: r.Summary, Markdown: r.Markdown,
-		Steps: r.Steps, Requirements: r.Requirements, Enabled: enabled, SortOrder: r.SortOrder,
+		Steps: r.Steps, Requirements: r.Requirements, Enabled: enabled, SortOrder: sortOrder,
 	}
 }
 
@@ -137,6 +142,9 @@ func (h *ChannelGuideHandler) Update(c echo.Context) error {
 	}
 	if req.Channel != "" && req.Channel != channel {
 		return response.Fail(c, http.StatusBadRequest, 40001, "channel cannot be changed")
+	}
+	if req.Builtin != nil {
+		return response.Fail(c, http.StatusBadRequest, 40001, "builtin cannot be changed")
 	}
 	item, err := h.Service.Update(c.Request().Context(), channel, req.input())
 	if err != nil {
