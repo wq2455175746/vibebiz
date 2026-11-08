@@ -1,0 +1,8 @@
+{
+  "name": "vibebiz-web-interaction-copy",
+  "version": "v1.2026.11",
+  "commit": "local-prototype",
+  "builtAt": "2026-11-08T00:00:00.000Z",
+  "source": "packages/web/public/evolution/origin_version",
+  "note": "Phase 1 hand-written interaction copy. CI replaces this directory with a real build in Phase 2."
+}

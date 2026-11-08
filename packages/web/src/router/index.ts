@@ -4,6 +4,7 @@ import { useAuthStore } from '@/stores/auth'
 import CloneEditorView from '@/views/CloneEditorView.vue'
 import EditorView from '@/views/EditorView.vue'
 import EnterpriseEditorView from '@/views/EnterpriseEditorView.vue'
+import EvolutionView from '@/views/EvolutionView.vue'
 import HomeView from '@/views/HomeView.vue'
 import LoginView from '@/views/LoginView.vue'
 
@@ -19,6 +20,7 @@ const router = createRouter({
     { path: '/resources', name: 'resources', component: HomeView },
     { path: '/clones', name: 'clones', component: HomeView },
     { path: '/scheduled-tasks', name: 'scheduled-tasks', component: HomeView },
+    { path: '/evolve', name: 'evolution', component: EvolutionView },
     { path: '/clone/editor/:id', name: 'clone-editor', component: CloneEditorView },
     { path: '/enterprise/editor/:id', name: 'enterprise-editor', component: EnterpriseEditorView },
     settingsRoute,
@@ -51,13 +53,15 @@ router.afterEach((to) => {
         ? 'Vibebiz · 企业工程开发'
         : name === 'clone-editor'
           ? 'Vibebiz · 克隆'
-          : name === 'login'
-          ? 'Vibebiz · 登录'
-          : name.startsWith('settings')
-            ? 'Vibebiz · 设置'
-            : name === 'clones'
-              ? 'Vibebiz · 克隆'
-              : 'Vibebiz'
+          : name === 'evolution'
+            ? 'Vibebiz · 集思进化计划'
+            : name === 'login'
+              ? 'Vibebiz · 登录'
+              : name.startsWith('settings')
+                ? 'Vibebiz · 设置'
+                : name === 'clones'
+                  ? 'Vibebiz · 克隆'
+                  : 'Vibebiz'
 })
 
 export default router

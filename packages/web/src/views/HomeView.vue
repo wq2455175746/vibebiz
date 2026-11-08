@@ -9,6 +9,7 @@ import { listTemplates, useTemplate as createFromTemplate } from '@/api/template
 import { fetchChatStatus } from '@/api/chat'
 import ClonePanel from '@/components/clone/ClonePanel.vue'
 import EnterpriseRoadmap from '@/components/enterprise/EnterpriseRoadmap.vue'
+import EvolutionEntryButton from '@/components/evolution/EvolutionEntryButton.vue'
 import HomeDiscovery from '@/components/home/HomeDiscovery.vue'
 import HomeHero from '@/components/home/HomeHero.vue'
 import HomeSidebar from '@/components/home/HomeSidebar.vue'
@@ -353,5 +354,7 @@ onMounted(async () => {
       @close="pickerOpen = false"
       @select="selectProject"
     />
+
+    <EvolutionEntryButton />
   </div>
 </template>

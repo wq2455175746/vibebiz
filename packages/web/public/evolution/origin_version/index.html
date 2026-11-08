@@ -1,0 +1,1734 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vibebiz · 交互副本</title>
+    <style>
+      :root {
+        --ink: #111111;
+        --text: #1f2937;
+        --muted: #6b7280;
+        --line: #e5e7eb;
+        --line-strong: #d1d5db;
+        --surface: #ffffff;
+        --canvas: #f5f6f8;
+        --soft: #f3f4f6;
+        --blue: #2563eb;
+        --blue-soft: #eff4ff;
+        font-family:
+          ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+          'Hiragino Sans GB', sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body,
+      #app {
+        height: 100%;
+      }
+
+      body {
+        margin: 0;
+        background: var(--canvas);
+        color: var(--text);
+        font-size: 13px;
+      }
+
+      button,
+      textarea,
+      input {
+        font: inherit;
+      }
+
+      h1,
+      h2,
+      h3,
+      h4,
+      p {
+        margin: 0;
+      }
+
+      .app {
+        display: grid;
+        grid-template-columns: 232px minmax(0, 1fr);
+        height: 100%;
+        overflow: hidden;
+      }
+
+      .app.collapsed {
+        grid-template-columns: 68px minmax(0, 1fr);
+      }
+
+      .sidebar {
+        display: flex;
+        min-height: 0;
+        flex-direction: column;
+        gap: 14px;
+        padding: 14px 12px;
+        background: var(--soft);
+        border-right: 1px solid var(--line);
+        transition: width 160ms ease;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 2px 4px 8px;
+      }
+
+      .brand-logo {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        background: var(--ink);
+        border-radius: 9px;
+        color: var(--surface);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .brand-name {
+        color: var(--ink);
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+
+      .new-project {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 9px 10px;
+        background: var(--ink);
+        border: 1px solid var(--ink);
+        border-radius: 9px;
+        color: var(--surface);
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+
+      .nav {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .nav button {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 8px 10px;
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        color: var(--text);
+        font-size: 12px;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .nav button:hover {
+        background: var(--surface);
+      }
+
+      .nav button.active {
+        background: var(--blue-soft);
+        color: var(--blue);
+        font-weight: 600;
+      }
+
+      .nav-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .recent {
+        display: flex;
+        min-height: 0;
+        flex: 1;
+        flex-direction: column;
+        gap: 6px;
+        overflow-y: auto;
+      }
+
+      .recent h4,
+      .sidebar-label {
+        padding: 0 6px;
+        color: var(--muted);
+        font-size: 9px;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+      }
+
+      .recent-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 8px;
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        color: var(--text);
+        font-size: 11px;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .recent-item:hover {
+        background: var(--surface);
+        border-color: var(--line);
+      }
+
+      .recent-dot {
+        width: 6px;
+        height: 6px;
+        background: var(--blue);
+        border-radius: 999px;
+      }
+
+      .side-foot {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding-top: 10px;
+        border-top: 1px solid var(--line);
+      }
+
+      .avatar {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        background: var(--ink);
+        border-radius: 999px;
+        color: var(--surface);
+        font-size: 11px;
+        font-weight: 600;
+      }
+
+      .side-user {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        min-width: 0;
+      }
+
+      .side-user strong {
+        color: var(--ink);
+        font-size: 11px;
+      }
+
+      .side-user span {
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 9px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .app.collapsed .brand-name,
+      .app.collapsed .nav button span:last-child,
+      .app.collapsed .recent,
+      .app.collapsed .side-user,
+      .app.collapsed .new-project span {
+        display: none;
+      }
+
+      .main {
+        display: flex;
+        min-width: 0;
+        min-height: 0;
+        flex-direction: column;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        height: 52px;
+        padding: 0 18px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--line);
+      }
+
+      .icon-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        color: var(--muted);
+        cursor: pointer;
+      }
+
+      .icon-button:hover {
+        background: var(--soft);
+        color: var(--ink);
+      }
+
+      .topbar-title {
+        flex: 1;
+        color: var(--ink);
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .badge {
+        padding: 4px 9px;
+        background: var(--soft);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--muted);
+        font-size: 9px;
+        letter-spacing: 0.04em;
+        white-space: nowrap;
+      }
+
+      .badge.strong {
+        background: var(--blue-soft);
+        border-color: var(--line);
+        color: var(--blue);
+      }
+
+      .view {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+      }
+
+      .view.hidden {
+        display: none;
+      }
+
+      .home-view {
+        padding: 34px 30px 40px;
+      }
+
+      .hero {
+        max-width: 760px;
+        margin: 0 auto;
+        text-align: center;
+      }
+
+      .eyebrow {
+        margin-bottom: 14px;
+        color: var(--muted);
+        font-size: 9px;
+        letter-spacing: 0.24em;
+      }
+
+      .hero h1 {
+        margin-bottom: 24px;
+        color: var(--ink);
+        font-size: 30px;
+        font-weight: 600;
+        line-height: 1.28;
+        letter-spacing: -0.01em;
+      }
+
+      .composer {
+        padding: 12px;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        box-shadow: 0 16px 40px rgb(17 17 17 / 5%);
+        text-align: left;
+      }
+
+      .composer textarea {
+        width: 100%;
+        min-height: 74px;
+        padding: 6px 4px;
+        background: transparent;
+        border: 0;
+        color: var(--ink);
+        font-size: 13px;
+        line-height: 1.65;
+        resize: none;
+        outline: none;
+      }
+
+      .composer textarea::placeholder {
+        color: var(--muted);
+      }
+
+      .composer-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding-top: 8px;
+        border-top: 1px solid var(--line);
+      }
+
+      .quick-actions {
+        display: none;
+        flex-wrap: wrap;
+        gap: 5px;
+      }
+
+      .quick-actions button {
+        padding: 4px 9px;
+        background: var(--soft);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--muted);
+        font-size: 10px;
+        cursor: pointer;
+      }
+
+      .quick-actions button:hover {
+        color: var(--blue);
+      }
+
+      .composer-foot > span {
+        color: var(--muted);
+        font-size: 9px;
+      }
+
+      .primary-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 13px;
+        background: var(--ink);
+        border: 1px solid var(--ink);
+        border-radius: 8px;
+        color: var(--surface);
+        font-size: 11px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+
+      .primary-button:hover {
+        background: var(--text);
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 6px;
+        margin-top: 14px;
+      }
+
+      .chips button {
+        padding: 5px 10px;
+        background: transparent;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--muted);
+        font-size: 10px;
+        cursor: pointer;
+      }
+
+      .chips button:hover {
+        background: var(--surface);
+        color: var(--ink);
+      }
+
+      .discovery {
+        max-width: 980px;
+        margin: 44px auto 0;
+      }
+
+      .section-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+
+      .section-head h2 {
+        color: var(--ink);
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      .section-head button {
+        background: transparent;
+        border: 0;
+        color: var(--muted);
+        font-size: 10px;
+        cursor: pointer;
+      }
+
+      .section-head button:hover {
+        color: var(--blue);
+      }
+
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 12px;
+        margin-bottom: 28px;
+      }
+
+      .card {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        cursor: pointer;
+        transition:
+          transform 160ms ease,
+          box-shadow 160ms ease;
+      }
+
+      .card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 14px 30px rgb(17 17 17 / 7%);
+      }
+
+      .card-delete {
+        position: absolute;
+        top: 7px;
+        right: 7px;
+        z-index: 2;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        background: rgb(255 255 255 / 88%);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--muted);
+        font-size: 12px;
+        cursor: pointer;
+      }
+
+      .card-delete:hover {
+        background: var(--ink);
+        border-color: var(--ink);
+        color: var(--surface);
+      }
+
+      .thumb {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 92px;
+        background: linear-gradient(135deg, #e5e7eb, #f3f4f6 60%, #dbeafe);
+        border-bottom: 1px solid var(--line);
+      }
+
+      .thumb span {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        background: var(--surface);
+        border: 1px solid var(--line-strong);
+        border-radius: 10px;
+        color: var(--ink);
+        font-size: 15px;
+        font-weight: 600;
+      }
+
+      .thumb-b {
+        background: linear-gradient(135deg, #dbeafe, #f3f4f6 65%, #e5e7eb);
+      }
+
+      .thumb-c {
+        background: linear-gradient(135deg, #f3f4f6, #e5e7eb 55%, #bfdbfe);
+      }
+
+      .thumb-d {
+        background: linear-gradient(135deg, #eff4ff, #e5e7eb 70%, #f3f4f6);
+      }
+
+      .card-body {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        gap: 5px;
+        padding: 10px 11px 11px;
+      }
+
+      .card-body h3 {
+        overflow: hidden;
+        color: var(--ink);
+        font-size: 12px;
+        font-weight: 600;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .card-body p {
+        display: -webkit-box;
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 10px;
+        line-height: 1.55;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+      }
+
+      .card-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-top: auto;
+        padding-top: 7px;
+      }
+
+      .card-meta time {
+        color: var(--muted);
+        font-size: 9px;
+      }
+
+      .state {
+        padding: 2px 7px;
+        background: var(--soft);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--muted);
+        font-size: 8px;
+      }
+
+      .state.running {
+        background: var(--blue-soft);
+        border-color: var(--line);
+        color: var(--blue);
+      }
+
+      .template-card {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 13px;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+      }
+
+      .template-card .tag {
+        align-self: flex-start;
+        padding: 2px 7px;
+        background: var(--soft);
+        border-radius: 999px;
+        color: var(--muted);
+        font-size: 8px;
+      }
+
+      .template-card h3 {
+        color: var(--ink);
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .template-card p {
+        color: var(--muted);
+        font-size: 10px;
+        line-height: 1.5;
+      }
+
+      .editor-view {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .editor-view.hidden {
+        display: none;
+      }
+
+      .editor-chat {
+        display: flex;
+        width: 340px;
+        min-height: 0;
+        flex-direction: column;
+        background: var(--surface);
+        border-right: 1px solid var(--line);
+      }
+
+      .editor-shell {
+        display: flex;
+        flex: 1;
+        min-height: 0;
+      }
+
+      .editor-chat-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 13px 13px 10px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .editor-chat-head div {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .editor-chat-head strong {
+        color: var(--ink);
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .editor-chat-head span {
+        color: var(--muted);
+        font-size: 9px;
+      }
+
+      .editor-messages {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        gap: 9px;
+        padding: 12px;
+        overflow-y: auto;
+      }
+
+      .chat-message {
+        display: flex;
+        max-width: 94%;
+        flex-direction: column;
+        gap: 4px;
+        padding: 9px 10px;
+        background: var(--soft);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+      }
+
+      .chat-message.user {
+        align-self: flex-end;
+        background: var(--ink);
+        border-color: var(--ink);
+        color: var(--surface);
+      }
+
+      .chat-message .role {
+        font-size: 8px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        opacity: 0.65;
+      }
+
+      .chat-message p {
+        font-size: 11px;
+        line-height: 1.6;
+        white-space: pre-wrap;
+      }
+
+      .editor-composer {
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+        padding: 11px 12px 12px;
+        border-top: 1px solid var(--line);
+      }
+
+      .editor-composer textarea {
+        width: 100%;
+        padding: 9px 10px;
+        background: var(--canvas);
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        color: var(--ink);
+        font-size: 11px;
+        line-height: 1.55;
+        resize: none;
+        outline: none;
+      }
+
+      .editor-composer textarea:focus {
+        background: var(--surface);
+        border-color: var(--blue);
+      }
+
+      .editor-composer-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .editor-composer-foot span {
+        color: var(--muted);
+        font-size: 8px;
+      }
+
+      .editor-work {
+        display: flex;
+        min-width: 0;
+        min-height: 0;
+        flex: 1;
+        flex-direction: column;
+      }
+
+      .work-tabs {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        height: 46px;
+        padding: 0 14px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--line);
+      }
+
+      .work-tabs button {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 6px 10px;
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 7px;
+        color: var(--muted);
+        font-size: 10px;
+        cursor: pointer;
+      }
+
+      .work-tabs button.active {
+        background: var(--blue-soft);
+        border-color: var(--line);
+        color: var(--blue);
+        font-weight: 600;
+      }
+
+      .work-tabs .work-meta {
+        margin-left: auto;
+        color: var(--muted);
+        font-size: 9px;
+      }
+
+      .work-body {
+        flex: 1;
+        min-height: 0;
+        padding: 14px;
+        overflow: auto;
+      }
+
+      .work-pane {
+        height: 100%;
+      }
+
+      .work-pane.hidden {
+        display: none;
+      }
+
+      .preview-frame {
+        height: 100%;
+        overflow: auto;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+      }
+
+      .fake-app {
+        min-height: 100%;
+        padding: 22px;
+      }
+
+      .fake-app header {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .fake-logo {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        background: var(--ink);
+        border-radius: 7px;
+        color: var(--surface);
+        font-size: 11px;
+        font-weight: 600;
+      }
+
+      .fake-app header strong {
+        color: var(--ink);
+        font-size: 12px;
+      }
+
+      .fake-app nav {
+        display: flex;
+        gap: 12px;
+        margin-left: auto;
+      }
+
+      .fake-app nav a {
+        color: var(--muted);
+        font-size: 10px;
+        text-decoration: none;
+      }
+
+      .fake-hero {
+        padding: 34px 0 26px;
+        text-align: center;
+      }
+
+      .fake-eyebrow {
+        margin-bottom: 10px;
+        color: var(--muted);
+        font-size: 8px;
+        letter-spacing: 0.2em;
+      }
+
+      .fake-hero h1 {
+        margin-bottom: 10px;
+        color: var(--ink);
+        font-size: 24px;
+        font-weight: 600;
+      }
+
+      .fake-hero p {
+        max-width: 440px;
+        margin: 0 auto 16px;
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.65;
+      }
+
+      .fake-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .fake-grid article {
+        padding: 13px;
+        background: var(--canvas);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+      }
+
+      .fake-grid h3 {
+        margin-bottom: 5px;
+        color: var(--ink);
+        font-size: 11px;
+      }
+
+      .fake-grid p {
+        color: var(--muted);
+        font-size: 9px;
+        line-height: 1.55;
+      }
+
+      .code-view {
+        height: 100%;
+        margin: 0;
+        padding: 14px;
+        overflow: auto;
+        background: var(--ink);
+        border-radius: 12px;
+        color: #e5e7eb;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 10.5px;
+        line-height: 1.7;
+        white-space: pre;
+      }
+
+      .terminal-view {
+        height: 100%;
+        padding: 13px;
+        overflow: auto;
+        background: var(--ink);
+        border-radius: 12px;
+        color: #d1d5db;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 10px;
+        line-height: 1.8;
+      }
+
+      .terminal-line span {
+        color: #9ca3af;
+      }
+
+      .terminal-line.ok {
+        color: #bfdbfe;
+      }
+
+      .toast {
+        position: fixed;
+        bottom: 18px;
+        left: 50%;
+        z-index: 20;
+        padding: 9px 14px;
+        background: var(--ink);
+        border-radius: 999px;
+        color: var(--surface);
+        font-size: 11px;
+        opacity: 0;
+        pointer-events: none;
+        transform: translate(-50%, 8px);
+        transition:
+          opacity 160ms ease,
+          transform 160ms ease;
+      }
+
+      .toast.show {
+        opacity: 1;
+        transform: translate(-50%, 0);
+      }
+
+      body.s-compact-sidebar .app {
+        grid-template-columns: 188px minmax(0, 1fr);
+      }
+
+      body.s-compact-sidebar .cards {
+        grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+        gap: 9px;
+      }
+
+      body.s-compact-sidebar .card-body {
+        padding: 8px 9px 9px;
+      }
+
+      body.s-compact-sidebar .home-view {
+        padding-top: 24px;
+      }
+
+      body.s-focus-composer .hero {
+        max-width: 880px;
+        margin-top: 7vh;
+      }
+
+      body.s-focus-composer .hero h1 {
+        font-size: 34px;
+      }
+
+      body.s-focus-composer .composer textarea {
+        min-height: 150px;
+        font-size: 16px;
+      }
+
+      body.s-focus-composer .discovery {
+        opacity: 0.42;
+      }
+
+      body.s-soft-cards .card {
+        background: var(--soft);
+        border-color: transparent;
+        border-radius: 18px;
+        box-shadow: none;
+      }
+
+      body.s-soft-cards .thumb {
+        border-bottom: 0;
+        background: transparent;
+      }
+
+      body.s-soft-cards .card-body p {
+        color: var(--muted);
+      }
+
+      body.s-quick-actions .quick-actions {
+        display: flex;
+      }
+
+      body.s-bugfix .card-delete {
+        border-color: var(--blue);
+        box-shadow: 0 0 0 3px var(--blue-soft);
+      }
+
+      @media (max-width: 840px) {
+        .editor-chat {
+          display: none;
+        }
+
+        .cards {
+          grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app" id="app">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-logo">V</span>
+          <span class="brand-name">Vibebiz</span>
+        </div>
+        <button class="new-project" id="newProject" type="button">
+          <span>＋</span>
+          <span>新建项目</span>
+        </button>
+        <nav class="nav">
+          <button type="button" class="active" data-view="home">
+            <span class="nav-icon">◆</span>
+            <span>首页</span>
+          </button>
+          <button type="button" data-view="projects">
+            <span class="nav-icon">▤</span>
+            <span>我的项目</span>
+          </button>
+          <button type="button" data-view="resources">
+            <span class="nav-icon">◇</span>
+            <span>资源 · 模板</span>
+          </button>
+          <button type="button" data-view="scheduled">
+            <span class="nav-icon">◷</span>
+            <span>定时任务</span>
+          </button>
+        </nav>
+        <div class="recent">
+          <h4>最近项目</h4>
+          <div id="recentList"></div>
+        </div>
+        <div class="side-foot">
+          <span class="avatar">H</span>
+          <div class="side-user">
+            <strong>王海广</strong>
+            <span>个人工作区</span>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <button type="button" class="icon-button" id="sideToggle">☰</button>
+          <span class="topbar-title" id="topTitle">首页</span>
+          <span class="badge strong" id="scenarioBadge">官方基线</span>
+          <span class="badge">交互副本</span>
+        </header>
+
+        <section class="view home-view" id="homeView">
+          <div class="hero">
+            <p class="eyebrow">AI CODING PLATFORM</p>
+            <h1>把想法交给 Vibebiz，<br />从一句话到一个可运行的应用。</h1>
+            <div class="composer">
+              <textarea
+                id="prompt"
+                placeholder="描述你想创建的项目，或粘贴参考资料…"
+              ></textarea>
+              <div class="composer-foot">
+                <div class="quick-actions">
+                  <button type="button" data-quick="生成一个 SaaS 落地页">生成落地页</button>
+                  <button type="button" data-quick="拆解这个需求并给出页面结构">拆解需求</button>
+                  <button type="button" data-quick="把上传的资料整理成项目说明">整理资料</button>
+                </div>
+                <span id="composerHint">描述需求后直接开始</span>
+                <button type="button" class="primary-button" id="createBtn">
+                  开始创作 <span>→</span>
+                </button>
+              </div>
+            </div>
+            <div class="chips">
+              <button type="button" data-quick="做一个企业官网，包含产品、案例和联系表单">企业官网</button>
+              <button type="button" data-quick="做一个活动报名页，支持收集报名信息">活动报名页</button>
+              <button type="button" data-quick="做一个团队周报助手，自动汇总进展">周报助手</button>
+            </div>
+          </div>
+
+          <div class="discovery">
+            <div class="section-head">
+              <h2>最近项目</h2>
+              <button type="button" data-view="projects">查看全部</button>
+            </div>
+            <div class="cards" id="projectGrid"></div>
+            <div class="section-head">
+              <h2>模板灵感</h2>
+              <button type="button" data-view="resources">全部模板</button>
+            </div>
+            <div class="cards" id="templateGrid"></div>
+          </div>
+        </section>
+
+        <section class="view projects-view hidden" id="projectsView">
+          <div class="home-view">
+            <div class="section-head">
+              <h2>我的项目</h2>
+              <span class="badge" id="projectCount">0 个项目</span>
+            </div>
+            <div class="cards" id="projectsGrid"></div>
+          </div>
+        </section>
+
+        <section class="view resources-view hidden" id="resourcesView">
+          <div class="home-view">
+            <div class="section-head">
+              <h2>资源 · 模板</h2>
+              <span class="badge">4 个模板</span>
+            </div>
+            <div class="cards" id="resourcesGrid"></div>
+          </div>
+        </section>
+
+        <section class="view scheduled-view hidden" id="scheduledView">
+          <div class="home-view">
+            <div class="section-head">
+              <h2>定时任务</h2>
+              <span class="badge">1 个任务</span>
+            </div>
+            <div class="template-card">
+              <span class="tag">每周一 09:00</span>
+              <h3>团队周报自动汇总</h3>
+              <p>读取项目最近一周的变更与对话，生成周报草稿并发送到工作区。</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="view editor-view hidden" id="editorView">
+          <div class="editor-shell">
+            <aside class="editor-chat">
+              <header class="editor-chat-head">
+                <div>
+                  <strong id="editorProjectName">项目</strong>
+                  <span>Agent 会先评估再生成效果</span>
+                </div>
+                <span class="badge" id="editorState">已就绪</span>
+              </header>
+              <div class="editor-messages" id="editorMessages"></div>
+              <div class="editor-composer">
+                <textarea
+                  id="editorPrompt"
+                  rows="3"
+                  placeholder="继续描述你的需求…"
+                ></textarea>
+                <div class="editor-composer-foot">
+                  <span>Ctrl / ⌘ + Enter 发送</span>
+                  <button type="button" class="primary-button" id="editorSend">发送</button>
+                </div>
+              </div>
+            </aside>
+
+            <div class="editor-work">
+              <div class="work-tabs">
+                <button type="button" class="active" data-tab="preview">应用查看器</button>
+                <button type="button" data-tab="code">代码</button>
+                <button type="button" data-tab="terminal">终端</button>
+                <span class="work-meta" id="workMeta">实时预览</span>
+              </div>
+              <div class="work-body">
+                <div class="work-pane" id="previewPane">
+                  <div class="preview-frame" id="fakePreview"></div>
+                </div>
+                <pre class="work-pane hidden code-view" id="codePane"></pre>
+                <div class="work-pane hidden terminal-view" id="terminalPane"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+      const STORAGE_KEY = 'vibebiz:evolution-demo:v1'
+      const params = new URLSearchParams(window.location.search)
+      const scenario = params.get('scenario') || 'baseline'
+      const versionLabel = params.get('version') || 'v1.2026.11'
+      const userName = params.get('user') || 'Vibebiz 官方'
+
+      document.body.classList.add('s-' + scenario)
+      document.getElementById('scenarioBadge').textContent = versionLabel + ' · ' + userName
+
+      const state = loadState()
+      let currentView = 'home'
+      let currentProjectId = null
+
+      function minutesAgo(minutes) {
+        return new Date(Date.now() - minutes * 60000).toISOString()
+      }
+
+      function seedState() {
+        return {
+          schema: 1,
+          projects: [
+            {
+              id: 'p-1',
+              name: '宠物社区小程序',
+              desc: '宠物领养、日常记录与社区互动。',
+              state: 'ready',
+              updatedAt: minutesAgo(120),
+              accent: 'a',
+            },
+            {
+              id: 'p-2',
+              name: '团队周报助手',
+              desc: '自动汇总成员进展并生成周报。',
+              state: 'ready',
+              updatedAt: minutesAgo(300),
+              accent: 'b',
+            },
+            {
+              id: 'p-3',
+              name: '活动报名页',
+              desc: '活动介绍、报名表单与名单管理。',
+              state: 'running',
+              updatedAt: minutesAgo(60),
+              accent: 'c',
+            },
+            {
+              id: 'p-4',
+              name: '企业官网重构',
+              desc: '品牌首页、产品介绍与联系我们。',
+              state: 'ready',
+              updatedAt: minutesAgo(1440),
+              accent: 'd',
+            },
+          ],
+          templates: [
+            { id: 't-1', name: 'SaaS 落地页', tag: '官网', desc: '产品价值、功能特性与转化入口。' },
+            { id: 't-2', name: '活动报名页', tag: '表单', desc: '活动信息、报名收集与名单导出。' },
+            { id: 't-3', name: '团队周报', tag: '效率', desc: '自动汇总进展并生成可编辑周报。' },
+            { id: 't-4', name: '作品集网站', tag: '个人', desc: '项目展示、经历与联系方式。' },
+          ],
+          chats: {
+            'p-1': [
+              { role: 'user', text: '做一个宠物社区小程序，先有首页和领养列表。' },
+              {
+                role: 'agent',
+                text: '已拆分为首页、领养列表、详情三个页面。当前预览使用示例数据，可以直接体验交互。',
+              },
+            ],
+            'p-2': [
+              { role: 'user', text: '每周一自动汇总团队进展，生成周报。' },
+              { role: 'agent', text: '已生成周报任务与模板，并接入示例数据。' },
+            ],
+            'p-3': [],
+            'p-4': [],
+          },
+        }
+      }
+
+      function loadState() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY)
+          if (!raw) {
+            const seed = seedState()
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(seed))
+            return seed
+          }
+          const parsed = JSON.parse(raw)
+          if (!parsed || parsed.schema !== 1 || !Array.isArray(parsed.projects)) {
+            const seed = seedState()
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(seed))
+            return seed
+          }
+          if (!parsed.chats || typeof parsed.chats !== 'object') {
+            parsed.chats = {}
+          }
+          return parsed
+        } catch (error) {
+          return seedState()
+        }
+      }
+
+      function saveState() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;')
+      }
+
+      function relative(iso) {
+        const diff = Math.max(0, Date.now() - new Date(iso).getTime())
+        const minute = 60000
+        const hour = 60 * minute
+        const day = 24 * hour
+        if (diff < minute) return '刚刚'
+        if (diff < hour) return Math.floor(diff / minute) + ' 分钟前'
+        if (diff < day) return Math.floor(diff / hour) + ' 小时前'
+        return Math.floor(diff / day) + ' 天前'
+      }
+
+      function toast(text) {
+        const element = document.getElementById('toast')
+        element.textContent = text
+        element.classList.add('show')
+        window.clearTimeout(toast.timer)
+        toast.timer = window.setTimeout(() => element.classList.remove('show'), 1800)
+      }
+
+      function projectCard(project) {
+        const stateLabel = project.state === 'running' ? '生成中' : '已就绪'
+        return (
+          '<article class="card" data-open="' +
+          escapeHtml(project.id) +
+          '">' +
+          '<button class="card-delete" type="button" data-delete="' +
+          escapeHtml(project.id) +
+          '" title="删除项目">×</button>' +
+          '<div class="thumb thumb-' +
+          escapeHtml(project.accent || 'a') +
+          '"><span>' +
+          escapeHtml(project.name.slice(0, 1)) +
+          '</span></div>' +
+          '<div class="card-body"><h3>' +
+          escapeHtml(project.name) +
+          '</h3><p>' +
+          escapeHtml(project.desc) +
+          '</p><div class="card-meta"><span class="state ' +
+          (project.state === 'running' ? 'running' : '') +
+          '">' +
+          stateLabel +
+          '</span><time>' +
+          relative(project.updatedAt) +
+          '</time></div></div></article>'
+        )
+      }
+
+      function templateCard(template) {
+        return (
+          '<article class="template-card"><span class="tag">' +
+          escapeHtml(template.tag) +
+          '</span><h3>' +
+          escapeHtml(template.name) +
+          '</h3><p>' +
+          escapeHtml(template.desc) +
+          '</p></article>'
+        )
+      }
+
+      function render() {
+        document.getElementById('projectGrid').innerHTML = state.projects
+          .slice(0, 4)
+          .map(projectCard)
+          .join('')
+        document.getElementById('templateGrid').innerHTML = state.templates
+          .slice(0, 4)
+          .map(templateCard)
+          .join('')
+        document.getElementById('projectsGrid').innerHTML = state.projects.map(projectCard).join('')
+        document.getElementById('resourcesGrid').innerHTML = state.templates.map(templateCard).join('')
+        document.getElementById('projectCount').textContent = state.projects.length + ' 个项目'
+        document.getElementById('recentList').innerHTML = state.projects
+          .slice(0, 4)
+          .map(
+            (project) =>
+              '<button class="recent-item" type="button" data-open="' +
+              escapeHtml(project.id) +
+              '"><span class="recent-dot"></span><span>' +
+              escapeHtml(project.name) +
+              '</span></button>',
+          )
+          .join('')
+        if (currentProjectId) {
+          renderEditor()
+        }
+      }
+
+      function showView(view) {
+        currentView = view
+        const map = {
+          home: 'homeView',
+          projects: 'projectsView',
+          resources: 'resourcesView',
+          scheduled: 'scheduledView',
+          editor: 'editorView',
+        }
+        Object.keys(map).forEach((key) => {
+          document.getElementById(map[key]).classList.toggle('hidden', key !== view)
+        })
+        const titles = {
+          home: '首页',
+          projects: '我的项目',
+          resources: '资源 · 模板',
+          scheduled: '定时任务',
+          editor: currentProject() ? currentProject().name : '项目',
+        }
+        document.getElementById('topTitle').textContent = titles[view]
+        document.querySelectorAll('.nav button').forEach((button) => {
+          button.classList.toggle('active', button.dataset.view === view)
+        })
+      }
+
+      function currentProject() {
+        return state.projects.find((project) => project.id === currentProjectId) || null
+      }
+
+      function openEditor(projectId) {
+        const project = state.projects.find((item) => item.id === projectId)
+        if (!project) {
+          return
+        }
+        currentProjectId = projectId
+        if (!state.chats[projectId]) {
+          state.chats[projectId] = []
+        }
+        showView('editor')
+        renderEditor()
+        saveState()
+      }
+
+      function renderEditor() {
+        const project = currentProject()
+        if (!project) {
+          return
+        }
+        document.getElementById('editorProjectName').textContent = project.name
+        document.getElementById('editorState').textContent =
+          project.state === 'running' ? '生成中' : '已就绪'
+        document.getElementById('topTitle').textContent = project.name
+        renderMessages()
+        renderPreview()
+        renderCode()
+        renderTerminal()
+      }
+
+      function renderMessages() {
+        const messages = state.chats[currentProjectId] || []
+        const container = document.getElementById('editorMessages')
+        container.innerHTML =
+          messages
+            .map(
+              (message) =>
+                '<article class="chat-message ' +
+                escapeHtml(message.role) +
+                '"><span class="role">' +
+                (message.role === 'user' ? '用户' : 'Agent') +
+                '</span><p>' +
+                escapeHtml(message.text) +
+                '</p></article>',
+            )
+            .join('') ||
+          '<p style="margin:auto;color:var(--muted);font-size:11px;text-align:center">还没有对话，描述你的需求开始。</p>'
+        container.scrollTop = container.scrollHeight
+      }
+
+      function renderPreview() {
+        const project = currentProject()
+        if (!project) {
+          return
+        }
+        const cards = [
+          ['核心能力', '用一句话描述需求，自动拆解页面与交互。'],
+          ['实时预览', '每次修改立即渲染，确认后再进入下一步。'],
+          ['持续迭代', '基于对话继续优化，不需要重新开始。'],
+        ]
+          .map(
+            (item) =>
+              '<article><h3>' +
+              item[0] +
+              '</h3><p>' +
+              item[1] +
+              '</p></article>',
+          )
+          .join('')
+        document.getElementById('fakePreview').innerHTML =
+          '<div class="fake-app"><header><span class="fake-logo">' +
+          escapeHtml(project.name.slice(0, 1)) +
+          '</span><strong>' +
+          escapeHtml(project.name) +
+          '</strong><nav><a href="#">首页</a><a href="#">功能</a><a href="#">关于</a></nav></header><section class="fake-hero"><p class="fake-eyebrow">GENERATED BY VIBEBiz</p><h1>' +
+          escapeHtml(project.name) +
+          '</h1><p>' +
+          escapeHtml(project.desc) +
+          '</p><button type="button" class="primary-button">立即体验</button></section><section class="fake-grid">' +
+          cards +
+          '</section></div>'
+      }
+
+      function renderCode() {
+        const project = currentProject()
+        if (!project) {
+          return
+        }
+        const code =
+          '<template>\n' +
+          '  <main class="page">\n' +
+          '    <header class="page-head">\n' +
+          '      <h1>' +
+          project.name +
+          '</h1>\n' +
+          '      <p>' +
+          project.desc +
+          '</p>\n' +
+          '    </header>\n' +
+          '    <section class="grid">\n' +
+          '      <article v-for="item in features" :key="item.title">\n' +
+          '        <h2>{{ item.title }}</h2>\n' +
+          '        <p>{{ item.desc }}</p>\n' +
+          '      </article>\n' +
+          '    </section>\n' +
+          '  </main>\n' +
+          '</template>\n'
+        document.getElementById('codePane').textContent = code
+      }
+
+      function renderTerminal() {
+        const now = new Date().toLocaleTimeString('zh-CN', { hour12: false })
+        document.getElementById('terminalPane').innerHTML =
+          '<div class="terminal-line"><span>[' +
+          now +
+          ']</span> workspace ready</div>' +
+          '<div class="terminal-line"><span>[' +
+          now +
+          ']</span> preview dev server listening on :3000</div>' +
+          '<div class="terminal-line ok"><span>[' +
+          now +
+          ']</span> build finished in 1.2s</div>'
+      }
+
+      function createProject(prompt) {
+        const text = (prompt || '').trim() || '一个个人作品集网站'
+        const name = text.length > 14 ? text.slice(0, 14) + '…' : text
+        const id = 'p-' + Date.now().toString(36)
+        state.projects.unshift({
+          id,
+          name,
+          desc: text,
+          state: 'ready',
+          updatedAt: new Date().toISOString(),
+          accent: ['a', 'b', 'c', 'd'][state.projects.length % 4],
+        })
+        state.chats[id] = [
+          { role: 'user', text },
+          {
+            role: 'agent',
+            text: '已拆解为首页与功能区块，并生成第一版预览。你可以继续描述要调整的地方。',
+          },
+        ]
+        saveState()
+        render()
+        openEditor(id)
+        toast('项目已创建，正在预览第一版效果')
+      }
+
+      function removeProject(projectId) {
+        const project = state.projects.find((item) => item.id === projectId)
+        if (!project) {
+          return
+        }
+        state.projects = state.projects.filter((item) => item.id !== projectId)
+        delete state.chats[projectId]
+        if (currentProjectId === projectId) {
+          currentProjectId = null
+          showView('home')
+        }
+        saveState()
+        render()
+        toast('已删除项目「' + project.name + '」')
+      }
+
+      function sendEditorMessage() {
+        const input = document.getElementById('editorPrompt')
+        const text = input.value.trim()
+        if (!text || !currentProjectId) {
+          return
+        }
+        const messages = state.chats[currentProjectId] || []
+        messages.push({ role: 'user', text })
+        state.chats[currentProjectId] = messages
+        input.value = ''
+        saveState()
+        renderMessages()
+        window.setTimeout(() => {
+          let reply = '收到。我会先评估这个改动的范围，再决定是否直接生成效果。'
+          if (/bug|报错|错误|没反应|无法|失效/i.test(text)) {
+            reply = '这看起来是页面缺陷，我会在当前副本中直接修复，并把结果渲染到预览里。'
+          } else if (/颜色|布局|间距|字体|按钮|样式|紧凑|卡片|交互/i.test(text)) {
+            reply = '这属于视觉 / 交互优化。我先给出候选效果，你确认后再记录为意见版本。'
+          } else if (/新增|支持|接入|功能|模块|架构|权限/i.test(text)) {
+            reply =
+              '这个提议涉及功能或架构改动，我不会直接生成。需要先确认使用场景、影响范围和验收标准。'
+          }
+          messages.push({ role: 'agent', text: reply })
+          saveState()
+          renderMessages()
+        }, 520)
+      }
+
+      document.addEventListener('click', (event) => {
+        const target = event.target
+        if (!(target instanceof Element)) {
+          return
+        }
+        const deleteButton = target.closest('[data-delete]')
+        if (deleteButton) {
+          event.stopPropagation()
+          removeProject(deleteButton.dataset.delete)
+          return
+        }
+        const openButton = target.closest('[data-open]')
+        if (openButton) {
+          openEditor(openButton.dataset.open)
+          return
+        }
+        const viewButton = target.closest('[data-view]')
+        if (viewButton) {
+          showView(viewButton.dataset.view)
+          return
+        }
+        const quickButton = target.closest('[data-quick]')
+        if (quickButton) {
+          const prompt = document.getElementById('prompt')
+          prompt.value = quickButton.dataset.quick
+          prompt.focus()
+          return
+        }
+        const tabButton = target.closest('[data-tab]')
+        if (tabButton) {
+          showTab(tabButton.dataset.tab)
+        }
+      })
+
+      function showTab(tab) {
+        document.querySelectorAll('.work-tabs button').forEach((button) => {
+          button.classList.toggle('active', button.dataset.tab === tab)
+        })
+        document.getElementById('previewPane').classList.toggle('hidden', tab !== 'preview')
+        document.getElementById('codePane').classList.toggle('hidden', tab !== 'code')
+        document.getElementById('terminalPane').classList.toggle('hidden', tab !== 'terminal')
+        const labels = { preview: '实时预览', code: '只读文件', terminal: '终端输出' }
+        document.getElementById('workMeta').textContent = labels[tab]
+      }
+
+      document.getElementById('sideToggle').addEventListener('click', () => {
+        document.getElementById('app').classList.toggle('collapsed')
+      })
+
+      document.getElementById('newProject').addEventListener('click', () => {
+        showView('home')
+        document.getElementById('prompt').focus()
+      })
+
+      document.getElementById('createBtn').addEventListener('click', () => {
+        createProject(document.getElementById('prompt').value)
+        document.getElementById('prompt').value = ''
+      })
+
+      document.getElementById('editorSend').addEventListener('click', sendEditorMessage)
+
+      document.getElementById('editorPrompt').addEventListener('keydown', (event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+          event.preventDefault()
+          sendEditorMessage()
+        }
+      })
+
+      render()
+      showView('home')
+    </script>
+  </body>
+</html>
