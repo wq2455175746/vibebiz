@@ -6,7 +6,8 @@ name: vibebiz
 
 services:
   logs-init:
-    image: alpine:3.20
+    platform: ${DOCKER_PLATFORM:-linux/amd64}
+    image: ${INIT_IMAGE:-alpine:3.20}
     command: ["sh", "-c", "mkdir -p /logs/backend /logs/sandbox /data/skills && chmod 0777 /logs/backend /logs/sandbox /data/skills"]
     volumes:
       - ../../logs:/logs
@@ -14,7 +15,8 @@ services:
     restart: "no"
 
   publish-init:
-    image: alpine:3.20
+    platform: ${DOCKER_PLATFORM:-linux/amd64}
+    image: ${INIT_IMAGE:-alpine:3.20}
     command: ["sh", "-c", "mkdir -p /published /channel-packages && chmod 0777 /published /channel-packages"]
     volumes:
       - ../../data/published:/published
@@ -22,9 +24,10 @@ services:
     restart: "no"
 
   sandbox:
+    platform: ${DOCKER_PLATFORM:-linux/amd64}
     build:
       context: ../../packages/sandbox
-    image: vibebiz/sandbox:local
+    image: ${SANDBOX_IMAGE:-vibebiz/sandbox:${IMAGE_TAG:-develop}}
     env_file:
       - ../../packages/sandbox/.env
     environment:
@@ -77,10 +80,14 @@ services:
     restart: unless-stopped
 
   backend:
+    platform: ${DOCKER_PLATFORM:-linux/amd64}
     build:
       context: ../../packages/backend
       target: combined
-    image: vibebiz/backend:local
+      args:
+        GOPROXY: ${GOPROXY:-https://goproxy.cn,direct}
+        GOSUMDB: ${GOSUMDB:-sum.golang.org}
+    image: ${BACKEND_IMAGE:-vibebiz/backend:${IMAGE_TAG:-develop}}
     env_file:
       - ../../packages/backend/.env
     environment:
@@ -119,13 +126,14 @@ services:
     restart: unless-stopped
 
   web:
+    platform: ${DOCKER_PLATFORM:-linux/amd64}
     build:
       context: ../../packages/web
       args:
         VITE_CP_BASE: ${VITE_CP_BASE:-/cp/api/v1}
         VITE_DP_BASE: ${VITE_DP_BASE:-/dp/api/v1}
         VITE_DEMO_LOGIN: ${VITE_DEMO_LOGIN:-true}
-    image: vibebiz/web:local
+    image: ${WEB_IMAGE:-vibebiz/web:${IMAGE_TAG:-develop}}
     depends_on:
       backend:
         condition: service_healthy
@@ -134,7 +142,8 @@ services:
     restart: unless-stopped
 
   published:
-    image: nginx:1.27-alpine
+    platform: ${DOCKER_PLATFORM:-linux/amd64}
+    image: ${PUBLISHED_IMAGE:-nginx:1.27-alpine}
     container_name: vibebiz-published
     depends_on:
       publish-init:
@@ -147,12 +156,13 @@ services:
     restart: unless-stopped
 
   ops-web:
+    platform: ${DOCKER_PLATFORM:-linux/amd64}
     build:
       context: ../../packages/ops-web
       args:
         VITE_OPS_API_BASE: ${VITE_OPS_API_BASE:-/cp/api/v1/admin}
         VITE_DEMO_LOGIN: ${VITE_DEMO_LOGIN:-true}
-    image: vibebiz/ops-web:local
+    image: ${OPS_WEB_IMAGE:-vibebiz/ops-web:${IMAGE_TAG:-develop}}
     depends_on:
       backend:
         condition: service_healthy

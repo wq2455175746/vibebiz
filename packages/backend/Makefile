@@ -6,8 +6,15 @@ CP_PORT ?= 8080
 DP_PORT ?= 8081
 CORS_ORIGINS ?= http://localhost:5173,http://localhost:5174
 export
+GO ?= go
+GOOS ?= $(shell $(GO) env GOOS)
+GOARCH ?= $(shell $(GO) env GOARCH)
+CGO_ENABLED ?= 0
+BUILD_LDFLAGS ?= -s -w
+BUILD_FLAGS ?= -trimpath -ldflags "$(BUILD_LDFLAGS)"
+unexport GO GOOS GOARCH CGO_ENABLED BUILD_LDFLAGS BUILD_FLAGS
 
-.PHONY: help init install dev dev-cp dev-dp test lint quality validate build clean db-create db-migrate-up db-migrate-down db-migrate-status db-migrate-version db-migrate-redo
+.PHONY: help init install dev dev-cp dev-dp test lint quality validate build build-linux clean db-create db-migrate-up db-migrate-down db-migrate-status db-migrate-version db-migrate-redo
 
 help:
 	@echo "vibebiz backend"
@@ -18,7 +25,8 @@ help:
 	@echo "  make dev-dp     - DP (http://localhost:$(DP_PORT))"
 	@echo "  make test       - go test ./..."
 	@echo "  make quality    - gofmt + go vet"
-	@echo "  make build      - 构建 bin/cp 与 bin/dp"
+	@echo "  make build      - 构建 bin/cp 与 bin/dp（默认当前平台，已裁剪调试信息）"
+	@echo "  make build-linux - 交叉编译 linux/amd64 的 bin/cp 与 bin/dp"
 	@echo "  make db-create  - 创建 MYSQL_DATABASE（如不存在）"
 	@echo "  make db-migrate-up     - 执行所有待执行迁移"
 	@echo "  make db-migrate-down   - 回滚一个迁移"
@@ -54,8 +62,12 @@ validate: quality
 
 build:
 	@mkdir -p bin
-	@CGO_ENABLED=0 go build -o bin/cp ./cmd/cp
-	@CGO_ENABLED=0 go build -o bin/dp ./cmd/dp
+	@CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=$(GOARCH) $(GO) build $(BUILD_FLAGS) -o bin/cp ./cmd/cp
+	@CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=$(GOARCH) $(GO) build $(BUILD_FLAGS) -o bin/dp ./cmd/dp
+	@echo "built bin/cp bin/dp for $(GOOS)/$(GOARCH)"
+
+build-linux:
+	@$(MAKE) --no-print-directory build GOOS=linux GOARCH=amd64
 
 clean:
 	@rm -rf bin

@@ -6,6 +6,7 @@ Exit code: 0 = no errors (warnings allowed), 1 = errors.
 """
 
 import json
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -352,6 +353,56 @@ def require_contains(relative: str, needles: list[str]) -> None:
         check(f"{relative} contract")
 
 
+def compose_services(content: str) -> set[str]:
+    in_services = False
+    services: set[str] = set()
+    for line in content.splitlines():
+        if line.startswith("services:"):
+            in_services = True
+            continue
+        if in_services:
+            if line and not line[0].isspace():
+                break
+            match = re.fullmatch(r"  ([a-z0-9-]+):", line)
+            if match:
+                services.add(match.group(1))
+    return services
+
+
+def require_compose_platform(relative: str) -> set[str]:
+    content = read(relative)
+    if not content:
+        error(f"cannot check compose platform: {relative} missing or empty")
+        return set()
+    services = compose_services(content)
+    missing = sorted(
+        name
+        for name in services
+        if not re.search(
+            rf"^  {re.escape(name)}:\n    platform: \$\{{DOCKER_PLATFORM:-linux/amd64\}}$",
+            content,
+            re.MULTILINE,
+        )
+    )
+    if missing:
+        error(f"{relative} missing platform on services: {', '.join(missing)}")
+    else:
+        check(f"{relative} platform on all services")
+    return services
+
+
+def validate_compose_sync() -> None:
+    local = require_compose_platform("deployment/docker/docker-compose.yml")
+    public = require_compose_platform("deployment/docker/docker-compose.public.yml")
+    if local and public and local != public:
+        error(
+            "compose service sets differ: "
+            f"local-only={sorted(local - public)} public-only={sorted(public - local)}"
+        )
+    elif local and public:
+        check("compose service sets match")
+
+
 def validate_contracts() -> None:
     print("\n[5/7] Contracts")
     require_contains(
@@ -390,7 +441,22 @@ def validate_contracts() -> None:
             "mkdir -p /published /channel-packages",
         ],
     )
-    require_contains("packages/backend/Dockerfile", ["AS cp", "AS dp", "AS combined", "docker-entrypoint.sh"])
+    validate_compose_sync()
+    for compose in (
+        "deployment/docker/docker-compose.yml",
+        "deployment/docker/docker-compose.public.yml",
+    ):
+        require_contains(
+            compose,
+            [
+                "${BACKEND_IMAGE:-vibebiz/backend:${IMAGE_TAG:-develop}}",
+                "${SANDBOX_IMAGE:-vibebiz/sandbox:${IMAGE_TAG:-develop}}",
+                "${WEB_IMAGE:-vibebiz/web:${IMAGE_TAG:-develop}}",
+                "${OPS_WEB_IMAGE:-vibebiz/ops-web:${IMAGE_TAG:-develop}}",
+            ],
+        )
+        require_regex_absent(compose, r"vibebiz/(backend|sandbox|web|ops-web):local")
+    require_contains("packages/backend/Dockerfile", ["AS cp", "AS dp", "AS combined", "ARG GOPROXY", "docker-entrypoint.sh"])
     require_contains("packages/backend/docker-entrypoint.sh", ["CP_PORT", "DP_PORT", "/app/cp", "/app/dp"])
     require_contains(
         "scripts/dev.sh",

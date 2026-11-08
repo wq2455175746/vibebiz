@@ -10,7 +10,20 @@ VITE_DP_BASE ?= /dp/api/v1
 VITE_OPS_API_BASE ?= /cp/api/v1/admin
 VITE_DEMO_LOGIN ?= true
 CONTAINER_ENGINE ?= docker
-export VITE_CP_BASE VITE_DP_BASE VITE_OPS_API_BASE VITE_DEMO_LOGIN
+DOCKER_PLATFORM ?= linux/amd64
+GOPROXY ?= https://goproxy.cn,direct
+GOSUMDB ?= sum.golang.org
+IMAGE_TAG ?= develop
+BACKEND_IMAGE ?= vibebiz/backend:$(IMAGE_TAG)
+SANDBOX_IMAGE ?= vibebiz/sandbox:$(IMAGE_TAG)
+WEB_IMAGE ?= vibebiz/web:$(IMAGE_TAG)
+OPS_WEB_IMAGE ?= vibebiz/ops-web:$(IMAGE_TAG)
+CP_IMAGE ?= vibebiz/cp:$(IMAGE_TAG)
+DP_IMAGE ?= vibebiz/dp:$(IMAGE_TAG)
+INIT_IMAGE ?= alpine:3.20
+PUBLISHED_IMAGE ?= nginx:1.27-alpine
+export VITE_CP_BASE VITE_DP_BASE VITE_OPS_API_BASE VITE_DEMO_LOGIN DOCKER_PLATFORM GOPROXY GOSUMDB
+export IMAGE_TAG BACKEND_IMAGE SANDBOX_IMAGE WEB_IMAGE OPS_WEB_IMAGE CP_IMAGE DP_IMAGE INIT_IMAGE PUBLISHED_IMAGE
 
 .PHONY: help init install install-web install-ops-web install-backend install-sandbox \
 	dev dev-web dev-ops-web dev-cp dev-dp dev-sandbox stop \
@@ -46,8 +59,8 @@ help:
 	@echo "  make db-create       - 创建 MySQL database（如不存在）"
 	@echo "  make db-migrate-up   - 执行所有待执行迁移"
 	@echo "  make db-migrate-status - 查看迁移状态"
-	@echo "  make docker-build    - 使用 docker 构建合并版 backend + sandbox + web + ops-web"
-	@echo "  make docker-build-split - 使用 docker 构建独立 cp / dp 镜像"
+	@echo "  make docker-build    - 使用 docker 构建合并版 backend + sandbox + web + ops-web（$(DOCKER_PLATFORM)，tag=$(IMAGE_TAG)）"
+	@echo "  make docker-build-split - 使用 docker 构建独立 cp / dp 镜像（$(DOCKER_PLATFORM)，tag=$(IMAGE_TAG)）"
 	@echo "  make podman-build    - 使用 podman 构建合并版 backend + sandbox + web + ops-web"
 	@echo "  make podman-build-split - 使用 podman 构建独立 cp / dp 镜像"
 	@echo "  make podman-build-all - 使用 podman 构建全部镜像"
@@ -189,21 +202,30 @@ build:
 	@$(MAKE) --no-print-directory -C $(OPS_WEB) build
 
 container-build: init
-	@$(CONTAINER_ENGINE) build -t vibebiz/backend:local --target combined $(BACKEND)
-	@$(CONTAINER_ENGINE) build -t vibebiz/sandbox:local $(SANDBOX)
-	@$(CONTAINER_ENGINE) build -t vibebiz/web:local \
+	@$(CONTAINER_ENGINE) build --platform $(DOCKER_PLATFORM) -t $(BACKEND_IMAGE) \
+		--build-arg GOPROXY=$(GOPROXY) \
+		--build-arg GOSUMDB=$(GOSUMDB) \
+		--target combined $(BACKEND)
+	@$(CONTAINER_ENGINE) build --platform $(DOCKER_PLATFORM) -t $(SANDBOX_IMAGE) $(SANDBOX)
+	@$(CONTAINER_ENGINE) build --platform $(DOCKER_PLATFORM) -t $(WEB_IMAGE) \
 		--build-arg VITE_CP_BASE=$(VITE_CP_BASE) \
 		--build-arg VITE_DP_BASE=$(VITE_DP_BASE) \
 		--build-arg VITE_DEMO_LOGIN=$(VITE_DEMO_LOGIN) \
 		$(WEB)
-	@$(CONTAINER_ENGINE) build -t vibebiz/ops-web:local \
+	@$(CONTAINER_ENGINE) build --platform $(DOCKER_PLATFORM) -t $(OPS_WEB_IMAGE) \
 		--build-arg VITE_OPS_API_BASE=$(VITE_OPS_API_BASE) \
 		--build-arg VITE_DEMO_LOGIN=$(VITE_DEMO_LOGIN) \
 		$(OPS_WEB)
 
 container-build-split: init
-	@$(CONTAINER_ENGINE) build -t vibebiz/cp:local --target cp $(BACKEND)
-	@$(CONTAINER_ENGINE) build -t vibebiz/dp:local --target dp $(BACKEND)
+	@$(CONTAINER_ENGINE) build --platform $(DOCKER_PLATFORM) -t $(CP_IMAGE) \
+		--build-arg GOPROXY=$(GOPROXY) \
+		--build-arg GOSUMDB=$(GOSUMDB) \
+		--target cp $(BACKEND)
+	@$(CONTAINER_ENGINE) build --platform $(DOCKER_PLATFORM) -t $(DP_IMAGE) \
+		--build-arg GOPROXY=$(GOPROXY) \
+		--build-arg GOSUMDB=$(GOSUMDB) \
+		--target dp $(BACKEND)
 
 container-build-all: container-build container-build-split
 
@@ -224,7 +246,7 @@ podman-build-split: container-build-split
 podman-build-all: podman-build podman-build-split
 
 docker-up: init
-	@docker compose -f deployment/docker/docker-compose.yml --env-file /dev/null up --build -d
+	@DOCKER_DEFAULT_PLATFORM=$(DOCKER_PLATFORM) docker compose -f deployment/docker/docker-compose.yml --env-file /dev/null up --build -d
 
 docker-down:
 	@docker compose -f deployment/docker/docker-compose.yml --env-file /dev/null down
