@@ -41,4 +41,5 @@ deployment/helm/vibebiz/tmpcharts/
 
 deployment/docker/workspaces/
 deployment/docker/skills/
+deployment/docker/channel-packages/
 /node_modules/

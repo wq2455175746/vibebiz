@@ -119,6 +119,18 @@ make dev
 
 测试账号通过 `packages/web/.env` 与 `packages/ops-web/.env` 中的 `VITE_DEMO_IDENTIFIER` / `VITE_DEMO_PASSWORD` 注入；生产环境请设置 `VITE_DEMO_LOGIN=false` 并删除默认账号。
 
+## 数据目录
+
+本地开发与 Docker 在仓库根目录 `data/` 下持久化运行时数据，均不入库：
+
+```text
+data/workspaces/        项目工作区（sandbox 读写）
+data/published/         发布产物，供分享页与 nginx 读取
+data/skills/            用户端技能
+data/user-trace/        用户访问日志
+data/channel-packages/  渠道包产物（微信/抖音/Steam），按项目/渠道归档
+```
+
 ## 文档
 
 - [技术说明](docs/TECHNICAL.md)：架构、服务职责、常用命令、配置、API、部署与安全限制

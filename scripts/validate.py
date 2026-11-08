@@ -374,6 +374,22 @@ def validate_contracts() -> None:
         "deployment/docker/docker-compose.yml",
         ["sandbox:", "backend:", "web:", "ops-web:", "target: combined"],
     )
+    require_contains(
+        "deployment/docker/docker-compose.yml",
+        [
+            "CHANNEL_PACKAGES_DIR: /data/channel-packages",
+            "../../data/channel-packages:/data/channel-packages",
+            "mkdir -p /published /channel-packages",
+        ],
+    )
+    require_contains(
+        "deployment/docker/docker-compose.public.yml",
+        [
+            "CHANNEL_PACKAGES_DIR: /data/channel-packages",
+            "./channel-packages:/data/channel-packages",
+            "mkdir -p /published /channel-packages",
+        ],
+    )
     require_contains("packages/backend/Dockerfile", ["AS cp", "AS dp", "AS combined", "docker-entrypoint.sh"])
     require_contains("packages/backend/docker-entrypoint.sh", ["CP_PORT", "DP_PORT", "/app/cp", "/app/dp"])
     require_contains(
@@ -387,6 +403,10 @@ def validate_contracts() -> None:
     require_contains("packages/backend/.env.example", [
         "HOST=", "CP_PORT=", "DP_PORT=", "SANDBOX_REGISTRY_TOKEN=", "CORS_ORIGINS=",
         "MYSQL_HOST=", "MYSQL_DATABASE=", "REDIS_HOST=", "S3_BUCKET=", "S3_ENDPOINT=",
+    ])
+    require_contains("packages/backend/.env.example", [
+        "CHANNEL_PACKAGES_DIR=", "CHANNEL_PACKAGE_MAX_BYTES=",
+        "CHANNEL_PACKAGE_TIMEOUT=", "CHANNEL_PACKAGE_CONCURRENCY=",
     ])
     for name in (
         "00001_identity_workspace.sql",

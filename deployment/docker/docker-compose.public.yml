@@ -12,9 +12,10 @@ services:
 
   publish-init:
     image: alpine:3.20
-    command: ["sh", "-c", "mkdir -p /published && chmod 0777 /published"]
+    command: ["sh", "-c", "mkdir -p /published /channel-packages && chmod 0777 /published /channel-packages"]
     volumes:
       - ./published:/published
+      - ./channel-packages:/channel-packages
     restart: "no"
 
   sandbox:
@@ -67,6 +68,7 @@ services:
     environment:
       WORKSPACES_DIR: /data/workspaces
       PUBLISH_DIR: /data/published
+      CHANNEL_PACKAGES_DIR: /data/channel-packages
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
       USER_TRACE_DIR: /app/logs/user-trace
       USAGE_TIMEZONE: ${USAGE_TIMEZONE:-Asia/Shanghai}
@@ -74,6 +76,7 @@ services:
       - ./logs/backend:/app/logs
       - ./workspaces:/data/workspaces:ro
       - ./published:/data/published
+      - ./channel-packages:/data/channel-packages
     depends_on:
       sandbox:
         condition: service_started
