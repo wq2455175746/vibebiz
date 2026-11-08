@@ -24,6 +24,13 @@ export const settingsMenu: SettingsMenuItem[] = [
     group: '账户',
   },
   {
+    label: '发布渠道指引',
+    icon: 'pi pi-share-alt',
+    to: '/settings/channel-guides',
+    name: 'settings-channel-guides',
+    group: '企业工程',
+  },
+  {
     label: '制品空间配置',
     icon: 'pi pi-box',
     to: '/settings/artifact-space',
@@ -76,6 +83,11 @@ export const settingsRoute: RouteRecordRaw = {
       path: 'notification-channels',
       name: 'settings-notification-channels',
       component: () => import('@/views/settings/NotificationChannelsView.vue'),
+    },
+    {
+      path: 'channel-guides',
+      name: 'settings-channel-guides',
+      component: () => import('@/views/settings/ChannelGuideView.vue'),
     },
     {
       path: 'artifact-space',

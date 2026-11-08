@@ -27,6 +27,10 @@ const (
 	PurposeCloneImage    = "clone_image"
 	PurposeCloneUnitTest = "clone_unit_test"
 	PurposeCloneDocs     = "clone_docs"
+	PurposeChannelBuild  = "channel_build"
+
+	MaxChannelBuildFileBytes    int64 = 500 << 20
+	MaxChannelBuildProjectBytes int64 = 500 << 20
 )
 
 var (
@@ -367,6 +371,24 @@ func (s *Service) DeleteStaging(ctx context.Context, workspaceID, userID int64, 
 	return s.Repo.SoftDelete(ctx, resourceID)
 }
 
+func (s *Service) OpenReadyChannelBuild(ctx context.Context, projectID, resourceID string) (io.ReadCloser, int64, error) {
+	if s.S3 == nil {
+		return nil, 0, ErrUnavailable
+	}
+	item, err := s.Repo.GetByResourceID(ctx, resourceID)
+	if err != nil {
+		if errors.Is(err, dao.ErrNotFound) {
+			return nil, 0, ErrNotFound
+		}
+		return nil, 0, err
+	}
+	if item.ProjectPublicID == nil || *item.ProjectPublicID != projectID ||
+		item.Status != "ready" || item.Purpose != PurposeChannelBuild {
+		return nil, 0, ErrNotFound
+	}
+	return s.S3.Get(ctx, item.S3Key)
+}
+
 func (s *Service) fail(ctx context.Context, item *model.ProjectResource) {
 	item.Status = "failed"
 	_ = s.Repo.Update(ctx, item)
@@ -402,7 +424,7 @@ func uniqueName(original string, existing []model.ProjectResource, selfID string
 
 func normalizePurpose(purpose string) (string, bool) {
 	switch purpose {
-	case PurposeDefault, PurposeCloneImage, PurposeCloneUnitTest, PurposeCloneDocs:
+	case PurposeDefault, PurposeCloneImage, PurposeCloneUnitTest, PurposeCloneDocs, PurposeChannelBuild:
 		return purpose, true
 	default:
 		return "", false
@@ -415,6 +437,8 @@ func purposeLimits(purpose string) (int64, int64) {
 		return 10 << 20, MaxCloneProjectBytes
 	case PurposeCloneUnitTest, PurposeCloneDocs:
 		return MaxCloneFileBytes, MaxCloneProjectBytes
+	case PurposeChannelBuild:
+		return MaxChannelBuildFileBytes, MaxChannelBuildProjectBytes
 	default:
 		return MaxFileBytes, MaxProjectBytes
 	}
@@ -428,7 +452,8 @@ func validateForPurpose(name, ext, rawType, purpose string) (string, string, err
 			return "", "", ErrInvalidFile
 		}
 		return contentType, kind, nil
-	case PurposeCloneUnitTest:
+	case PurposeCloneUnitTest, PurposeChannelBuild:
+		ext = strings.ToLower(ext)
 		if ext != ".zip" {
 			return "", "", ErrInvalidFile
 		}

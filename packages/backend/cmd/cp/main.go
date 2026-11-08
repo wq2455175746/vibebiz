@@ -18,6 +18,11 @@ import (
 	"vibebiz/internal/admin"
 	"vibebiz/internal/agentrole"
 	"vibebiz/internal/auth"
+	"vibebiz/internal/channelpkg"
+	"vibebiz/internal/channelpkg/adapters/douyin"
+	"vibebiz/internal/channelpkg/adapters/steam"
+	"vibebiz/internal/channelpkg/adapters/wechat"
+	"vibebiz/internal/channelpkg/core"
 	"vibebiz/internal/client"
 	"vibebiz/internal/clone"
 	"vibebiz/internal/config"
@@ -262,6 +267,22 @@ func main() {
 	publishHandler.Leaderboard = leaderboardService
 	leaderboardHandler := handler.NewLeaderboardHandler(leaderboardService, cfg.PublicBaseURL)
 
+	channelPackageService := channelpkg.NewService(channelpkg.ServiceConfig{
+		Repo:          dao.NewChannelPackageRepository(db),
+		WorkspacesDir: cfg.WorkspacesDir,
+		PackagesDir:   cfg.ChannelPackagesDir,
+		OpenResource:  resourceService.OpenReadyChannelBuild,
+		Adapters: map[string]core.Adapter{
+			core.ChannelWeChat: wechat.New(),
+			core.ChannelDouyin: douyin.New(),
+			core.ChannelSteam:  steam.New(),
+		},
+		MaxBytes:    cfg.ChannelPackageMaxBytes,
+		Timeout:     cfg.ChannelPackageTimeout,
+		Concurrency: cfg.ChannelPackageConcurrency,
+	})
+	channelPackageHandler := handler.NewChannelPackageHandler(channelPackageService, projectStore)
+
 	healthChecker := sandboxregistry.NewHealthChecker(registryRepo, cfg.SandboxHeartbeatTTL, cfg.SandboxHealthTimeout, obs)
 	asynqLogger := sandboxregistry.NewAsyncLogger(obs.Logger)
 	asynqRedis := asynq.RedisClientOpt{Addr: cfg.RedisHost, Password: cfg.RedisPassword, DB: cfg.AsynqRedisDB}
@@ -326,7 +347,7 @@ func main() {
 	templateHandler := handler.NewTemplateHandler(templateService, projectStore, provisioner, sandboxRouter)
 	templateHandler.Metas = metas
 
-	router.RegisterControl(e, adminRepo, projectStore, provisioner, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler, registryHandler, modelHandler, roleHandler, avatarPresigner, cfg.S3PresignExpiry(), sandboxRouter, templateHandler, harnessImporter, stageStore, sandboxRouter, notificationChannelHandler, fdeResourceHandler, publishHandler, cloneHandler, usageService, accessLogHandler, skillManager, leaderboardHandler)
+	router.RegisterControl(e, adminRepo, projectStore, provisioner, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler, registryHandler, modelHandler, roleHandler, avatarPresigner, cfg.S3PresignExpiry(), sandboxRouter, templateHandler, harnessImporter, stageStore, sandboxRouter, notificationChannelHandler, fdeResourceHandler, publishHandler, channelPackageHandler, cloneHandler, usageService, accessLogHandler, skillManager, leaderboardHandler)
 	router.RegisterScheduledTasks(e, scheduledHandler, authn)
 	router.RegisterChatHistory(e, handler.NewChatHistoryHandler(sandboxRouter, projectStore), authn)
 

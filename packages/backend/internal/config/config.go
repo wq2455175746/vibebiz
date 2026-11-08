@@ -46,22 +46,26 @@ type Config struct {
 	SessionUserTTL time.Duration
 	SessionOpsTTL  time.Duration
 
-	S3Bucket               string
-	S3Region               string
-	S3Endpoint             string
-	S3AccessKey            string
-	S3SecretKey            string
-	S3RemoteDirPrefix      string
-	S3ForcePathStyle       bool
-	S3PresignExpiryMinutes int
-	EnterpriseHarnessS3Key string
-	WorkspacesDir          string
-	PublishDir             string
-	PublicBaseURL          string
-	ModelSecretKey         string
-	NotificationSecretKey  string
-	UsageTimezone          string
-	UserSkillUploadEnabled bool
+	S3Bucket                  string
+	S3Region                  string
+	S3Endpoint                string
+	S3AccessKey               string
+	S3SecretKey               string
+	S3RemoteDirPrefix         string
+	S3ForcePathStyle          bool
+	S3PresignExpiryMinutes    int
+	EnterpriseHarnessS3Key    string
+	WorkspacesDir             string
+	PublishDir                string
+	ChannelPackagesDir        string
+	PublicBaseURL             string
+	ModelSecretKey            string
+	NotificationSecretKey     string
+	UsageTimezone             string
+	UserSkillUploadEnabled    bool
+	ChannelPackageMaxBytes    int64
+	ChannelPackageTimeout     time.Duration
+	ChannelPackageConcurrency int
 
 	UserTraceEnabled      bool
 	UserTraceDir          string
@@ -115,22 +119,26 @@ func Load(plane string) Config {
 		SessionUserTTL: getDuration("SESSION_USER_TTL", 168*time.Hour),
 		SessionOpsTTL:  getDuration("SESSION_OPS_TTL", 12*time.Hour),
 
-		S3Bucket:               getString("S3_BUCKET", "vibebiz"),
-		S3Region:               getString("S3_REGION", "default"),
-		S3Endpoint:             getString("S3_ENDPOINT", ""),
-		S3AccessKey:            getString("S3_ACCESS_KEY", ""),
-		S3SecretKey:            getString("S3_SECRET_KEY", ""),
-		S3RemoteDirPrefix:      getString("S3_REMOTE_DIR_PREFIX", ""),
-		S3ForcePathStyle:       getBool("S3_FORCE_PATH_STYLE", getString("S3_ENDPOINT", "") != ""),
-		S3PresignExpiryMinutes: getInt("S3_PRESIGN_EXPIRY_MINUTES", 15),
-		EnterpriseHarnessS3Key: getString("ENTERPRISE_HARNESS_S3_KEY", "tmp/vibebiz_prod/vibebiz-harness.zip"),
-		WorkspacesDir:          getString("WORKSPACES_DIR", "../../data/workspaces"),
-		PublishDir:             getString("PUBLISH_DIR", "../../data/published"),
-		PublicBaseURL:          getString("PUBLIC_BASE_URL", ""),
-		ModelSecretKey:         getString("MODEL_SECRET_KEY", ""),
-		NotificationSecretKey:  getString("NOTIFICATION_SECRET_KEY", getString("MODEL_SECRET_KEY", "")),
-		UsageTimezone:          getString("USAGE_TIMEZONE", "Asia/Shanghai"),
-		UserSkillUploadEnabled: getBool("USER_SKILL_UPLOAD_ENABLED", false),
+		S3Bucket:                  getString("S3_BUCKET", "vibebiz"),
+		S3Region:                  getString("S3_REGION", "default"),
+		S3Endpoint:                getString("S3_ENDPOINT", ""),
+		S3AccessKey:               getString("S3_ACCESS_KEY", ""),
+		S3SecretKey:               getString("S3_SECRET_KEY", ""),
+		S3RemoteDirPrefix:         getString("S3_REMOTE_DIR_PREFIX", ""),
+		S3ForcePathStyle:          getBool("S3_FORCE_PATH_STYLE", getString("S3_ENDPOINT", "") != ""),
+		S3PresignExpiryMinutes:    getInt("S3_PRESIGN_EXPIRY_MINUTES", 15),
+		EnterpriseHarnessS3Key:    getString("ENTERPRISE_HARNESS_S3_KEY", "tmp/vibebiz_prod/vibebiz-harness.zip"),
+		WorkspacesDir:             getString("WORKSPACES_DIR", "../../data/workspaces"),
+		PublishDir:                getString("PUBLISH_DIR", "../../data/published"),
+		ChannelPackagesDir:        getString("CHANNEL_PACKAGES_DIR", "../../data/channel-packages"),
+		PublicBaseURL:             getString("PUBLIC_BASE_URL", ""),
+		ModelSecretKey:            getString("MODEL_SECRET_KEY", ""),
+		NotificationSecretKey:     getString("NOTIFICATION_SECRET_KEY", getString("MODEL_SECRET_KEY", "")),
+		UsageTimezone:             getString("USAGE_TIMEZONE", "Asia/Shanghai"),
+		UserSkillUploadEnabled:    getBool("USER_SKILL_UPLOAD_ENABLED", false),
+		ChannelPackageMaxBytes:    int64(getInt("CHANNEL_PACKAGE_MAX_BYTES", 1<<30)),
+		ChannelPackageTimeout:     getDuration("CHANNEL_PACKAGE_TIMEOUT", 90*time.Second),
+		ChannelPackageConcurrency: getInt("CHANNEL_PACKAGE_CONCURRENCY", 2),
 
 		UserTraceEnabled:      getBool("USER_TRACE_ENABLED", true),
 		UserTraceDir:          getString("USER_TRACE_DIR", "../../data/user-trace"),

@@ -1,11 +1,11 @@
 package handler
 
 import (
-	"bytes"
 	"errors"
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 
 	"github.com/labstack/echo/v4"
 
@@ -74,15 +74,31 @@ func (h *ResourceHandler) UploadStaging(c echo.Context) error {
 		return response.Fail(c, http.StatusUnauthorized, 40101, "unauthorized")
 	}
 	resourceID := c.Param("resourceId")
-	body, err := io.ReadAll(io.LimitReader(c.Request().Body, resource.MaxUploadBytes+1))
+	limited := http.MaxBytesReader(c.Response(), c.Request().Body, resource.MaxChannelBuildFileBytes)
+	tmp, err := os.CreateTemp("", "vibebiz-resource-upload-*")
 	if err != nil {
+		return response.Fail(c, http.StatusInternalServerError, 50001, "resource upload failed")
+	}
+	tmpName := tmp.Name()
+	defer func() {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+	}()
+	size, err := io.Copy(tmp, limited)
+	if err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			return response.Fail(c, http.StatusRequestEntityTooLarge, 41301, "resource file is too large")
+		}
 		return response.Fail(c, http.StatusBadRequest, 40006, "invalid request body")
 	}
-	size := int64(len(body))
-	if size > resource.MaxUploadBytes {
-		return response.Fail(c, http.StatusRequestEntityTooLarge, 41301, "resource file is too large")
+	if size <= 0 {
+		return response.Fail(c, http.StatusBadRequest, 40006, "invalid request body")
 	}
-	if err := h.Service.UploadStaging(c.Request().Context(), session.CurrentWorkspaceID, session.UserID, resourceID, bytes.NewReader(body), size, c.Request().Header.Get(echo.HeaderContentType)); err != nil {
+	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
+		return response.Fail(c, http.StatusInternalServerError, 50001, "resource upload failed")
+	}
+	if err := h.Service.UploadStaging(c.Request().Context(), session.CurrentWorkspaceID, session.UserID, resourceID, tmp, size, c.Request().Header.Get(echo.HeaderContentType)); err != nil {
 		h.log(c, "resource.upload", resourceID, err)
 		return resourceError(c, err)
 	}

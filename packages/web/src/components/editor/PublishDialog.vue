@@ -3,6 +3,7 @@ import InputText from 'primevue/inputtext'
 import { computed, ref, watch } from 'vue'
 
 import { publishProject, type PublishResult } from '@/api/publish'
+import ChannelPackagePanel from '@/components/editor/ChannelPackagePanel.vue'
 
 const props = defineProps<{
   projectId: string
@@ -13,6 +14,7 @@ const emit = defineEmits<{
   (event: 'close'): void
 }>()
 
+const tab = ref<'share' | 'channel'>('share')
 const title = ref(props.projectName.slice(0, 80))
 const description = ref('')
 const tagsText = ref('')
@@ -80,64 +82,101 @@ function openURL() {
       <header class="dialog-head">
         <div>
           <p class="dialog-eyebrow">发布作品</p>
-          <h2>{{ result ? '发布成功' : '生成分享页' }}</h2>
+          <h2>{{ tab === 'channel' ? '生成渠道包' : result ? '发布成功' : '生成分享页' }}</h2>
         </div>
         <button class="dialog-close" type="button" aria-label="关闭" @click="emit('close')">
           <i class="pi pi-times" />
         </button>
       </header>
 
-      <template v-if="result">
-        <p class="publish-success">分享页已生成，手机打开链接即可体验。</p>
-        <div class="publish-link">
-          <span>{{ result.url }}</span>
-          <button type="button" class="publish-copy" @click="copyURL">
-            <i class="pi pi-copy" />
-            {{ copied ? '已复制' : '复制' }}
-          </button>
-        </div>
+      <div class="publish-tabs" role="tablist" aria-label="发布方式">
+        <button
+          type="button"
+          role="tab"
+          class="publish-tab"
+          :class="{ active: tab === 'share' }"
+          :aria-selected="tab === 'share'"
+          @click="tab = 'share'"
+        >
+          分享页
+        </button>
+        <button
+          type="button"
+          role="tab"
+          class="publish-tab"
+          :class="{ active: tab === 'channel' }"
+          :aria-selected="tab === 'channel'"
+          @click="tab = 'channel'"
+        >
+          渠道包
+        </button>
+      </div>
+
+      <div v-show="tab === 'share'" class="publish-share-pane" role="tabpanel" aria-label="分享页">
+        <template v-if="result">
+          <p class="publish-success">分享页已生成，手机打开链接即可体验。</p>
+          <div class="publish-link">
+            <span>{{ result.url }}</span>
+            <button type="button" class="publish-copy" @click="copyURL">
+              <i class="pi pi-copy" />
+              {{ copied ? '已复制' : '复制' }}
+            </button>
+          </div>
+          <div class="publish-actions">
+            <button type="button" class="publish-secondary" @click="emit('close')">关闭</button>
+            <button type="button" class="publish-primary" @click="openURL">
+              <i class="pi pi-external-link" />
+              打开分享页
+            </button>
+          </div>
+        </template>
+
+        <template v-else>
+          <p class="publish-note">
+            发布后会生成一张作品卡片，手机打开链接可以直接体验。再次发布会覆盖更新同一分享链接。请先确认项目中的
+            <code>index.html</code> 或 <code>app.html</code> 是最新版本。
+          </p>
+          <label class="publish-field">
+            <span>作品标题</span>
+            <InputText v-model="title" maxlength="80" placeholder="例如：毕业季校园答题游戏" />
+          </label>
+          <label class="publish-field">
+            <span>一句话介绍</span>
+            <textarea
+              v-model="description"
+              class="publish-textarea"
+              rows="3"
+              maxlength="500"
+              placeholder="三分钟通关的校园答题游戏"
+            />
+          </label>
+          <label class="publish-field">
+            <span>标签</span>
+            <InputText v-model="tagsText" placeholder="答题、校园、小游戏" />
+            <small>用逗号、顿号或换行分隔，最多 5 个。</small>
+          </label>
+          <p v-if="error" class="settings-error" role="alert">{{ error }}</p>
+          <div class="publish-actions">
+            <button type="button" class="publish-secondary" @click="emit('close')">取消</button>
+            <button type="button" class="publish-primary" :disabled="publishing" @click="publish">
+              <i :class="publishing ? 'pi pi-spin pi-spinner' : 'pi pi-upload'" />
+              {{ publishing ? '发布中…' : '发布' }}
+            </button>
+          </div>
+        </template>
+      </div>
+
+      <div
+        v-show="tab === 'channel'"
+        class="publish-channel-pane"
+        role="tabpanel"
+        aria-label="渠道包"
+      >
+        <ChannelPackagePanel :project-id="projectId" />
         <div class="publish-actions">
           <button type="button" class="publish-secondary" @click="emit('close')">关闭</button>
-          <button type="button" class="publish-primary" @click="openURL">
-            <i class="pi pi-external-link" />
-            打开分享页
-          </button>
         </div>
-      </template>
-
-      <template v-else>
-        <p class="publish-note">
-          发布后会生成一张作品卡片，手机打开链接可以直接体验。再次发布会覆盖更新同一分享链接。请先确认项目中的
-          <code>index.html</code> 或 <code>app.html</code> 是最新版本。
-        </p>
-        <label class="publish-field">
-          <span>作品标题</span>
-          <InputText v-model="title" maxlength="80" placeholder="例如：毕业季校园答题游戏" />
-        </label>
-        <label class="publish-field">
-          <span>一句话介绍</span>
-          <textarea
-            v-model="description"
-            class="publish-textarea"
-            rows="3"
-            maxlength="500"
-            placeholder="三分钟通关的校园答题游戏"
-          />
-        </label>
-        <label class="publish-field">
-          <span>标签</span>
-          <InputText v-model="tagsText" placeholder="答题、校园、小游戏" />
-          <small>用逗号、顿号或换行分隔，最多 5 个。</small>
-        </label>
-        <p v-if="error" class="settings-error" role="alert">{{ error }}</p>
-        <div class="publish-actions">
-          <button type="button" class="publish-secondary" @click="emit('close')">取消</button>
-          <button type="button" class="publish-primary" :disabled="publishing" @click="publish">
-            <i :class="publishing ? 'pi pi-spin pi-spinner' : 'pi pi-upload'" />
-            {{ publishing ? '发布中…' : '发布' }}
-          </button>
-        </div>
-      </template>
+      </div>
     </div>
   </div>
 </template>
@@ -145,6 +184,39 @@ function openURL() {
 <style scoped>
 .publish-dialog {
   width: min(600px, 100%);
+}
+
+.publish-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.publish-tab {
+  padding: 6px 14px;
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.publish-tab.active {
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  color: var(--ink);
+}
+
+.publish-share-pane,
+.publish-channel-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .publish-note,

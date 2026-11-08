@@ -165,6 +165,18 @@ make dev
 - [ ] Docker 镜像在真实环境构建与验证。
 - [ ] `.ai` 自动更新接入 opencode 事件（当前手动 `make harness-update`）。
 
+## 数据目录
+
+本地开发（`make dev`）默认把运行时数据写入仓库根目录 `data/`，且不入库；Docker 部署的挂载位置因 compose 而异，以 `deployment/docker/*.yml` 为准。以下为本地开发目录：
+
+```text
+data/workspaces/        项目工作区（sandbox 读写）
+data/published/         发布产物，供分享页与 nginx 读取
+data/skills/            用户端技能
+data/user-trace/        用户访问日志
+data/channel-packages/  渠道包产物（微信/抖音/Steam），按项目/渠道归档
+```
+
 ## 文档
 
 - [技术说明](docs/TECHNICAL.md)：架构、服务职责、常用命令、配置、API、部署与安全限制
