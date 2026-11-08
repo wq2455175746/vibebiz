@@ -50,20 +50,23 @@ func TestSubmitBugCreatesPreviewVersion(t *testing.T) {
 	}
 }
 
-func TestSubmitFeaturePushesBack(t *testing.T) {
+func TestSubmitFeatureCreatesPagePreview(t *testing.T) {
 	service, _ := testService()
 	proposal, version, err := service.SubmitProposal(context.Background(), Viewer{ID: "7", Name: "tester"}, "希望支持多人同时编辑")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if proposal.Kind != KindFeature || proposal.Status != ProposalReviewing {
+	if proposal.Kind != KindFeature || proposal.Status != ProposalQueued {
 		t.Fatalf("proposal = %+v", proposal)
 	}
-	if version != nil {
-		t.Fatalf("version = %+v, want nil", version)
+	if version == nil || version.Status != VersionPreview {
+		t.Fatalf("version = %+v", version)
 	}
-	if proposal.AgentReply == "" {
-		t.Fatal("expected pushback reply")
+	if proposal.VersionPublicID != version.PublicID {
+		t.Fatalf("proposal version = %q, version id = %q", proposal.VersionPublicID, version.PublicID)
+	}
+	if strings.Contains(proposal.AgentReply, "不会直接生成") {
+		t.Fatalf("feature should not push back: %q", proposal.AgentReply)
 	}
 }
 

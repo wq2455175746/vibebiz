@@ -26,7 +26,7 @@ var featureWords = []string{
 
 var visualWords = []string{
 	"颜色", "布局", "间距", "字体", "按钮", "样式", "优化", "交互", "体验", "文案",
-	"动画", "紧凑", "卡片", "导航", "排版", "预览", "首屏", "输入框",
+	"动画", "紧凑", "卡片", "导航", "菜单", "排版", "预览", "首屏", "输入框",
 }
 
 type Decision struct {
@@ -102,10 +102,10 @@ func Decide(content string) Decision {
 	default:
 		return Decision{
 			Kind:     kind,
-			Action:   ActionPushback,
+			Action:   ActionPreview,
 			Scenario: scenario,
-			Summary:  "功能或架构提议，等待补充场景与验收标准。",
-			Reply:    "这个提议涉及功能或架构改动，我不会直接生成。理由：一是会扩大当前版本范围；二是需要先确认与平台现有边界、数据契约不冲突；三是目前缺少可验证的验收标准。建议先补充使用场景、影响范围和成功标准，再评估是否纳入后续版本。",
+			Summary:  "按页面效果生成候选版本，真实功能与架构影响后续评估。",
+			Reply:    "这个建议会先按页面效果生成候选版本，请预览确认。涉及平台架构或真实功能的部分，会在后续评估中单独处理。",
 		}
 	}
 }

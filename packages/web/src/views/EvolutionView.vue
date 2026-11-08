@@ -87,10 +87,6 @@ async function runSandboxAgent(content: string): Promise<void> {
 async function submitProposal(content: string): Promise<void> {
   try {
     const proposal = await store.submitProposal(content)
-    if (proposal.kind === 'feature') {
-      notice.value = 'Agent 已给出评估意见，该提议暂未直接生成版本'
-      return
-    }
     if (!proposal.versionId) {
       notice.value = '已记录提议，但没有生成预览版本'
       return

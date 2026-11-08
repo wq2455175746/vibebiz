@@ -143,7 +143,7 @@ data/workspaces/vibebiz-evolve/
 
 1. **bug**：直接在当前用户版本快照修复，生成新版本并立即渲染。
 2. **visual**（视觉 / 交互优化）：先给出判断与理由，生成候选版本渲染，等待用户确认。
-3. **feature**（新功能 / 架构改动）：必须提出反驳或风险说明（范围、架构约束、与平台方向冲突），不直接生成；用户确认后才进入候选版本。
+3. **feature**（新功能 / 架构改动）：Phase 2B 本地原型中先按页面效果生成候选版本并预览；真实架构与功能实现风险留到后续评估。
 4. 用户确认后固定回复：「已收录你的意见版本，评估通过后随下一版本发布。」
 5. Agent 不得修改 `origin_version`，不得合并、发布、删除他人版本。
 6. 每条回复记录到该用户 `chat.jsonl` 与 `audit.jsonl`。
@@ -281,7 +281,7 @@ Phase 1 前端通过 `api/evolution.ts` 门面隔离，Phase 2 只替换门面�
 
 - 每个真实用户在 sandbox 使用一个隐藏项目 `evolve-<userId>`，首次进入 `/evolve` 时创建，基于 `origin_version` 静态交互页初始化，不出现在普通项目列表。
 - 用户提交 `bug` / `visual` 提议：CP 记录提议和版本；web 通过现有 DP SSE 调用 sandbox Agent 修改 `index.html`，完成后刷新预览。
-- `feature` 提议仍只给风险说明，不直接生成版本。
+- 所有提议（`bug` / `visual` / `feature`）都按页面效果生成候选版本，并通过 sandbox Agent 修改预览；真实架构评估留到后续。
 - web 预览使用 `/dp/api/v1/projects/evolve-<userId>/preview/`；ops-web 预览使用 `/cp/api/v1/admin/projects/evolve-<userId>/live/`。
 - 删除 1001-1004 的 seed 演示版本、提议、对话、任务，只保留 official 基线；由 `00032_remove_evolution_seed.sql` 清理。
 - 不做版本文件快照，预览始终对应用户当前 sandbox 状态。
