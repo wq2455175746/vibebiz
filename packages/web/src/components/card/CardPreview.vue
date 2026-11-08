@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
+import { useBlobUrl } from '@/composables/useBlobUrl'
 import { DEMO_IMAGE } from '@/mocks/cards'
 import type { CardFeatured, CardProjectItem } from '@/types'
 import { PREVIEW_SANDBOX } from '@/utils/preview'
@@ -27,6 +28,9 @@ const resolved = computed(() => {
   }
   return null
 })
+
+const pdfSource = computed(() => (resolved.value?.kind === 'pdf' ? resolved.value.src : ''))
+const pdfUrl = useBlobUrl(pdfSource)
 </script>
 
 <template>
@@ -34,7 +38,7 @@ const resolved = computed(() => {
     <template v-if="resolved">
       <div v-if="large && resolved.kind === 'pdf'" class="card-preview-pdf">
         <iframe
-          :src="resolved.src"
+          :src="pdfUrl"
           title="PDF 预览"
           :sandbox="PREVIEW_SANDBOX"
           referrerpolicy="no-referrer"

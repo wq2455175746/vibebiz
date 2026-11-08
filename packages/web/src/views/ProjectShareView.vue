@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 
+import { useBlobUrl } from '@/composables/useBlobUrl'
 import { DEMO_DOCUMENT, DEMO_HTML, DEMO_IMAGE, DEMO_PDF, DEMO_VIDEO } from '@/mocks/cards'
 import { useCardStore } from '@/stores/card'
 import type { CardContentType } from '@/types'
@@ -37,6 +38,8 @@ const mediaSource = computed(() => {
 })
 
 const documentHTML = computed(() => renderMarkdown(item.value?.previewUrl || DEMO_DOCUMENT))
+const pdfSource = computed(() => (type.value === 'pdf' ? mediaSource.value : ''))
+const pdfUrl = useBlobUrl(pdfSource)
 </script>
 
 <template>
@@ -73,7 +76,7 @@ const documentHTML = computed(() => renderMarkdown(item.value?.previewUrl || DEM
         <img v-else-if="type === 'image'" :src="mediaSource" :alt="item.name" />
         <iframe
           v-else-if="type === 'pdf'"
-          :src="mediaSource"
+          :src="pdfUrl"
           title="PDF 预览"
           :sandbox="PREVIEW_SANDBOX"
           referrerpolicy="no-referrer"

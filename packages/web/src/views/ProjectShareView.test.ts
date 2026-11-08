@@ -1,11 +1,23 @@
 import { createPinia } from 'pinia'
 import { createApp, type App } from 'vue'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import ProjectShareView from './ProjectShareView.vue'
 import type { CardContentType } from '@/types'
 
 let currentType: CardContentType = 'html'
+
+beforeEach(() => {
+  if (typeof URL.createObjectURL !== 'function') {
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      value: vi.fn(() => 'blob:project-share'),
+    })
+  }
+  if (typeof URL.revokeObjectURL !== 'function') {
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() })
+  }
+})
 
 vi.mock('vue-router', () => ({ useRoute: () => ({ params: { projectId: 'demo-1-p1' } }) }))
 
@@ -21,7 +33,10 @@ vi.mock('@/stores/card', () => ({
         coverUrl: null,
         type: currentType,
         shareUrl: '/p/demo-1-p1',
-        previewUrl: 'https://example.com/demo',
+        previewUrl:
+          currentType === 'pdf'
+            ? 'data:application/pdf;base64,JVBERi0xLjQK'
+            : 'https://example.com/demo',
         addedAt: '2026-11-08T00:00:00.000Z',
       },
     }),
@@ -71,9 +86,11 @@ describe('ProjectShareView', () => {
     expect(host.querySelector('img')).not.toBeNull()
   })
 
-  it('renders a pdf iframe', () => {
+  it('renders a pdf iframe through a blob url', () => {
     mount('pdf')
-    expect(host.querySelector('iframe')).not.toBeNull()
+    const frame = host.querySelector('iframe')
+    expect(frame).not.toBeNull()
+    expect(frame?.getAttribute('src')?.startsWith('blob:')).toBe(true)
   })
 
   it('renders a video', () => {
