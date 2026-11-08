@@ -96,7 +96,9 @@ export const useCloneProjectsStore = defineStore('cloneProjects', () => {
         description: draft.description.trim(),
         sourceUrl: draft.sourceUrl.trim(),
         assets: {
-          coverResourceId: coverAssetId ? resourceByLocal.get(coverAssetId) : undefined,
+          coverResourceId: coverAssetId
+            ? resourceByLocal.get(coverAssetId)
+            : undefined,
           galleryResourceIds,
           unitTestResourceId: unitTest ? resourceByLocal.get(unitTest.id) : undefined,
           docsResourceId: docs ? resourceByLocal.get(docs.id) : undefined,

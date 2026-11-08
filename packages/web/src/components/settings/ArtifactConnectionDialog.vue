@@ -37,7 +37,9 @@ const title = computed(() => {
   return 'Jenkins'
 })
 
-const hasSavedSecret = computed(() => props.connection !== null && props.connection.secret !== '')
+const hasSavedSecret = computed(
+  () => props.connection !== null && props.connection.secret !== '',
+)
 
 watch(
   () => [props.kind, props.connection] as const,

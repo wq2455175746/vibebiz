@@ -53,14 +53,14 @@ router.afterEach((to) => {
         : name === 'clone-editor'
           ? 'Vibebiz · 克隆'
           : name === 'login'
-            ? 'Vibebiz · 登录'
-            : name.startsWith('settings')
-              ? 'Vibebiz · 设置'
-              : name === 'clones'
-                ? 'Vibebiz · 克隆'
-                : name === 'leaderboard'
-                  ? 'Vibebiz · 排行榜'
-                  : 'Vibebiz'
+          ? 'Vibebiz · 登录'
+          : name.startsWith('settings')
+            ? 'Vibebiz · 设置'
+            : name === 'clones'
+              ? 'Vibebiz · 克隆'
+              : name === 'leaderboard'
+                ? 'Vibebiz · 排行榜'
+                : 'Vibebiz'
 })
 
 export default router

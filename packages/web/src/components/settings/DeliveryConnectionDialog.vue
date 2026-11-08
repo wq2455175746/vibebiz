@@ -142,9 +142,7 @@ function submit() {
             v-model="draft.kubeconfig"
             class="connection-textarea"
             rows="6"
-            :placeholder="
-              hasSavedKubeconfig ? '留空保持已保存的 kubeconfig' : '粘贴 kubeconfig 内容'
-            "
+            :placeholder="hasSavedKubeconfig ? '留空保持已保存的 kubeconfig' : '粘贴 kubeconfig 内容'"
           />
         </label>
         <label class="connection-field">

@@ -24,13 +24,16 @@ const open = computed({
 const project = computed(() => store.current)
 const imageAssets = computed<CloneAssetView[]>(
   () =>
-    project.value?.assets.filter((asset) => asset.role === 'cover' || asset.role === 'gallery') ??
-    [],
+    project.value?.assets.filter(
+      (asset) => asset.role === 'cover' || asset.role === 'gallery',
+    ) ?? [],
 )
 const unitTestAsset = computed(
   () => project.value?.assets.find((asset) => asset.role === 'unit_test') ?? null,
 )
-const allDocs = computed(() => project.value?.assets.filter((asset) => asset.role === 'docs') ?? [])
+const allDocs = computed(
+  () => project.value?.assets.filter((asset) => asset.role === 'docs') ?? [],
+)
 const firstDocs = computed(() => allDocs.value[0] ?? null)
 const coverAssetId = computed(
   () => project.value?.assets.find((asset) => asset.role === 'cover')?.resourceId ?? null,
@@ -46,10 +49,7 @@ function toDraftImage(asset: CloneAssetView): CloneDraftAsset {
   }
 }
 
-function toDraftAsset(
-  asset: CloneAssetView | null,
-  role: 'unit_test' | 'docs',
-): CloneDraftAsset | null {
+function toDraftAsset(asset: CloneAssetView | null, role: 'unit_test' | 'docs'): CloneDraftAsset | null {
   if (!asset) {
     return null
   }

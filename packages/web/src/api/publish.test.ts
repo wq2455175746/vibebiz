@@ -1,12 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { cpHttp, request } from './client'
-import {
-  deletePublishedProject,
-  getPublishedStats,
-  listPublishedProjects,
-  publishProject,
-} from './publish'
+import { deletePublishedProject, getPublishedStats, listPublishedProjects, publishProject } from './publish'
 
 vi.mock('./client', () => ({
   cpHttp: {},
