@@ -1303,3 +1303,232 @@ button.file-row {
   color: var(--muted);
   font-size: 9px;
 }
+
+.channel-package-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.channel-package-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.channel-package-label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.channel-package-channels,
+.channel-package-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.channel-package-chip {
+  padding: 6px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.channel-package-chip:hover {
+  background: var(--soft);
+}
+
+.channel-package-chip.active {
+  background: var(--blue-soft);
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.channel-package-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  background: var(--soft);
+  border: 1px dashed var(--line-strong);
+  border-radius: 10px;
+}
+
+.channel-package-file {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+}
+
+.channel-package-file input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.channel-package-file span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.channel-package-upload small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.channel-package-error {
+  margin: 0;
+  padding: 8px 10px;
+  background: var(--soft);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.channel-package-generate {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  gap: 6px;
+  height: 34px;
+  padding: 0 16px;
+  background: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 8px;
+  color: var(--surface);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.channel-package-generate:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.channel-package-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.channel-package-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.channel-package-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.channel-package-item-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.channel-package-item-head div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.channel-package-item-head strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.channel-package-item-head small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.channel-package-level {
+  flex: none;
+  padding: 2px 8px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 10px;
+}
+
+.channel-package-level.level-a {
+  background: var(--blue-soft);
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.channel-package-level.level-c {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.channel-package-warnings {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.channel-package-item-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.channel-package-size {
+  flex: 1;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.channel-package-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  color: var(--ink);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.channel-package-link:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
