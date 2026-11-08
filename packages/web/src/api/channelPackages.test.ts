@@ -98,6 +98,10 @@ describe('channelPackages api', () => {
           steps: ['生成渠道包'],
           requirements: ['企业主体'],
           updatedAt: '2026-11-07',
+          enabled: true,
+          builtin: true,
+          packageable: true,
+          sortOrder: 10,
         },
       ],
     })

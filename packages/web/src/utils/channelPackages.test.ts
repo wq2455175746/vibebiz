@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { channelLabel, channelOptions, levelLabel } from './channelPackages'
+import type { ChannelGuide } from '@/types'
+import { channelLabel, channelOptions, levelLabel, packageableChannelOptions } from './channelPackages'
 
 describe('channel package helpers', () => {
   it('exposes three channels in display order', () => {
@@ -24,5 +25,43 @@ describe('channel package helpers', () => {
 
   it('returns no level label when the backend omits the level', () => {
     expect(levelLabel('')).toBe('')
+  })
+
+  it('filters packageable channels and falls back to builtins', () => {
+    const guides: ChannelGuide[] = [
+      {
+        channel: 'wechat_minigame',
+        title: '微信小游戏',
+        summary: '',
+        markdown: '',
+        steps: [],
+        requirements: [],
+        updatedAt: '2026-11-08',
+        enabled: true,
+        builtin: true,
+        packageable: true,
+        sortOrder: 10,
+      },
+      {
+        channel: 'taptap_mobile',
+        title: 'TapTap',
+        summary: '',
+        markdown: '',
+        steps: [],
+        requirements: [],
+        updatedAt: '2026-11-08',
+        enabled: true,
+        builtin: false,
+        packageable: false,
+        sortOrder: 40,
+      },
+    ]
+
+    expect(packageableChannelOptions(guides).map((item) => item.value)).toEqual(['wechat_minigame'])
+    expect(packageableChannelOptions([]).map((item) => item.value)).toEqual([
+      'wechat_minigame',
+      'douyin_minigame',
+      'steam_desktop',
+    ])
   })
 })
