@@ -2,11 +2,31 @@ import type { BusinessCard, CardContentType, CardProjectItem } from '@/types'
 
 const TIMESTAMP = '2026-11-08T10:00:00.000Z'
 
-export const DEMO_IMAGE =
-  'data:image/svg+xml;charset=utf-8,' +
-  encodeURIComponent(
-    '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#111111"/><stop offset="1" stop-color="#2563eb"/></linearGradient></defs><rect width="640" height="360" fill="url(#g)"/><text x="320" y="190" text-anchor="middle" fill="#ffffff" font-size="34" font-family="sans-serif">Vibebiz Card</text></svg>',
+const COVER_PALETTES = [
+  ['#111111', '#2563eb'],
+  ['#1f2937', '#6b7280'],
+  ['#2563eb', '#111111'],
+  ['#6b7280', '#1f2937'],
+  ['#111111', '#6b7280'],
+  ['#1f2937', '#2563eb'],
+]
+
+function escapeXml(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+function demoCover(label: string, seed: number): string {
+  const [from, to] = COVER_PALETTES[seed % COVER_PALETTES.length] ?? COVER_PALETTES[0]!
+  const text = escapeXml(label.slice(0, 20))
+  return (
+    'data:image/svg+xml;charset=utf-8,' +
+    encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${from}"/><stop offset="1" stop-color="${to}"/></linearGradient></defs><rect width="640" height="360" fill="url(#g)"/><text x="320" y="190" text-anchor="middle" fill="#ffffff" font-size="30" font-family="sans-serif">${text}</text></svg>`,
+    )
   )
+}
+
+export const DEMO_IMAGE = demoCover('Vibebiz Card', 0)
 
 export const DEMO_PDF =
   'data:application/pdf;base64,JVBERi0xLjAKMSAwIG9iajw8L1R5cGUvQ2F0YWxvZy9QYWdlcyAyIDAgUj4+ZW5kb2JqCjIgMCBvYmo8PC9UeXBlL1BhZ2VzL0tpZHNbMyAwIFJdL0NvdW50IDE+PmVuZG9iagozIDAgb2JqPDwvVHlwZS9QYWdlL1BhcmVudCAyIDAgUi9NZWRpYUJveFswIDAgMjAwIDIwMF0+PmVuZG9iagp4cmVmCjAgNAowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMDkgMDAwMDAgbiAKMDAwMDAwMDA1MiAwMDAwMCBuIAowMDAwMDAwMTAxIDAwMDAwIG4gCnRyYWlsZXI8PC9Sb290IDEgMCBSPj4Kc3RhcnR4cmVmCjE2MAolJUVPRgo='
@@ -67,15 +87,17 @@ function demoItem(
   name: string,
   type: CardContentType,
   description: string,
+  coverSeed: number,
 ): CardProjectItem {
+  const coverUrl = demoCover(name, coverSeed)
   return {
     projectId,
     name,
     description,
-    coverUrl: DEMO_IMAGE,
+    coverUrl,
     type,
     shareUrl: `/share/project/${projectId}`,
-    previewUrl: previewFor(type),
+    previewUrl: type === 'image' ? coverUrl : previewFor(type),
     addedAt: TIMESTAMP,
   }
 }
@@ -90,6 +112,7 @@ export const mockCards: BusinessCard[] = PEOPLE.map((person, index) => {
       `${person.name}的作品 ${itemIndex + 1}`,
       type,
       `${person.name} 的${type === 'html' ? '互动小游戏' : type === 'document' ? '技术文档' : '创作项目'}`,
+      index * 4 + itemIndex,
     )
   })
   return {

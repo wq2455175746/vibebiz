@@ -27,7 +27,7 @@ import {
 } from '@/utils/card'
 
 const MINE_KEY = 'vibebiz:cards:mine:v1'
-const DISCOVER_KEY = 'vibebiz:cards:discover:v1'
+const DISCOVER_KEY = 'vibebiz:cards:discover:v2'
 
 export const useCardStore = defineStore('card', () => {
   const mine = ref<BusinessCard>(emptyCard())

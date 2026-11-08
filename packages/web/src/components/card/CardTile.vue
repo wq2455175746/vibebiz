@@ -1,16 +1,24 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+
 import CardPreview from './CardPreview.vue'
-import type { BusinessCard } from '@/types'
+import type { BusinessCard, CardFeatured } from '@/types'
 
 const props = defineProps<{ card: BusinessCard }>()
 const emit = defineEmits<{ open: [id: string] }>()
-const initial = (props.card.ownerName || '?').charAt(0).toUpperCase()
+const initial = computed(() => (props.card.ownerName || '?').charAt(0).toUpperCase())
+
+const previewFeatured = computed<CardFeatured>(() => {
+  if (props.card.featured) return props.card.featured
+  const first = props.card.items[0]
+  return first ? { kind: 'project', projectId: first.projectId } : null
+})
 </script>
 
 <template>
   <article class="card-tile" @click="emit('open', card.id)">
     <div class="card-tile-preview">
-      <CardPreview :featured="card.featured" :items="card.items" />
+      <CardPreview :featured="previewFeatured" :items="card.items" />
     </div>
     <div class="card-tile-body">
       <div class="card-tile-person">
