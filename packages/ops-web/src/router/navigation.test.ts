@@ -55,6 +55,12 @@ describe('ops navigation', () => {
     expect(routeNames).toEqual(navItems.map((item) => item.name))
   })
 
+  it('resolves every navigation path to a layout child route', () => {
+    for (const item of navItems) {
+      expect(router.resolve(item.path).matched.length, item.path).toBeGreaterThan(1)
+    }
+  })
+
   it('serves the login route outside the ops layout and marks it public', () => {
     const login = router.resolve('/login')
     expect(login.meta.public).toBe(true)

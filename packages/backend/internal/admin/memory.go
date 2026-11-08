@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -46,7 +47,7 @@ func NewMemoryRepository() Repository {
 func (r *MemoryRepository) Overview(_ context.Context, projectCount int) (Overview, error) {
 	return Overview{
 		Projects:         projectCount,
-		Users:            2,
+		Users:            len(r.users),
 		RunningSandboxes: 1,
 		TodayRequests:    128,
 	}, nil
@@ -67,6 +68,47 @@ func (r *MemoryRepository) User(_ context.Context, id int64) (UserDetail, error)
 	if !ok {
 		return UserDetail{}, ErrNotFound
 	}
+	return detail, nil
+}
+
+func (r *MemoryRepository) CreateUser(_ context.Context, input CreateUserInput) (UserDetail, error) {
+	for _, detail := range r.details {
+		if strings.EqualFold(detail.Username, input.Username) || strings.EqualFold(detail.Email, input.Email) {
+			return UserDetail{}, ErrConflict
+		}
+	}
+	var maxID int64
+	for _, item := range r.users {
+		if id, err := strconv.ParseInt(item.ID, 10, 64); err == nil && id > maxID {
+			maxID = id
+		}
+	}
+	id := strconv.FormatInt(maxID+1, 10)
+	status := "disabled"
+	if input.Status == 1 {
+		status = "active"
+	}
+	name := input.Nickname
+	if name == "" {
+		name = input.Username
+	}
+	now := input.At
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	detail := UserDetail{
+		ID: id, Username: input.Username, Name: name, Nickname: input.Nickname,
+		Email: input.Email, Plan: input.Plan, Source: "ADMIN", Status: status,
+		CreatedAt: now, UpdatedAt: now,
+	}
+	if input.Email != "" {
+		detail.EmailVerifiedAt = &now
+	}
+	r.users = append(r.users, User{
+		ID: id, Name: name, Email: input.Email, Plan: input.Plan, Status: status, CreatedAt: now,
+	})
+	r.details[id] = detail
+	r.passwordHash[id] = input.PasswordHash
 	return detail, nil
 }
 

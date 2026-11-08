@@ -28,7 +28,8 @@ export interface EvolutionVersion {
   status: VersionStatus
   scenario: string
   summary: string
-  proposalIds: string[]
+  originVersion: string
+  proposalIds: string[] | null
 }
 
 export interface EvolutionChatMessage {
@@ -39,34 +40,9 @@ export interface EvolutionChatMessage {
   content: string
 }
 
-export interface EvolutionState {
-  proposals: EvolutionProposal[]
-  versions: EvolutionVersion[]
-  chats: Record<string, EvolutionChatMessage[]>
-  selectedVersionId: string | null
-  selectedUserId: string | null
-}
-
 export interface EvolutionVersionGroup {
   userId: string
   userName: string
   latest: EvolutionVersion
   versions: EvolutionVersion[]
-}
-
-export interface EvolutionViewer {
-  id: string
-  name: string
-}
-
-export interface EvolutionTask {
-  id: string
-  versionId: string
-  userId: string
-  userName: string
-  versionLabel: string
-  originVersion: string
-  chatSummary: string
-  status: 'queued' | 'coding' | 'ci' | 'released' | 'failed'
-  createdAt: string
 }

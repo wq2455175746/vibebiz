@@ -15,7 +15,7 @@ import (
 	"vibebiz/internal/usage"
 )
 
-func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.ProjectStore, provisioner handler.ProjectInitializer, obs *observability.Provider, authn *auth.Authenticator, authHandler *handler.AuthHandler, settingsHandler *handler.SettingsHandler, storageHandler *handler.StorageHandler, metas auth.ProjectMetaStore, notifications *handler.NotificationHandler, registry *handler.SandboxRegistryHandler, models *handler.ModelHandler, roles *handler.RoleHandler, coverSigner handler.CoverURLSigner, coverExpiry time.Duration, adminSandbox handler.AdminSandbox, templates *handler.TemplateHandler, harness handler.HarnessImporter, stageStore projectstage.Store, stageSandbox handler.StageSandbox, notificationChannels *handler.NotificationChannelHandler, fdeResources *handler.FdeResourceHandler, publishApp *handler.PublishHandler, channelPackages *handler.ChannelPackageHandler, channelGuides *handler.ChannelGuideHandler, cloneHandler *handler.CloneHandler, usageService *usage.Service, accessLogs *handler.AccessLogHandler, skillManager *handler.SkillManager, leaderboardHandler *handler.LeaderboardHandler) {
+func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.ProjectStore, provisioner handler.ProjectInitializer, obs *observability.Provider, authn *auth.Authenticator, authHandler *handler.AuthHandler, settingsHandler *handler.SettingsHandler, storageHandler *handler.StorageHandler, metas auth.ProjectMetaStore, notifications *handler.NotificationHandler, registry *handler.SandboxRegistryHandler, models *handler.ModelHandler, roles *handler.RoleHandler, coverSigner handler.CoverURLSigner, coverExpiry time.Duration, adminSandbox handler.AdminSandbox, templates *handler.TemplateHandler, harness handler.HarnessImporter, stageStore projectstage.Store, stageSandbox handler.StageSandbox, notificationChannels *handler.NotificationChannelHandler, fdeResources *handler.FdeResourceHandler, publishApp *handler.PublishHandler, channelPackages *handler.ChannelPackageHandler, channelGuides *handler.ChannelGuideHandler, cloneHandler *handler.CloneHandler, usageService *usage.Service, accessLogs *handler.AccessLogHandler, skillManager *handler.SkillManager, leaderboardHandler *handler.LeaderboardHandler, evolutionHandler *handler.EvolutionHandler) {
 	var roleStore handler.AgentRoleStore
 	if roles != nil {
 		roleStore = roles.Service
@@ -144,6 +144,16 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 		api.GET("/leaderboard", leaderboardHandler.ListPublic, authn.RequireUser)
 	}
 
+	if evolutionHandler != nil {
+		evolveAPI := api.Group("/evolve", authn.RequireUser)
+		evolveAPI.GET("", evolutionHandler.List)
+		evolveAPI.GET("/conversations/:userId", evolutionHandler.Conversation)
+		evolveAPI.POST("/draft", evolutionHandler.EnsureDraft)
+		evolveAPI.POST("/proposals", evolutionHandler.SubmitProposal)
+		evolveAPI.POST("/chat", evolutionHandler.SubmitChat)
+		evolveAPI.POST("/versions/:id/confirm", evolutionHandler.ConfirmVersion)
+	}
+
 	adminAPI := api.Group("/admin")
 	adminAPI.POST("/auth/login", authHandler.LoginOps)
 	adminAPI.GET("/auth/me", authHandler.MeOps)
@@ -171,6 +181,7 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 		adminProtected.POST("/channel-guides/:channel/markdown", channelGuides.UploadMarkdown)
 	}
 	adminProtected.GET("/users", adminHandler.Users)
+	adminProtected.POST("/users", adminHandler.CreateUser)
 	adminProtected.GET("/users/:id", adminHandler.UserDetail)
 	adminProtected.PUT("/users/:id/status", adminHandler.UpdateUserStatus)
 	adminProtected.PUT("/users/:id/password", adminHandler.UpdateUserPassword)
@@ -192,6 +203,13 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 		adminProtected.GET("/leaderboard", leaderboardHandler.ListAdmin)
 		adminProtected.PUT("/leaderboard/:projectId/hidden", leaderboardHandler.Hide)
 		adminProtected.DELETE("/leaderboard/:projectId", leaderboardHandler.Delete)
+	}
+	if evolutionHandler != nil {
+		adminProtected.GET("/evolve", evolutionHandler.AdminSnapshot)
+		adminProtected.GET("/evolve/conversations/:userId", evolutionHandler.AdminConversation)
+		adminProtected.POST("/evolve/versions/:id/reply", evolutionHandler.AdminReply)
+		adminProtected.POST("/evolve/tasks", evolutionHandler.AdminSubmitTask)
+		adminProtected.PATCH("/evolve/tasks/:id", evolutionHandler.AdminUpdateTask)
 	}
 	if models != nil {
 		adminProtected.GET("/models", models.List)

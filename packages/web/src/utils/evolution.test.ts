@@ -3,10 +3,9 @@ import { describe, expect, it } from 'vitest'
 import type { EvolutionVersion } from '@/types/evolution'
 import {
   OFFICIAL_USER_ID,
-  OFFICIAL_VERSION_ID,
-  buildAgentDecision,
   buildEvolutionPreviewUrl,
-  classifyProposal,
+  formatRelative,
+  groupMessagesByDay,
   groupVersionsByUser,
   latestVersionsByUser,
   statusLabel,
@@ -29,60 +28,18 @@ function version(
     status: 'preview',
     scenario: 'baseline',
     summary: '',
+    originVersion: 'v1.2026.11',
     proposalIds: [],
     ...overrides,
   }
 }
-
-describe('classifyProposal', () => {
-  it('classifies defects as bug', () => {
-    expect(classifyProposal('删除按钮点击没有反应')).toBe('bug')
-    expect(classifyProposal('页面报错，打不开')).toBe('bug')
-  })
-
-  it('classifies page adjustments as visual', () => {
-    expect(classifyProposal('首页卡片太挤了，希望更紧凑')).toBe('visual')
-    expect(classifyProposal('输入框的布局和间距需要优化')).toBe('visual')
-  })
-
-  it('classifies capability changes as feature', () => {
-    expect(classifyProposal('希望支持多人协作')).toBe('feature')
-    expect(classifyProposal('接入一个新的数据库')).toBe('feature')
-  })
-
-  it('defaults unknown ideas to feature instead of accepting blindly', () => {
-    expect(classifyProposal('我想到了一个全新的玩法')).toBe('feature')
-  })
-})
-
-describe('buildAgentDecision', () => {
-  it('patches bug reports directly', () => {
-    const decision = buildAgentDecision('按钮失效了')
-    expect(decision.kind).toBe('bug')
-    expect(decision.action).toBe('patch')
-    expect(decision.scenario).toBe('bugfix')
-  })
-
-  it('previews visual changes and asks for confirmation', () => {
-    const decision = buildAgentDecision('首页导航布局更紧凑一些')
-    expect(decision.kind).toBe('visual')
-    expect(decision.action).toBe('preview')
-    expect(decision.scenario).toBe('compact-sidebar')
-  })
-
-  it('pushes back on feature requests', () => {
-    const decision = buildAgentDecision('支持多人同时编辑')
-    expect(decision.kind).toBe('feature')
-    expect(decision.action).toBe('pushback')
-  })
-})
 
 describe('groupVersionsByUser', () => {
   const versions = [
     version('current-old', '7', '2026-11-01T00:00:00.000Z'),
     version('current-new', '7', '2026-11-07T00:00:00.000Z'),
     version('other', '9', '2026-11-08T00:00:00.000Z'),
-    version(OFFICIAL_VERSION_ID, OFFICIAL_USER_ID, '2026-11-09T00:00:00.000Z'),
+    version('v-official-1', OFFICIAL_USER_ID, '2026-11-09T00:00:00.000Z'),
   ]
 
   it('pins the current user first and the official baseline last', () => {
@@ -94,7 +51,7 @@ describe('groupVersionsByUser', () => {
 
   it('returns the latest version per user', () => {
     const latest = latestVersionsByUser(versions, '7')
-    expect(latest.map((item) => item.id)).toEqual(['current-new', 'other', OFFICIAL_VERSION_ID])
+    expect(latest.map((item) => item.id)).toEqual(['current-new', 'other', 'v-official-1'])
   })
 })
 
@@ -121,10 +78,27 @@ describe('preview URL', () => {
   })
 })
 
-describe('statusLabel', () => {
+describe('formatting', () => {
   it('maps known statuses', () => {
+    expect(statusLabel('draft')).toBe('草案')
     expect(statusLabel('preview')).toBe('待确认')
     expect(statusLabel('queued')).toBe('待处理')
     expect(statusLabel('unknown')).toBe('unknown')
+  })
+
+  it('formats relative times', () => {
+    const now = Date.parse('2026-11-08T12:00:00.000Z')
+    expect(formatRelative('2026-11-08T11:59:30.000Z', now)).toBe('刚刚')
+    expect(formatRelative('2026-11-08T11:30:00.000Z', now)).toBe('30 分钟前')
+  })
+
+  it('groups chat messages by day', () => {
+    const groups = groupMessagesByDay([
+      { id: 'a', createdAt: '2026-11-07T10:00:00Z', role: 'user', userName: 'u', content: 'a' },
+      { id: 'b', createdAt: '2026-11-08T10:00:00Z', role: 'agent', userName: 'a', content: 'b' },
+      { id: 'c', createdAt: '2026-11-08T11:00:00Z', role: 'user', userName: 'u', content: 'c' },
+    ])
+    expect(groups).toHaveLength(2)
+    expect(groups[0].messages).toHaveLength(2)
   })
 })

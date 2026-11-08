@@ -51,6 +51,15 @@ export interface AdminUserDetail {
   updatedAt: string
 }
 
+export interface CreateUserInput {
+  username: string
+  password: string
+  email?: string
+  nickname?: string
+  plan: string
+  status: number
+}
+
 export interface AdminProject {
   id: string
   name: string

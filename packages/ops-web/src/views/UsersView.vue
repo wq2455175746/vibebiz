@@ -2,19 +2,26 @@
 import { computed, ref } from 'vue'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
+import InputText from 'primevue/inputtext'
 import Password from 'primevue/password'
+import Select from 'primevue/select'
 import Textarea from 'primevue/textarea'
 import ToggleSwitch from 'primevue/toggleswitch'
 import { useToast } from 'primevue/usetoast'
 
-import { getUser, getUsers, updateUserPassword, updateUserStatus } from '@/api/admin'
+import { createUser, getUser, getUsers, updateUserPassword, updateUserStatus } from '@/api/admin'
 import DataTable from '@/components/DataTable.vue'
 import TablePagination from '@/components/TablePagination.vue'
 import TableSearch from '@/components/TableSearch.vue'
 import { useAdminPage } from '@/composables/useAdminPage'
-import type { AdminUser, AdminUserDetail, TableColumn } from '@/types'
+import type { AdminUser, AdminUserDetail, CreateUserInput, TableColumn } from '@/types'
 import { formatDateTime } from '@/utils/format'
-import { validateDisableReason, validateNewPassword } from '@/utils/userAdmin'
+import {
+  createUserErrorMessage,
+  validateCreateUser,
+  validateDisableReason,
+  validateNewPassword,
+} from '@/utils/userAdmin'
 
 const toast = useToast()
 const { rows, total, page, pageSize, keyword, loading, error, load, search, setPage, setPageSize } =
@@ -46,6 +53,69 @@ const savingPassword = ref(false)
 const detailVisible = ref(false)
 const detail = ref<AdminUserDetail | null>(null)
 const detailLoading = ref(false)
+
+const planOptions = [
+  { label: '免费 free', value: 'free' },
+  { label: '专业 pro', value: 'pro' },
+  { label: '旗舰 max', value: 'max' },
+]
+
+const createVisible = ref(false)
+const creating = ref(false)
+const createError = ref('')
+const createForm = ref({
+  username: '',
+  password: '',
+  confirmPassword: '',
+  email: '',
+  nickname: '',
+  plan: 'free',
+  status: 1,
+})
+
+function openCreate() {
+  createForm.value = {
+    username: '',
+    password: '',
+    confirmPassword: '',
+    email: '',
+    nickname: '',
+    plan: 'free',
+    status: 1,
+  }
+  createError.value = ''
+  createVisible.value = true
+}
+
+async function submitCreate() {
+  const form = createForm.value
+  const message = validateCreateUser(form)
+  if (message) {
+    createError.value = message
+    return
+  }
+  creating.value = true
+  createError.value = ''
+  try {
+    const input: CreateUserInput = {
+      username: form.username.trim(),
+      password: form.password,
+      email: form.email.trim() || undefined,
+      nickname: form.nickname.trim() || undefined,
+      plan: form.plan,
+      status: form.status,
+    }
+    await createUser(input)
+    notifySuccess('用户已创建')
+    createVisible.value = false
+    page.value = 1
+    await load()
+  } catch (err) {
+    createError.value = createUserErrorMessage(err)
+  } finally {
+    creating.value = false
+  }
+}
 
 const detailInitial = computed(() => {
   const name = detail.value?.name || detail.value?.username || ''
@@ -199,7 +269,10 @@ async function openDetail(row: unknown) {
       <span class="tag">{{ total }} 条</span>
     </header>
 
-    <TableSearch v-model:keyword="keyword" @search="search" />
+    <div class="users-toolbar">
+      <Button label="添加用户" icon="pi pi-plus" @click="openCreate" />
+      <TableSearch v-model:keyword="keyword" @search="search" />
+    </div>
 
     <DataTable
       :columns="columns"
@@ -230,6 +303,89 @@ async function openDetail(row: unknown) {
       @page="setPage"
       @page-size="setPageSize"
     />
+
+    <Dialog
+      v-model:visible="createVisible"
+      header="添加用户"
+      modal
+      :closable="!creating"
+      :close-on-escape="!creating"
+      :dismissable-mask="!creating"
+      :style="{ width: '520px' }"
+      @hide="createError = ''"
+    >
+      <div class="form">
+        <label class="field">
+          <span>用户名</span>
+          <InputText
+            v-model="createForm.username"
+            maxlength="32"
+            placeholder="3-32 位字母、数字、_ 或 -"
+          />
+        </label>
+        <label class="field">
+          <span>密码</span>
+          <Password
+            v-model="createForm.password"
+            toggle-mask
+            :feedback="false"
+            autocomplete="new-password"
+          />
+        </label>
+        <label class="field">
+          <span>确认密码</span>
+          <Password
+            v-model="createForm.confirmPassword"
+            toggle-mask
+            :feedback="false"
+            autocomplete="new-password"
+          />
+        </label>
+        <label class="field">
+          <span>邮箱</span>
+          <InputText v-model="createForm.email" maxlength="255" placeholder="留空自动生成" />
+        </label>
+        <label class="field">
+          <span>昵称</span>
+          <InputText v-model="createForm.nickname" maxlength="255" placeholder="留空使用用户名" />
+        </label>
+        <label class="field">
+          <span>套餐</span>
+          <Select
+            v-model="createForm.plan"
+            :options="planOptions"
+            option-label="label"
+            option-value="value"
+            aria-label="套餐"
+          />
+        </label>
+        <label class="field">
+          <span>状态</span>
+          <Select
+            v-model="createForm.status"
+            :options="[
+              { label: '启用', value: 1 },
+              { label: '禁用', value: 0 },
+            ]"
+            option-label="label"
+            option-value="value"
+            aria-label="状态"
+          />
+        </label>
+        <p class="hint">邮箱留空将自动生成 &lt;用户名&gt;@test.local。</p>
+        <p v-if="createError" class="error-text">{{ createError }}</p>
+      </div>
+      <template #footer>
+        <Button
+          label="取消"
+          severity="secondary"
+          text
+          :disabled="creating"
+          @click="createVisible = false"
+        />
+        <Button label="创建" :loading="creating" @click="submitCreate" />
+      </template>
+    </Dialog>
 
     <Dialog
       v-model:visible="disableVisible"
@@ -362,6 +518,19 @@ async function openDetail(row: unknown) {
 </template>
 
 <style scoped>
+.users-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.users-toolbar :deep(.table-search) {
+  margin-bottom: 0;
+}
+
 .form {
   display: flex;
   flex-direction: column;

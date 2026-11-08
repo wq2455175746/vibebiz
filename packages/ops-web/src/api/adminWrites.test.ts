@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   createTemplate,
   createTopic,
+  createUser,
   deleteTemplate,
   getAdminTopics,
   getProjectFiles,
@@ -168,6 +169,32 @@ describe('admin writes', () => {
       method: 'put',
       url: '/quotas/1',
       data: input,
+    })
+  })
+
+  it('creates a user', async () => {
+    const spy = vi.spyOn(http, 'request').mockResolvedValueOnce({
+      data: { code: 0, message: 'ok', result: { id: '7', username: 'tester01' } },
+    })
+    await createUser({
+      username: 'tester01',
+      password: 'secret123',
+      email: 'tester01@example.com',
+      nickname: 'Tester',
+      plan: 'free',
+      status: 1,
+    })
+    expect(spy).toHaveBeenCalledWith({
+      method: 'post',
+      url: '/users',
+      data: {
+        username: 'tester01',
+        password: 'secret123',
+        email: 'tester01@example.com',
+        nickname: 'Tester',
+        plan: 'free',
+        status: 1,
+      },
     })
   })
 })

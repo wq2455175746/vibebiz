@@ -27,7 +27,7 @@
 ## Task 1: 数据库迁移、模型与仓储
 
 **Files:**
-- Create: `packages/backend/migrations/00029_channel_guide.sql`
+- Create: `packages/backend/migrations/00030_channel_guide.sql`
 - Create: `packages/backend/internal/dao/model/channel_guide.go`
 - Create: `packages/backend/internal/dao/channel_guide_repository.go`
 - Create: `packages/backend/internal/dao/channel_guide_repository_test.go`
@@ -40,7 +40,7 @@
 
 - [ ] **Step 1: 写迁移与迁移测试**
 
-创建 `00029_channel_guide.sql`：
+创建 `00030_channel_guide.sql`：
 
 ```sql
 -- channel guide content managed by ops-web
@@ -74,7 +74,7 @@ DROP TABLE IF EXISTS `channel_guide`;
 
 ```go
 func TestChannelGuideMigration(t *testing.T) {
-	body, err := fs.ReadFile(FS, "00029_channel_guide.sql")
+	body, err := fs.ReadFile(FS, "00030_channel_guide.sql")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -298,7 +298,7 @@ Expected: PASS。
 - [ ] **Step 6: 提交**
 
 ```bash
-git add packages/backend/migrations/00029_channel_guide.sql packages/backend/migrations/migrations_test.go packages/backend/internal/dao/model/channel_guide.go packages/backend/internal/dao/channel_guide_repository.go packages/backend/internal/dao/channel_guide_repository_test.go
+git add packages/backend/migrations/00030_channel_guide.sql packages/backend/migrations/migrations_test.go packages/backend/internal/dao/model/channel_guide.go packages/backend/internal/dao/channel_guide_repository.go packages/backend/internal/dao/channel_guide_repository_test.go
 git commit -m "feat: add channel guide storage"
 ```
 

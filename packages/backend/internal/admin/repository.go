@@ -7,7 +7,10 @@ import (
 	"time"
 )
 
-var ErrNotFound = errors.New("admin record not found")
+var (
+	ErrNotFound = errors.New("admin record not found")
+	ErrConflict = errors.New("admin record already exists")
+)
 
 const (
 	DefaultPageSize = 10
@@ -115,6 +118,17 @@ type UserStatusUpdate struct {
 	At       time.Time
 }
 
+type CreateUserInput struct {
+	Username     string
+	Email        string
+	Nickname     string
+	PasswordHash string
+	Plan         string
+	Status       int8
+	Operator     string
+	At           time.Time
+}
+
 type Sandbox struct {
 	ID              string     `json:"id"`
 	Name            string     `json:"name"`
@@ -191,6 +205,7 @@ type Repository interface {
 	Overview(ctx context.Context, projectCount int) (Overview, error)
 	Users(ctx context.Context, query ListQuery) (Page[User], error)
 	User(ctx context.Context, id int64) (UserDetail, error)
+	CreateUser(ctx context.Context, input CreateUserInput) (UserDetail, error)
 	UpdateUserStatus(ctx context.Context, id int64, input UserStatusUpdate) error
 	UpdateUserPassword(ctx context.Context, id int64, hash string) error
 	Sandboxes(ctx context.Context, query ListQuery) (Page[Sandbox], error)

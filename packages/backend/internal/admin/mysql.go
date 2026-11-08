@@ -2,10 +2,12 @@ package admin
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
 
+	mysqldriver "github.com/go-sql-driver/mysql"
 	"gorm.io/gorm"
 
 	"vibebiz/internal/dao/model"
@@ -189,6 +191,10 @@ func (r *MySQLRepository) Quotas(ctx context.Context) ([]Quota, error) {
 }
 
 func (r *MySQLRepository) User(ctx context.Context, id int64) (UserDetail, error) {
+	return r.userDetail(ctx, r.db, id)
+}
+
+func (r *MySQLRepository) userDetail(ctx context.Context, db *gorm.DB, id int64) (UserDetail, error) {
 	var row struct {
 		ID              int64
 		Username        string
@@ -209,7 +215,7 @@ func (r *MySQLRepository) User(ctx context.Context, id int64) (UserDetail, error
 		CreatedAt       time.Time
 		UpdatedAt       time.Time
 	}
-	err := r.db.WithContext(ctx).
+	err := db.WithContext(ctx).
 		Table("user AS u").
 		Select("u.id, u.username, u.nickname, u.email, u.phone_number, u.avatar_url, u.avatar_s3_path, COALESCE(q.plan_code, 'free') AS plan_code, u.source, u.status, u.email_verified_at, u.last_login_time, u.last_login_ip, u.disabled_reason, u.disabled_at, u.disabled_by, u.created_at, u.updated_at").
 		Joins("LEFT JOIN user_quota AS q ON q.user_id = u.id AND q.deleted_at IS NULL").
@@ -250,6 +256,67 @@ func (r *MySQLRepository) User(ctx context.Context, id int64) (UserDetail, error
 		CreatedAt:       row.CreatedAt,
 		UpdatedAt:       row.UpdatedAt,
 	}, nil
+}
+
+func buildCreateUserRecords(input CreateUserInput, now time.Time) (model.User, model.Workspace, model.WorkspaceUser, model.UserQuota) {
+	user := model.User{
+		Email: input.Email, Source: "ADMIN", Username: input.Username,
+		PasswordHash: &input.PasswordHash, Nickname: input.Nickname, Status: input.Status,
+	}
+	if input.Email != "" {
+		user.EmailVerifiedAt = &now
+	}
+	workspace := model.Workspace{
+		Name:        input.Username + " 的个人工作区",
+		Description: "默认个人工作区", WorkspaceType: "personal",
+		Visibility: "private", Status: 1, CreatedBy: input.Operator,
+	}
+	member := model.WorkspaceUser{
+		Role: "owner", Status: 1, JoinedAt: &now,
+	}
+	quota := model.UserQuota{PlanCode: input.Plan, Status: 1, ConcurrentAgentRuns: 1}
+	return user, workspace, member, quota
+}
+
+func (r *MySQLRepository) CreateUser(ctx context.Context, input CreateUserInput) (UserDetail, error) {
+	now := input.At
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	var detail UserDetail
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		user, workspace, member, quota := buildCreateUserRecords(input, now)
+		if err := tx.Create(&user).Error; err != nil {
+			return err
+		}
+		workspace.OwnerUserID = user.ID
+		if err := tx.Create(&workspace).Error; err != nil {
+			return err
+		}
+		member.WorkspaceID = workspace.ID
+		member.UserID = user.ID
+		if err := tx.Create(&member).Error; err != nil {
+			return err
+		}
+		quota.UserID = user.ID
+		if err := tx.Create(&quota).Error; err != nil {
+			return err
+		}
+		found, err := r.userDetail(ctx, tx, user.ID)
+		if err != nil {
+			return err
+		}
+		detail = found
+		return nil
+	})
+	if err != nil {
+		var mysqlErr *mysqldriver.MySQLError
+		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
+			return UserDetail{}, ErrConflict
+		}
+		return UserDetail{}, fmt.Errorf("create admin user: %w", err)
+	}
+	return detail, nil
 }
 
 func (r *MySQLRepository) UpdateUserStatus(ctx context.Context, id int64, input UserStatusUpdate) error {

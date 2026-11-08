@@ -234,5 +234,4 @@ clean:
 	@$(MAKE) --no-print-directory -C $(SANDBOX) clean
 	@$(MAKE) --no-print-directory -C $(WEB) clean
 	@$(MAKE) --no-print-directory -C $(OPS_WEB) clean
-	@rm -rf data/workspaces/*
-	@echo "cleaned"
+	@echo "cleaned (project workspaces under data/workspaces are preserved; delete them manually if needed)"

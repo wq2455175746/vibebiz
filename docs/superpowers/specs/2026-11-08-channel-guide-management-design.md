@@ -45,7 +45,7 @@
 
 ## 3. 数据模型
 
-新增迁移 `packages/backend/migrations/00029_channel_guide.sql`。
+新增迁移 `packages/backend/migrations/00030_channel_guide.sql`。
 
 ```sql
 CREATE TABLE `channel_guide` (

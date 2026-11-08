@@ -42,36 +42,52 @@ function refreshPreview(): void {
   notice.value = '预览已刷新'
 }
 
-function selectVersion(versionId: string): void {
-  store.selectVersion(versionId)
+async function selectVersion(versionId: string): Promise<void> {
   notice.value = ''
-}
-
-function submitProposal(content: string): void {
-  const proposal = store.submitProposal(content)
-  if (!proposal) {
-    notice.value = '提交内容不能为空'
-    return
+  try {
+    await store.selectVersion(versionId)
+  } catch {
+    notice.value = store.error || '加载对话失败'
   }
-  notice.value =
-    proposal.kind === 'feature'
-      ? 'Agent 已给出评估意见，该提议暂未直接生成版本'
-      : '已生成候选版本，请在预览中确认效果'
 }
 
-function submitChat(content: string): void {
-  const ok = store.submitChat(content)
-  notice.value = ok ? '对话已追加到聊天记录' : '提交内容不能为空'
+async function submitProposal(content: string): Promise<void> {
+  try {
+    const proposal = await store.submitProposal(content)
+    notice.value =
+      proposal.kind === 'feature'
+        ? 'Agent 已给出评估意见，该提议暂未直接生成版本'
+        : '已生成候选版本，请在预览中确认效果'
+  } catch {
+    notice.value = store.error || '提交提议失败'
+  }
 }
 
-function confirmVersion(versionId: string): void {
-  const ok = store.confirmVersion(versionId)
-  notice.value = ok ? '已收录你的意见版本，评估通过后随下一版本发布。' : '版本不存在'
+async function submitChat(content: string): Promise<void> {
+  try {
+    await store.submitChat(content)
+    notice.value = '对话已追加到聊天记录'
+  } catch {
+    notice.value = store.error || '发送对话失败'
+  }
+}
+
+async function confirmVersion(versionId: string): Promise<void> {
+  try {
+    await store.confirmVersion(versionId)
+    notice.value = '已收录你的意见版本，评估通过后随下一版本发布。'
+  } catch {
+    notice.value = store.error || '确认版本失败'
+  }
 }
 
 onMounted(async () => {
   await auth.ensure().catch(() => undefined)
-  store.init({ id: viewerId.value, name: viewerName.value })
+  try {
+    await store.init({ id: viewerId.value, name: viewerName.value })
+  } catch {
+    notice.value = store.error || '加载集思进化数据失败'
+  }
 })
 </script>
 
@@ -87,7 +103,10 @@ onMounted(async () => {
         <span class="evolution-mark"><i class="pi pi-sparkles" /></span>
         <div>
           <strong>集思进化计划</strong>
-          <span>{{ EVOLUTION_PROJECT_ID }} · 官方基线 {{ OFFICIAL_VERSION_LABEL }}</span>
+          <span>
+            {{ store.projectId || EVOLUTION_PROJECT_ID }} · 官方基线
+            {{ store.originVersion || OFFICIAL_VERSION_LABEL }}
+          </span>
         </div>
       </div>
 
@@ -105,7 +124,7 @@ onMounted(async () => {
         :proposals="store.activeProposals"
         :is-own="store.isOwnVersion"
         :selected-user-name="store.activeUserName"
-        :current-version-label="selectedVersion?.label ?? OFFICIAL_VERSION_LABEL"
+        :current-version-label="selectedVersion?.label ?? store.originVersion"
         :latest-preview-version="store.latestPreviewVersion"
         @submit-proposal="submitProposal"
         @submit-chat="submitChat"

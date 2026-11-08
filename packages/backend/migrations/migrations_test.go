@@ -48,6 +48,7 @@ func TestInitialSchemaCoversAllBusinessTables(t *testing.T) {
 		"project_clone_source", "project_clone_asset",
 		"user_usage_daily", "user_access_log", "project_leases",
 		"project_channel_package", "channel_guide",
+		"evolution_version", "evolution_proposal", "evolution_message", "evolution_task",
 	}
 	var all strings.Builder
 	entries, err := fs.ReadDir(FS, ".")
@@ -218,8 +219,8 @@ func TestGooseCanCollectMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("collect migrations: %v", err)
 	}
-	if len(migs) != 29 {
-		t.Fatalf("collected %d migrations, want 29", len(migs))
+	if len(migs) != 31 {
+		t.Fatalf("collected %d migrations, want 31", len(migs))
 	}
 	for i, mig := range migs {
 		want := int64(i + 1)
@@ -437,7 +438,7 @@ func TestUserUsageDailyMigration(t *testing.T) {
 }
 
 func TestChannelGuideMigration(t *testing.T) {
-	body, err := fs.ReadFile(FS, "00029_channel_guide.sql")
+	body, err := fs.ReadFile(FS, "00030_channel_guide.sql")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -449,6 +450,23 @@ func TestChannelGuideMigration(t *testing.T) {
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("channel guide migration missing %q", want)
+		}
+	}
+}
+
+func TestMiniAppGuideSeed(t *testing.T) {
+	body, err := fs.ReadFile(FS, "00031_seed_miniapp_guides.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	for _, want := range []string{
+		"wechat_miniapp", "douyin_miniapp", "alipay_miniapp",
+		"INSERT IGNORE INTO `channel_guide`", "当前渠道仅提供指引",
+		"DELETE FROM `channel_guide`", "-- +goose Up", "-- +goose Down",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("mini-app guide seed missing %q", want)
 		}
 	}
 }

@@ -7,7 +7,9 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httputil"
+	"net/mail"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -95,6 +97,80 @@ func (h *AdminHandler) Users(c echo.Context) error {
 type userStatusRequest struct {
 	Status *int8  `json:"status"`
 	Reason string `json:"reason"`
+}
+
+var adminUsernamePattern = regexp.MustCompile(`^[A-Za-z0-9_-]{3,32}$`)
+
+type createUserRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+	Email    string `json:"email"`
+	Nickname string `json:"nickname"`
+	Plan     string `json:"plan"`
+	Status   *int8  `json:"status"`
+}
+
+func (h *AdminHandler) CreateUser(c echo.Context) error {
+	var req createUserRequest
+	if err := c.Bind(&req); err != nil {
+		return response.Fail(c, http.StatusBadRequest, 40001, "invalid user input")
+	}
+	username := strings.TrimSpace(req.Username)
+	if !adminUsernamePattern.MatchString(username) {
+		return response.Fail(c, http.StatusBadRequest, 40001, "invalid user input")
+	}
+	if len(req.Password) < 8 || len(req.Password) > 72 {
+		return response.Fail(c, http.StatusBadRequest, 40001, "invalid user input")
+	}
+	email := strings.ToLower(strings.TrimSpace(req.Email))
+	if email == "" {
+		email = strings.ToLower(username) + "@test.local"
+	}
+	if len(email) > 255 {
+		return response.Fail(c, http.StatusBadRequest, 40001, "invalid user input")
+	}
+	if addr, err := mail.ParseAddress(email); err != nil || !strings.EqualFold(addr.Address, email) {
+		return response.Fail(c, http.StatusBadRequest, 40001, "invalid user input")
+	}
+	nickname := strings.TrimSpace(req.Nickname)
+	if nickname == "" {
+		nickname = username
+	}
+	if utf8.RuneCountInString(nickname) > 255 {
+		return response.Fail(c, http.StatusBadRequest, 40001, "invalid user input")
+	}
+	plan := strings.TrimSpace(req.Plan)
+	if plan == "" {
+		plan = "free"
+	}
+	switch plan {
+	case "free", "pro", "max":
+	default:
+		return response.Fail(c, http.StatusBadRequest, 40001, "invalid user input")
+	}
+	status := int8(1)
+	if req.Status != nil {
+		status = *req.Status
+	}
+	if status != 0 && status != 1 {
+		return response.Fail(c, http.StatusBadRequest, 40001, "invalid user input")
+	}
+	hash, err := auth.HashPassword(req.Password)
+	if err != nil {
+		return response.Fail(c, http.StatusInternalServerError, 50001, "hash password failed")
+	}
+	operator := ""
+	if session, ok := auth.SessionFrom(c); ok {
+		operator = session.Username
+	}
+	detail, err := h.Repo.CreateUser(c.Request().Context(), admin.CreateUserInput{
+		Username: username, Email: email, Nickname: nickname, PasswordHash: hash,
+		Plan: plan, Status: status, Operator: operator, At: h.now(),
+	})
+	if err != nil {
+		return adminRepoError(c, err)
+	}
+	return response.OK(c, detail)
 }
 
 func (h *AdminHandler) UserDetail(c echo.Context) error {
@@ -516,6 +592,9 @@ func adminListQuery(c echo.Context) admin.ListQuery {
 func adminRepoError(c echo.Context, err error) error {
 	if errors.Is(err, admin.ErrNotFound) {
 		return response.Fail(c, http.StatusNotFound, 40401, "admin record not found")
+	}
+	if errors.Is(err, admin.ErrConflict) {
+		return response.Fail(c, http.StatusConflict, 40901, "username or email already exists")
 	}
 	return response.Fail(c, http.StatusInternalServerError, 50001, "admin data unavailable")
 }

@@ -20,6 +20,7 @@ import type {
   ChannelGuideCreateInput,
   ChannelGuideInput,
   ChannelGuideStatus,
+  CreateUserInput,
   FdeResourceInput,
   IPStats,
   ModelInput,
@@ -165,6 +166,10 @@ export async function updateUserPassword(id: string, password: string): Promise<
     url: `/users/${id}/password`,
     data: { password },
   })
+}
+
+export async function createUser(input: CreateUserInput): Promise<AdminUserDetail> {
+  return request<AdminUserDetail>({ method: 'post', url: '/users', data: input })
 }
 
 export async function getProjects(query: PageQuery = {}): Promise<PageResult<AdminProject>> {

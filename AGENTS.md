@@ -19,6 +19,7 @@
 - 不交付 Collector / Jaeger / Grafana 等观测后端，只保证日志、OTLP Trace 与 `/metrics` 可接入。
 - 不使用设计文档以外的数据库。CP 项目目录已持久化到 MySQL `project` 表（`public_id` UUID + 内部 bigint）；admin seed 仍在内存，重启即丢；工作区在磁盘持久化。目标数据库为 MySQL 8。聊天历史存工作区 `.chathistory/session.jsonl`，CP 通过 sandbox 内部 API 读取，当前不写聊天表。
 - ops-web 使用本地 admin 账号登录，仅面向本地；生产必须接入 SSO + RBAC。
+- `data/workspaces/` 是用户项目源码，`make clean` 及任何脚本不得自动删除；只能手动删除具体项目目录。
 
 ## 目录与职责
 

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	mysqldriver "github.com/go-sql-driver/mysql"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -277,5 +278,131 @@ func TestMySQLRepositorySandboxes(t *testing.T) {
 	}
 	if sandboxes.Total != 1 || len(sandboxes.Items) != 1 || sandboxes.Items[0].Name != "sandbox-a" || sandboxes.Items[0].Status != "online" || sandboxes.Items[0].ActiveRequests != 2 {
 		t.Fatalf("sandboxes = %+v", sandboxes)
+	}
+}
+
+func TestMySQLRepositoryCreateUser(t *testing.T) {
+	db, mock := newAdminMockDB(t)
+	repo := NewMySQLRepository(db, fixedCounter(0))
+	created := time.Date(2026, 11, 8, 10, 0, 0, 0, time.UTC)
+
+	mock.ExpectBegin()
+	mock.ExpectExec("INSERT INTO `user`").WillReturnResult(sqlmock.NewResult(7, 1))
+	mock.ExpectExec("INSERT INTO `workspace`").WillReturnResult(sqlmock.NewResult(11, 1))
+	mock.ExpectExec("INSERT INTO `workspace_user`").WillReturnResult(sqlmock.NewResult(12, 1))
+	mock.ExpectExec("INSERT INTO `user_quota`").WillReturnResult(sqlmock.NewResult(13, 1))
+	mock.ExpectQuery("SELECT u.id, u.username, u.nickname").
+		WithArgs(int64(7)).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "username", "nickname", "email", "phone_number", "avatar_url", "avatar_s3_path",
+			"plan_code", "source", "status", "email_verified_at", "last_login_time", "last_login_ip",
+			"disabled_reason", "disabled_at", "disabled_by", "created_at", "updated_at",
+		}).AddRow(
+			7, "tester01", "Tester", "tester01@example.com", "", "", "",
+			"pro", "ADMIN", 1, created, nil, "",
+			"", nil, "", created, created,
+		))
+	mock.ExpectCommit()
+
+	detail, err := repo.CreateUser(context.Background(), CreateUserInput{
+		Username: "tester01", Email: "tester01@example.com", Nickname: "Tester",
+		PasswordHash: "hash", Plan: "pro", Status: 1, Operator: "admin", At: created,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.ID != "7" || detail.Username != "tester01" || detail.Plan != "pro" || detail.Status != "active" {
+		t.Fatalf("detail = %+v", detail)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMySQLRepositoryCreateUserConflict(t *testing.T) {
+	db, mock := newAdminMockDB(t)
+	repo := NewMySQLRepository(db, fixedCounter(0))
+
+	mock.ExpectBegin()
+	mock.ExpectExec("INSERT INTO `user`").
+		WillReturnError(&mysqldriver.MySQLError{Number: 1062})
+	mock.ExpectRollback()
+
+	_, err := repo.CreateUser(context.Background(), CreateUserInput{
+		Username: "tester01", Email: "tester01@example.com", Plan: "free", Status: 1,
+	})
+	if !errors.Is(err, ErrConflict) {
+		t.Fatalf("err = %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMySQLRepositoryCreateUserRollsBackOnLaterFailure(t *testing.T) {
+	db, mock := newAdminMockDB(t)
+	repo := NewMySQLRepository(db, fixedCounter(0))
+
+	mock.ExpectBegin()
+	mock.ExpectExec("INSERT INTO `user`").WillReturnResult(sqlmock.NewResult(7, 1))
+	mock.ExpectExec("INSERT INTO `workspace`").WillReturnError(errors.New("workspace insert failed"))
+	mock.ExpectRollback()
+
+	_, err := repo.CreateUser(context.Background(), CreateUserInput{
+		Username: "tester01", Email: "tester01@example.com", Plan: "free", Status: 1,
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if errors.Is(err, ErrConflict) {
+		t.Fatalf("err = %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestBuildCreateUserRecords(t *testing.T) {
+	now := time.Date(2026, 11, 8, 10, 0, 0, 0, time.UTC)
+	user, workspace, member, quota := buildCreateUserRecords(CreateUserInput{
+		Username: "tester01", Email: "tester01@example.com", Nickname: "Tester",
+		PasswordHash: "hash", Plan: "pro", Status: 1, Operator: "admin",
+	}, now)
+
+	if user.Email != "tester01@example.com" || user.Source != "ADMIN" || user.Username != "tester01" ||
+		user.Nickname != "Tester" || user.Status != 1 {
+		t.Fatalf("user = %+v", user)
+	}
+	if user.PasswordHash == nil || *user.PasswordHash != "hash" {
+		t.Fatalf("user.PasswordHash = %v", user.PasswordHash)
+	}
+	if user.EmailVerifiedAt == nil || !user.EmailVerifiedAt.Equal(now) {
+		t.Fatalf("user.EmailVerifiedAt = %v", user.EmailVerifiedAt)
+	}
+
+	if workspace.Name != "tester01 的个人工作区" || workspace.Description != "默认个人工作区" ||
+		workspace.WorkspaceType != "personal" || workspace.Visibility != "private" ||
+		workspace.Status != 1 || workspace.CreatedBy != "admin" {
+		t.Fatalf("workspace = %+v", workspace)
+	}
+
+	if member.Role != "owner" || member.Status != 1 ||
+		member.JoinedAt == nil || !member.JoinedAt.Equal(now) {
+		t.Fatalf("member = %+v", member)
+	}
+
+	if quota.PlanCode != "pro" || quota.Status != 1 {
+		t.Fatalf("quota = %+v", quota)
+	}
+	if quota.ConcurrentAgentRuns != 1 {
+		t.Fatalf("quota.ConcurrentAgentRuns = %d", quota.ConcurrentAgentRuns)
+	}
+}
+
+func TestBuildCreateUserRecordsNoEmail(t *testing.T) {
+	now := time.Date(2026, 11, 8, 10, 0, 0, 0, time.UTC)
+	user, _, _, _ := buildCreateUserRecords(CreateUserInput{Username: "tester02", Status: 1}, now)
+	if user.EmailVerifiedAt != nil {
+		t.Fatalf("user.EmailVerifiedAt = %v", user.EmailVerifiedAt)
 	}
 }

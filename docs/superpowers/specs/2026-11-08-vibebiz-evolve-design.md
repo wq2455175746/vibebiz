@@ -227,3 +227,52 @@ Phase 1 前端通过 `api/evolution.ts` 门面隔离，Phase 2 只替换门面�
 - 不做真实 CI/CD、镜像构建、发布。
 - 不做跨用户实时代理与并发写入协调。
 - 不把 Phase 1 的 localStorage mock 当作真实数据源。
+
+## 12. Phase 2A 实施范围（2026-11-08 确认）
+
+在 Phase 1 前端原型基础上打通真实后端，但暂不接 CI/CD。
+
+### 存储
+
+- 使用 MySQL 新增 4 张元数据表：`evolution_version`、`evolution_proposal`、`evolution_message`、`evolution_task`。
+- 迁移中写入 4 个演示用户及其版本、提议、对话、任务，便于直接查看效果；真实用户数据在其后追加。
+- 版本、提议、聊天、任务的 ID 使用字符串公开 ID，前端继续使用 `id` 字段。
+- 真实用户版本文件快照、`taskqueue.jsonl` 与 CI 产物写入留到 CI/CD 阶段。
+
+### CP 接口
+
+```text
+用户
+  GET  /cp/api/v1/evolve
+  GET  /cp/api/v1/evolve/conversations/:userId
+  POST /cp/api/v1/evolve/proposals
+  POST /cp/api/v1/evolve/chat
+  POST /cp/api/v1/evolve/versions/:id/confirm
+
+运营
+  GET   /cp/api/v1/admin/evolve
+  GET   /cp/api/v1/admin/evolve/conversations/:userId
+  POST  /cp/api/v1/admin/evolve/versions/:id/reply
+  POST  /cp/api/v1/admin/evolve/tasks
+  PATCH /cp/api/v1/admin/evolve/tasks/:id
+```
+
+- 用户与运营都通过 CP 访问；web 不直连 sandbox，ops-web 不直连 DP。
+- 预览继续复用 `origin_version` 静态交互副本，通过版本 `scenario` 参数渲染。
+- 编码任务状态由运营后台手动推进：`queued → coding → ci → released / failed`。
+
+### ops-web 交互
+
+- 默认展示「提交变更」表格：用户、版本、变更摘要、提议数、状态、更新时间、操作。
+- 最右侧操作列提供：
+  - `预览`：打开弹窗，在弹窗内加载 iframe。
+  - `添加到编码计划`：创建编码任务，已提交版本禁用。
+  - `对话`：打开弹窗查看该用户对话与提议，并以运营身份追加回复。
+- 不在页面中默认内嵌预览。
+- 底部为编码任务队列表格，展示状态并支持手动推进。
+
+### 暂不做
+
+- CI/CD 自动编码、任务下发与回传。
+- 真实版本文件快照、版本 diff、回滚。
+- 真实 LLM Agent 与 SSE（继续使用确定性规则引擎）。

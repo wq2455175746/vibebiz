@@ -24,6 +24,9 @@ type fakeAdminRepository struct {
 	statusID     int64
 	passwordID   int64
 	passwordHash string
+	createInput  admin.CreateUserInput
+	createDetail admin.UserDetail
+	createErr    error
 }
 
 func (f *fakeAdminRepository) Overview(context.Context, int) (admin.Overview, error) {
@@ -65,6 +68,14 @@ func (f *fakeAdminRepository) UpdateUserPassword(_ context.Context, id int64, ha
 	f.passwordID = id
 	f.passwordHash = hash
 	return nil
+}
+
+func (f *fakeAdminRepository) CreateUser(_ context.Context, input admin.CreateUserInput) (admin.UserDetail, error) {
+	f.createInput = input
+	if f.createErr != nil {
+		return admin.UserDetail{}, f.createErr
+	}
+	return f.createDetail, nil
 }
 
 func (f *fakeAdminRepository) Sandboxes(context.Context, admin.ListQuery) (admin.Page[admin.Sandbox], error) {
@@ -239,5 +250,84 @@ func TestAdminUpdatesUserPassword(t *testing.T) {
 	}
 	if repo.passwordID != 1 || !auth.VerifyPassword(repo.passwordHash, "new-password") {
 		t.Fatalf("password hash = %q", repo.passwordHash)
+	}
+}
+
+func TestAdminCreateUserNormalizesInput(t *testing.T) {
+	repo := &fakeAdminRepository{createDetail: admin.UserDetail{ID: "7", Username: "tester01", Status: "active"}}
+	h := newAdminUserHandler(repo)
+	e := echo.New()
+	routeWithSession(e, http.MethodPost, "/users", h.CreateUser, &auth.Session{
+		ID: "sid", Realm: auth.RealmOps, UserID: 3, Username: "admin",
+	})
+
+	rec := adminUserRequest(e, http.MethodPost, "/users",
+		`{"username":" tester01 ","password":"secret123","email":" TESTER01@Example.com ","nickname":"","plan":""}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	in := repo.createInput
+	if in.Username != "tester01" || in.Email != "tester01@example.com" || in.Nickname != "tester01" ||
+		in.Plan != "free" || in.Status != 1 || in.Operator != "admin" {
+		t.Fatalf("input = %+v", in)
+	}
+	if !auth.VerifyPassword(in.PasswordHash, "secret123") {
+		t.Fatalf("password hash = %q", in.PasswordHash)
+	}
+}
+
+func TestAdminCreateUserGeneratesEmail(t *testing.T) {
+	repo := &fakeAdminRepository{createDetail: admin.UserDetail{ID: "7"}}
+	h := newAdminUserHandler(repo)
+	e := echo.New()
+	routeWithSession(e, http.MethodPost, "/users", h.CreateUser, &auth.Session{
+		ID: "sid", Realm: auth.RealmOps, Username: "admin",
+	})
+
+	rec := adminUserRequest(e, http.MethodPost, "/users", `{"username":"tester01","password":"secret123"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if repo.createInput.Email != "tester01@test.local" {
+		t.Fatalf("email = %q", repo.createInput.Email)
+	}
+}
+
+func TestAdminCreateUserRejectsInvalidInput(t *testing.T) {
+	cases := []string{
+		`{"username":"ab","password":"secret123"}`,
+		`{"username":"bad name","password":"secret123"}`,
+		`{"username":"tester01","password":"short"}`,
+		`{"username":"tester01","password":"secret123","email":"not-an-email"}`,
+		`{"username":"tester01","password":"secret123","plan":"vip"}`,
+		`{"username":"tester01","password":"secret123","status":2}`,
+	}
+	for _, body := range cases {
+		repo := &fakeAdminRepository{}
+		h := newAdminUserHandler(repo)
+		e := echo.New()
+		routeWithSession(e, http.MethodPost, "/users", h.CreateUser, &auth.Session{Realm: auth.RealmOps})
+		rec := adminUserRequest(e, http.MethodPost, "/users", body)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("body %s: status = %d, response = %s", body, rec.Code, rec.Body.String())
+		}
+		if repo.createInput.Username != "" {
+			t.Fatalf("body %s: repository should not be called", body)
+		}
+	}
+}
+
+func TestAdminCreateUserConflict(t *testing.T) {
+	repo := &fakeAdminRepository{createErr: admin.ErrConflict}
+	h := newAdminUserHandler(repo)
+	e := echo.New()
+	routeWithSession(e, http.MethodPost, "/users", h.CreateUser, &auth.Session{Realm: auth.RealmOps})
+
+	rec := adminUserRequest(e, http.MethodPost, "/users", `{"username":"tester01","password":"secret123"}`)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "40901") {
+		t.Fatalf("body = %s", rec.Body.String())
 	}
 }
