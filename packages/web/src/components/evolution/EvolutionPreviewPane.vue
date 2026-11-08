@@ -1,11 +1,16 @@
 <script setup lang="ts">
-import type { EvolutionVersion } from '@/types/evolution'
+import { computed } from 'vue'
 
-defineProps<{
+import type { EvolutionVersion } from '@/types/evolution'
+import { OFFICIAL_USER_ID } from '@/utils/evolution'
+
+const props = defineProps<{
   url: string
   version: EvolutionVersion | null
   refreshKey?: number
 }>()
+
+const isOfficial = computed(() => props.version?.userId === OFFICIAL_USER_ID)
 </script>
 
 <template>
@@ -15,7 +20,9 @@ defineProps<{
       <span class="evolution-preview-address">
         {{ version ? `${version.userName} · ${version.label}` : 'origin_version' }}
       </span>
-      <span class="evolution-preview-scenario">{{ version?.scenario ?? 'baseline' }}</span>
+      <span class="evolution-preview-scenario">
+        {{ isOfficial ? (version?.scenario ?? 'baseline') : 'sandbox' }}
+      </span>
     </div>
 
     <div class="evolution-preview-frame">
@@ -30,7 +37,9 @@ defineProps<{
 
     <footer class="evolution-preview-meta">
       <span>{{ version?.summary || '当前线上版本的交互副本。' }}</span>
-      <span class="evolution-preview-origin">origin_version · 只读</span>
+      <span class="evolution-preview-origin">
+        {{ isOfficial ? 'origin_version · 只读' : 'sandbox · 实时预览' }}
+      </span>
     </footer>
   </div>
 </template>

@@ -1,167 +1,17 @@
 import type {
   EvolutionChatMessage,
-  EvolutionTask,
   EvolutionVersion,
   EvolutionVersionGroup,
-  ProposalKind,
+  TaskStatus,
 } from '@/types/evolution'
 
 export const EVOLUTION_PROJECT_ID = 'vibebiz-evolve'
-export const EVOLUTION_STORAGE_KEY = 'vibebiz:ops-evolution:v1'
-export const EVOLUTION_PREVIEW_BASE = 'http://localhost:5173/evolution/origin_version/index.html'
+export const EVOLUTION_PROJECT_PREFIX = 'evolve-'
 export const OFFICIAL_USER_ID = 'official'
-export const OFFICIAL_USER_NAME = 'Vibebiz 官方'
-export const OFFICIAL_VERSION_ID = 'v-official-1'
 export const OFFICIAL_VERSION_LABEL = 'v1.2026.11'
 
-export type AgentAction = 'patch' | 'preview' | 'pushback'
-
-export interface AgentDecision {
-  kind: ProposalKind
-  action: AgentAction
-  reply: string
-  scenario: string
-  summary: string
-}
-
-const BUG_WORDS = [
-  'bug',
-  '报错',
-  '错误',
-  '崩溃',
-  '闪退',
-  '白屏',
-  '空白',
-  '失效',
-  '没反应',
-  '没有反应',
-  '无法',
-  '不能',
-  '异常',
-  '卡住',
-  '错别字',
-  '打不开',
-  '加载失败',
-]
-
-const FEATURE_WORDS = [
-  '新增',
-  '增加',
-  '支持',
-  '接入',
-  '功能',
-  '模块',
-  '重构',
-  '架构',
-  '数据库',
-  '接口',
-  '权限',
-  '登录',
-  '支付',
-  '协作',
-  '多用户',
-]
-
-const VISUAL_WORDS = [
-  '颜色',
-  '布局',
-  '间距',
-  '字体',
-  '按钮',
-  '样式',
-  '优化',
-  '交互',
-  '体验',
-  '文案',
-  '动画',
-  '紧凑',
-  '卡片',
-  '导航',
-  '排版',
-  '预览',
-  '首屏',
-  '输入框',
-]
-
-function containsAny(content: string, words: string[]): boolean {
-  const text = content.toLowerCase()
-  return words.some((word) => text.includes(word))
-}
-
-export function classifyProposal(content: string): ProposalKind {
-  if (containsAny(content, BUG_WORDS)) {
-    return 'bug'
-  }
-  if (containsAny(content, FEATURE_WORDS)) {
-    return 'feature'
-  }
-  if (containsAny(content, VISUAL_WORDS)) {
-    return 'visual'
-  }
-  return 'feature'
-}
-
-export function pickScenario(content: string, kind: ProposalKind): string {
-  if (kind === 'bug') {
-    return 'bugfix'
-  }
-  if (kind === 'feature') {
-    return 'focus-composer'
-  }
-  if (containsAny(content, ['紧凑', '密度', '间距', '导航', '布局'])) {
-    return 'compact-sidebar'
-  }
-  if (containsAny(content, ['卡片', '项目', '模板'])) {
-    return 'soft-cards'
-  }
-  if (containsAny(content, ['首屏', '输入框', '聚焦', '创作'])) {
-    return 'focus-composer'
-  }
-  return 'soft-cards'
-}
-
-export function buildAgentDecision(content: string): AgentDecision {
-  const kind = classifyProposal(content)
-  const scenario = pickScenario(content, kind)
-
-  if (kind === 'bug') {
-    return {
-      kind,
-      action: 'patch',
-      scenario,
-      summary: '修复当前用户版本中的确定性页面缺陷。',
-      reply:
-        '已定位到这个问题属于当前页面的确定性缺陷。基于现有交互约定，我会在你的版本副本中直接修复并渲染，官方 origin_version 保持不变。请在预览中确认修复结果。',
-    }
-  }
-
-  if (kind === 'visual') {
-    return {
-      kind,
-      action: 'preview',
-      scenario,
-      summary: '调整当前页面的视觉与交互呈现，不改动平台架构。',
-      reply:
-        '这个建议属于视觉 / 交互优化，方向可行。我的判断是：只调整当前页面的呈现与操作路径，不改动平台架构和数据契约。我已生成候选版本，请预览后确认是否采纳。',
-    }
-  }
-
-  return {
-    kind,
-    action: 'pushback',
-    scenario,
-    summary: '功能或架构提议，等待补充场景与验收标准。',
-    reply:
-      '这个提议涉及功能或架构改动，我不会直接生成。理由：一是会扩大当前版本范围；二是需要先确认与平台现有边界、数据契约不冲突；三是目前缺少可验证的验收标准。建议先补充使用场景、影响范围和成功标准，再评估是否纳入后续版本。',
-  }
-}
-
-export function nextId(prefix: string, now = Date.now(), seq = 0): string {
-  return `${prefix}-${now.toString(36)}-${seq.toString(36)}`
-}
-
-export function nextVersionLabel(userId: string, count: number): string {
-  return `v${userId}.${Math.max(1, count)}`
+export function evolutionProjectID(userId: string): string {
+  return `${EVOLUTION_PROJECT_PREFIX}${userId}`
 }
 
 export function latestVersionsByUser(
@@ -206,65 +56,6 @@ export function groupVersionsByUser(
     if (b.userId === OFFICIAL_USER_ID) return -1
     return Date.parse(b.latest.updatedAt) - Date.parse(a.latest.updatedAt)
   })
-}
-
-export function withQuery(base: string, params: Record<string, string | undefined>): string {
-  const hashIndex = base.indexOf('#')
-  const hash = hashIndex >= 0 ? base.slice(hashIndex) : ''
-  const withoutHash = hashIndex >= 0 ? base.slice(0, hashIndex) : base
-  const queryIndex = withoutHash.indexOf('?')
-  const path = queryIndex >= 0 ? withoutHash.slice(0, queryIndex) : withoutHash
-  const query = new URLSearchParams(queryIndex >= 0 ? withoutHash.slice(queryIndex + 1) : '')
-  for (const [key, value] of Object.entries(params)) {
-    if (value === undefined || value === '') {
-      query.delete(key)
-      continue
-    }
-    query.set(key, value)
-  }
-  const search = query.toString()
-  return `${path}${search ? `?${search}` : ''}${hash}`
-}
-
-export function buildEvolutionPreviewUrl(
-  base: string,
-  version: EvolutionVersion,
-  viewerName = '',
-): string {
-  return withQuery(base, {
-    scenario: version.scenario,
-    version: version.label,
-    user: version.userName,
-    viewer: viewerName,
-  })
-}
-
-export function createTask(
-  version: EvolutionVersion,
-  originVersion: string,
-  chatSummary: string,
-  now = Date.now(),
-): EvolutionTask {
-  return {
-    id: nextId('t', now),
-    versionId: version.id,
-    userId: version.userId,
-    userName: version.userName,
-    versionLabel: version.label,
-    originVersion,
-    chatSummary,
-    status: 'queued',
-    createdAt: new Date(now).toISOString(),
-  }
-}
-
-export function nextTaskStatus(status: EvolutionTask['status']): EvolutionTask['status'] {
-  const order: EvolutionTask['status'][] = ['queued', 'coding', 'ci', 'released']
-  const index = order.indexOf(status)
-  if (index < 0 || index === order.length - 1) {
-    return status
-  }
-  return order[index + 1]
 }
 
 export function statusLabel(status: string): string {
@@ -334,6 +125,15 @@ export function formatShortTime(iso: string): string {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+export function nextTaskStatus(status: TaskStatus): TaskStatus {
+  const order: TaskStatus[] = ['queued', 'coding', 'ci', 'released']
+  const index = order.indexOf(status)
+  if (index < 0 || index === order.length - 1) {
+    return status
+  }
+  return order[index + 1]
 }
 
 export interface ChatDayGroup {

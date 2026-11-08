@@ -6,6 +6,8 @@ export type VersionStatus = 'draft' | 'preview' | 'accepted' | 'submitted' | 're
 
 export type ChatRole = 'user' | 'agent' | 'admin'
 
+export type TaskStatus = 'queued' | 'coding' | 'ci' | 'released' | 'failed'
+
 export interface EvolutionProposal {
   id: string
   createdAt: string
@@ -28,7 +30,8 @@ export interface EvolutionVersion {
   status: VersionStatus
   scenario: string
   summary: string
-  proposalIds: string[]
+  originVersion: string
+  proposalIds: string[] | null
 }
 
 export interface EvolutionChatMessage {
@@ -39,12 +42,17 @@ export interface EvolutionChatMessage {
   content: string
 }
 
-export interface EvolutionState {
-  proposals: EvolutionProposal[]
-  versions: EvolutionVersion[]
-  chats: Record<string, EvolutionChatMessage[]>
-  selectedVersionId: string | null
-  selectedUserId: string | null
+export interface EvolutionTask {
+  id: string
+  versionId: string
+  userId: string
+  userName: string
+  versionLabel: string
+  originVersion: string
+  chatSummary: string
+  status: TaskStatus
+  createdAt: string
+  updatedAt: string
 }
 
 export interface EvolutionVersionGroup {
@@ -54,23 +62,9 @@ export interface EvolutionVersionGroup {
   versions: EvolutionVersion[]
 }
 
-export interface EvolutionViewer {
-  id: string
-  name: string
-}
-
-export interface EvolutionTask {
-  id: string
-  versionId: string
-  userId: string
-  userName: string
-  versionLabel: string
-  originVersion: string
-  chatSummary: string
-  status: 'queued' | 'coding' | 'ci' | 'released' | 'failed'
-  createdAt: string
-}
-
-export interface EvolutionAdminState extends EvolutionState {
-  tasks: EvolutionTask[]
+export interface EvolutionRow {
+  version: EvolutionVersion
+  proposalCount: number
+  latestProposal: EvolutionProposal | null
+  task: EvolutionTask | null
 }

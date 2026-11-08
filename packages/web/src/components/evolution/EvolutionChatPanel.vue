@@ -17,6 +17,7 @@ const props = defineProps<{
   selectedUserName: string
   currentVersionLabel: string
   latestPreviewVersion: EvolutionVersion | null
+  busy: boolean
 }>()
 
 const emit = defineEmits<{
@@ -40,7 +41,7 @@ const pendingCount = computed(
     ).length,
 )
 const historyGroups = computed(() => groupMessagesByDay(props.messages))
-const canSend = computed(() => draft.value.trim().length > 0)
+const canSend = computed(() => draft.value.trim().length > 0 && !props.busy)
 
 async function scrollToBottom(): Promise<void> {
   await nextTick()
@@ -52,7 +53,7 @@ async function scrollToBottom(): Promise<void> {
 
 function send(): void {
   const content = draft.value.trim()
-  if (!content) {
+  if (!content || props.busy) {
     return
   }
   if (mode.value === 'proposal') {
@@ -194,11 +195,13 @@ onMounted(() => {
         <button type="button" :class="{ active: mode === 'chat' }" @click="switchMode('chat')">
           对话
         </button>
-        <span>{{ mode === 'proposal' ? '写入 taskqueue' : '写入 chat.jsonl' }}</span>
+        <span>{{ mode === 'proposal' ? '写入提议队列' : '写入对话记录' }}</span>
       </div>
+      <p v-if="busy" class="evolution-empty">Agent 正在修改 sandbox 版本…</p>
       <textarea
         v-model="draft"
         rows="3"
+        :disabled="busy"
         :placeholder="
           mode === 'proposal' ? '描述你遇到的痛点或改进建议，Agent 会先评估再生成…' : '继续对话…'
         "

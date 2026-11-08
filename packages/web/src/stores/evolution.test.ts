@@ -1,90 +1,211 @@
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { EvolutionViewer } from '@/types/evolution'
-import type { EvolutionStorage } from '@/utils/evolutionState'
+import * as evolutionApi from '@/api/evolution'
+import type { EvolutionProposal, EvolutionVersion } from '@/types/evolution'
 
 import { useEvolutionStore } from './evolution'
 
-const viewer: EvolutionViewer = { id: '42', name: '测试用户' }
-let storage: EvolutionStorage
+vi.mock('@/api/evolution', () => ({
+  listVersions: vi.fn(),
+  ensureDraft: vi.fn(),
+  getConversation: vi.fn(),
+  submitProposal: vi.fn(),
+  submitChat: vi.fn(),
+  confirmVersion: vi.fn(),
+}))
 
-function memoryStorage(): EvolutionStorage {
-  const data = new Map<string, string>()
+const listVersionsMock = vi.mocked(evolutionApi.listVersions)
+const ensureDraftMock = vi.mocked(evolutionApi.ensureDraft)
+const getConversationMock = vi.mocked(evolutionApi.getConversation)
+const submitProposalMock = vi.mocked(evolutionApi.submitProposal)
+const submitChatMock = vi.mocked(evolutionApi.submitChat)
+const confirmVersionMock = vi.mocked(evolutionApi.confirmVersion)
+
+function version(
+  id: string,
+  userId: string,
+  status: EvolutionVersion['status'] = 'preview',
+  scenario = 'baseline',
+): EvolutionVersion {
   return {
-    getItem: (key) => data.get(key) ?? null,
-    setItem: (key, value) => {
-      data.set(key, value)
-    },
+    id,
+    userId,
+    userName: userId === '7' ? '王海广' : '林岚',
+    label: id,
+    createdAt: '2026-11-08T10:00:00.000Z',
+    updatedAt: '2026-11-08T10:00:00.000Z',
+    status,
+    scenario,
+    summary: '摘要',
+    originVersion: 'v1.2026.11',
+    proposalIds: [],
   }
 }
 
-function setup() {
-  const store = useEvolutionStore()
-  store.init(viewer, storage)
-  return store
+const ownVersion = version('v-7-1', '7')
+const otherVersion = version('v-1001-2', '1001', 'preview', 'compact-sidebar')
+const officialVersion = version('v-official-1', 'official', 'released')
+
+function seedVersions(versions: EvolutionVersion[] = [ownVersion, otherVersion, officialVersion]) {
+  listVersionsMock.mockResolvedValue({
+    projectId: 'vibebiz-evolve',
+    originVersion: 'v1.2026.11',
+    versions,
+  })
 }
 
 beforeEach(() => {
   setActivePinia(createPinia())
-  storage = memoryStorage()
+  listVersionsMock.mockReset()
+  ensureDraftMock.mockReset()
+  getConversationMock.mockReset()
+  submitProposalMock.mockReset()
+  submitChatMock.mockReset()
+  confirmVersionMock.mockReset()
+  getConversationMock.mockImplementation((userId: string) =>
+    Promise.resolve({
+      messages: [
+        {
+          id: `c-${userId}-1`,
+          createdAt: '2026-11-08T10:00:00.000Z',
+          role: 'agent',
+          userName: '集思进化助手',
+          content: '你好',
+        },
+      ],
+      proposals: [],
+    }),
+  )
 })
 
 describe('evolution store', () => {
-  it('seeds the official baseline and a copy for the viewer', () => {
-    const store = setup()
+  it('loads versions and selects the viewer copy', async () => {
+    seedVersions()
+    const store = useEvolutionStore()
 
-    expect(store.versions.some((version) => version.userId === 'official')).toBe(true)
-    expect(store.versions.some((version) => version.userId === '42')).toBe(true)
-    expect(store.selectedVersion?.userId).toBe('42')
-    expect(store.versionGroups[0].userId).toBe('42')
+    await store.init({ id: '7', name: '王海广' })
+
+    expect(store.selectedVersion?.id).toBe('v-7-1')
+    expect(store.versionGroups[0].userId).toBe('7')
+    expect(store.activeChat).toHaveLength(1)
+    expect(getConversationMock).toHaveBeenCalledWith('7')
   })
 
-  it('creates a preview version for a bug proposal', () => {
-    const store = setup()
-    const before = store.versions.filter((version) => version.userId === '42').length
+  it('creates a draft when the viewer has no version yet', async () => {
+    const draft = version('v-7-1', '7', 'draft')
+    listVersionsMock
+      .mockResolvedValueOnce({
+        projectId: 'vibebiz-evolve',
+        originVersion: 'v1.2026.11',
+        versions: [otherVersion, officialVersion],
+      })
+      .mockResolvedValue({
+        projectId: 'vibebiz-evolve',
+        originVersion: 'v1.2026.11',
+        versions: [draft, otherVersion, officialVersion],
+      })
+    ensureDraftMock.mockResolvedValue({ version: draft })
+    const store = useEvolutionStore()
 
-    const proposal = store.submitProposal('删除按钮点击没有反应')
+    await store.init({ id: '7', name: '王海广' })
 
-    expect(proposal?.kind).toBe('bug')
-    expect(store.versions.filter((version) => version.userId === '42')).toHaveLength(before + 1)
-    expect(store.selectedVersion?.status).toBe('preview')
-    const messages = store.activeChat
-    expect(messages[messages.length - 1]?.role).toBe('agent')
+    expect(ensureDraftMock).toHaveBeenCalledTimes(1)
+    expect(store.selectedVersion?.id).toBe('v-7-1')
+    expect(store.isOwnVersion).toBe(true)
   })
 
-  it('pushes back on feature proposals without creating a version', () => {
-    const store = setup()
-    const before = store.versions.filter((version) => version.userId === '42').length
+  it('creates a proposal and selects the new version', async () => {
+    const next = version('v-7-2', '7', 'preview', 'compact-sidebar')
+    const proposal: EvolutionProposal = {
+      id: 'p-1',
+      createdAt: '2026-11-08T10:00:00.000Z',
+      userId: '7',
+      userName: '王海广',
+      kind: 'visual',
+      content: '首页卡片再紧凑一点',
+      status: 'queued',
+      agentReply: '已生成候选版本',
+      versionId: 'v-7-2',
+    }
+    seedVersions()
+    submitProposalMock.mockResolvedValue({ proposal, version: next })
+    listVersionsMock.mockResolvedValue({
+      projectId: 'vibebiz-evolve',
+      originVersion: 'v1.2026.11',
+      versions: [next, ownVersion, otherVersion, officialVersion],
+    })
+    const store = useEvolutionStore()
+    await store.init({ id: '7', name: '王海广' })
 
-    const proposal = store.submitProposal('希望支持多人同时编辑同一个项目')
+    const created = await store.submitProposal('首页卡片再紧凑一点')
 
-    expect(proposal?.kind).toBe('feature')
-    expect(proposal?.status).toBe('reviewing')
-    expect(store.versions.filter((version) => version.userId === '42')).toHaveLength(before)
+    expect(created.kind).toBe('visual')
+    expect(store.selectedVersion?.id).toBe('v-7-2')
+    expect(store.selectedVersion?.scenario).toBe('compact-sidebar')
   })
 
-  it('appends chat messages without generating a version', () => {
-    const store = setup()
-    const versionsBefore = store.versions.length
-    const messagesBefore = store.activeChat.length
+  it('keeps the viewer version when a feature proposal is pushed back', async () => {
+    const proposal: EvolutionProposal = {
+      id: 'p-2',
+      createdAt: '2026-11-08T10:00:00.000Z',
+      userId: '7',
+      userName: '王海广',
+      kind: 'feature',
+      content: '支持多人协作',
+      status: 'reviewing',
+      agentReply: '暂不生成',
+      versionId: null,
+    }
+    seedVersions()
+    submitProposalMock.mockResolvedValue({ proposal, version: null })
+    const store = useEvolutionStore()
+    await store.init({ id: '7', name: '王海广' })
 
-    expect(store.submitChat('这个页面的颜色还可以再克制一点')).toBe(true)
+    await store.submitProposal('支持多人协作')
 
-    expect(store.versions).toHaveLength(versionsBefore)
-    expect(store.activeChat.length).toBe(messagesBefore + 2)
+    expect(store.selectedVersion?.id).toBe('v-7-1')
   })
 
-  it('confirms a preview version and records the acceptance reply', () => {
-    const store = setup()
-    store.submitProposal('首页卡片布局再紧凑一点')
+  it('reloads the conversation after chat', async () => {
+    seedVersions()
+    submitChatMock.mockResolvedValue({ messages: [] })
+    const store = useEvolutionStore()
+    await store.init({ id: '7', name: '王海广' })
+    getConversationMock.mockClear()
 
-    const preview = store.latestPreviewVersion
-    expect(preview).not.toBeNull()
+    await store.submitChat('这个颜色还可以再克制一点')
 
-    expect(store.confirmVersion(preview?.id ?? '')).toBe(true)
+    expect(submitChatMock).toHaveBeenCalledWith('这个颜色还可以再克制一点')
+    expect(getConversationMock).toHaveBeenCalledWith('7')
+  })
+
+  it('loads another user conversation when selecting their version', async () => {
+    seedVersions()
+    const store = useEvolutionStore()
+    await store.init({ id: '7', name: '王海广' })
+
+    await store.selectVersion('v-1001-2')
+
+    expect(store.activeUserId).toBe('1001')
+    expect(store.isOwnVersion).toBe(false)
+    expect(getConversationMock).toHaveBeenCalledWith('1001')
+  })
+
+  it('refreshes the selected version after confirmation', async () => {
+    const accepted = version('v-7-1', '7', 'accepted')
+    seedVersions()
+    confirmVersionMock.mockResolvedValue({ version: accepted })
+    const store = useEvolutionStore()
+    await store.init({ id: '7', name: '王海广' })
+    listVersionsMock.mockResolvedValue({
+      projectId: 'vibebiz-evolve',
+      originVersion: 'v1.2026.11',
+      versions: [accepted, otherVersion, officialVersion],
+    })
+
+    await store.confirmVersion('v-7-1')
+
     expect(store.selectedVersion?.status).toBe('accepted')
-    const messages = store.activeChat
-    expect(messages[messages.length - 1]?.content).toContain('已收录你的意见版本')
   })
 })
