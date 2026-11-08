@@ -33,18 +33,18 @@ func TestCPChannelPackageRoutesMounted(t *testing.T) {
 }
 
 func TestDPDoesNotExposeChannelPackageRoutes(t *testing.T) {
-	e, _, _ := newDP(t, "http://127.0.0.1:1")
+	e, _, authState := newDP(t, "http://127.0.0.1:1")
 	for _, tc := range []struct {
 		method string
 		path   string
 	}{
-		{http.MethodGet, "/cp/api/v1/channel-guides"},
-		{http.MethodPost, "/cp/api/v1/projects/p1/channel-packages"},
-		{http.MethodGet, "/cp/api/v1/projects/p1/channel-packages"},
-		{http.MethodGet, "/cp/api/v1/projects/p1/channel-packages/pkg-1/download"},
-		{http.MethodDelete, "/cp/api/v1/projects/p1/channel-packages/pkg-1"},
+		{http.MethodGet, "/dp/api/v1/channel-guides"},
+		{http.MethodPost, "/dp/api/v1/projects/p1/channel-packages"},
+		{http.MethodGet, "/dp/api/v1/projects/p1/channel-packages"},
+		{http.MethodGet, "/dp/api/v1/projects/p1/channel-packages/pkg-1/download"},
+		{http.MethodDelete, "/dp/api/v1/projects/p1/channel-packages/pkg-1"},
 	} {
-		rec := serve(e, tc.method, tc.path)
+		rec := serveWithAuth(e, tc.method, tc.path, authState.userCookie)
 		if rec.Code != http.StatusNotFound {
 			t.Fatalf("%s %s status = %d body=%s", tc.method, tc.path, rec.Code, rec.Body.String())
 		}
