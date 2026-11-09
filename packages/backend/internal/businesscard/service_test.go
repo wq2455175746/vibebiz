@@ -323,3 +323,39 @@ func TestPublicProjectFallsBackToProjectOwner(t *testing.T) {
 		t.Fatalf("project = %+v", project)
 	}
 }
+
+func TestPublicProjectHiddenCardFallsBackToProjectOwner(t *testing.T) {
+	repo := &fakeRepo{}
+	svc, _, _, _ := newTestService(repo)
+	repo.FindByProjectFn = func(context.Context, string) (*CardRecord, error) {
+		return &CardRecord{ID: 9, PublicID: "hidden-card", OwnerName: "hidden-bob", Hidden: true}, nil
+	}
+	project, err := svc.PublicProject(context.Background(), "p1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if project.Card.OwnerName != "alice" {
+		t.Fatalf("ownerName = %q", project.Card.OwnerName)
+	}
+	if project.Card.ID != "" {
+		t.Fatalf("cardID = %q", project.Card.ID)
+	}
+}
+
+func TestPublicProjectVisibleCardUsesCardOwner(t *testing.T) {
+	repo := &fakeRepo{}
+	svc, _, _, _ := newTestService(repo)
+	repo.FindByProjectFn = func(context.Context, string) (*CardRecord, error) {
+		return &CardRecord{ID: 9, PublicID: "visible-card", OwnerName: "visible-carol"}, nil
+	}
+	project, err := svc.PublicProject(context.Background(), "p1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if project.Card.OwnerName != "visible-carol" {
+		t.Fatalf("ownerName = %q", project.Card.OwnerName)
+	}
+	if project.Card.ID != "visible-card" {
+		t.Fatalf("cardID = %q", project.Card.ID)
+	}
+}
