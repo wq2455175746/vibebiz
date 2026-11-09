@@ -1,10 +1,10 @@
 {
   "service": "all",
-  "task_id": "business-card-social",
-  "task_name": "个人名片与编码社交前端",
+  "task_id": "business-card-backend",
+  "task_name": "个人名片后端与真实数据接入",
   "status": "completed",
-  "started_at": "2026-11-08",
-  "description": "web 我的名片编辑（3:1 内容/个人信息、已发布项目、主预览、标签）、名片与项目分享页（HTML/图片/PDF/视频/文档）、发现页滚动加载、副作用禁用评论/私信入口；ops-web 名片管理 mock。仅前端，复用已发布项目 API。",
+  "started_at": "2026-11-09",
+  "description": "MySQL v33 两张名片表 + CP businesscard Repository/Service + S3 主预览上传 + 名片/发现/公开分享/ops admin API；web 与 ops-web 删除 mock/localStorage，全部接真实 CP 接口。",
   "milestones": {
     "根目录与开发命令": "2026-10-28 - 根聚合 Makefile / 各 package Makefile+.env.example / docker-compose / scripts/dev.sh",
     "Go 网关骨架": "2026-10-28 - 项目、文件、SSE、预览代理 + httptest",
@@ -30,7 +30,8 @@
     "克隆后端": "2026-10-31 - mode=clone / 5 阶段 / CP clones CRUD / DP assets / purpose limits / migration v23 / 单测通过",
     "克隆端到端": "2026-10-31 - sandbox clone source/tests + 前端真实接口 + E2E 创建/附件/阶段启动/单测报告",
     "发布作品排行榜": "2026-11-07 - Redis 候选集 200/对外 50 + CP 榜单 API + web 两列卡片 + ops 表格隐藏删除 + 设置页曝光点击统计",
-    "个人名片前端": "2026-11-08 - web 名片编辑/发现/名片与项目分享页 + ops-web 名片管理 mock；localStorage 持久化，复用已发布项目 API，评论/私信禁用入口"
+    "个人名片前端": "2026-11-08 - web 名片编辑/发现/名片与项目分享页 + ops-web 名片管理 mock；localStorage 持久化，复用已发布项目 API，评论/私信禁用入口",
+    "个人名片后端": "2026-11-09 - business_card/business_card_item 迁移 + Repository/Service + S3 主预览 + 名片/发现/公开分享/ops admin API；web/ops 接真实接口并删除 mock"
   },
   "completed_tasks": [
     "根目录：README / AGENTS / Makefile / docker-compose.yml / .gitignore / scripts/dev.sh；配置在 packages/*/.env.example",
@@ -91,7 +92,13 @@
     "个人名片前端：types/utils/store + 12 mock 名片 + 3:1 编辑页 + 添加已发布项目 + 主预览上传 + 标签",
     "名片社交前端：名片分享页 /share/card/:id、项目分享页 /share/project/:projectId（HTML/图片/PDF/视频/文档）、发现页两列滚动加载",
     "ops-web：名片管理 mock 列表 + 搜索 + 隐藏/恢复/删除；导航与 /cards 路由",
-    "验证：web 314、ops-web 129、两端 build/lint、make quality、make validate 全部通过"
+    "验证：web 314、ops-web 129、两端 build/lint、make quality、make validate 全部通过",
+    "名片数据库：migration 00033 business_card + business_card_item，唯一 user/项目条目索引与 FK",
+    "名片后端：Repository/Service、项目实时解析、发现分页、公开名片/项目、admin 隐藏/删除",
+    "名片主预览：S3 上传 PDF/图片（2MB + MIME/magic），旧 key 清理，预签名读取",
+    "名片 API：/me/card、/cards/discover、/public/cards、/public/card-projects、/admin/cards",
+    "名片前端：API 驱动 store + 我的名片/发现/分享页真实数据，删除 localStorage 与 mock",
+    "验证：go test/vet、web 355、ops-web 132、两端 build/lint、make validate 全部通过"
   ],
   "next_tasks": [
     "克隆制品空间：源码归档、镜像构建与版本说明",
