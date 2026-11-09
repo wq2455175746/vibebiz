@@ -17,6 +17,7 @@ export const navItems: NavItem[] = [
     path: '/evolution',
     icon: 'pi pi-lightbulb',
   },
+  { name: 'super-team', label: '超级团队', path: '/super-team', icon: 'pi pi-users' },
   { name: 'sandboxes', label: '沙箱节点', path: '/sandboxes', icon: 'pi pi-server' },
   { name: 'models', label: '模型管理', path: '/models', icon: 'pi pi-box' },
   { name: 'skills', label: '技能', path: '/skills', icon: 'pi pi-sparkles' },

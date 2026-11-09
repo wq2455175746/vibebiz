@@ -17,6 +17,7 @@ import SandboxesView from '@/views/SandboxesView.vue'
 import ScheduledTasksView from '@/views/ScheduledTasksView.vue'
 import SkillsView from '@/views/SkillsView.vue'
 import SettingsView from '@/views/SettingsView.vue'
+import SuperTeamView from '@/views/SuperTeamView.vue'
 import TemplatesView from '@/views/TemplatesView.vue'
 import TopicsView from '@/views/TopicsView.vue'
 import UsersView from '@/views/UsersView.vue'
@@ -37,6 +38,12 @@ export const childRoutes: RouteRecordRaw[] = [
     name: 'evolution',
     component: EvolutionAdminView,
     meta: { title: '集思进化' },
+  },
+  {
+    path: 'super-team',
+    name: 'super-team',
+    component: SuperTeamView,
+    meta: { title: '超级团队' },
   },
   {
     path: 'sandboxes',

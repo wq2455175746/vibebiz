@@ -1,0 +1,716 @@
+.superteam-page {
+  width: 100%;
+  min-height: 100%;
+  padding: 32px 32px 48px;
+}
+
+.superteam-head,
+.superteam-section {
+  width: 100%;
+  max-width: 1080px;
+  margin: 0 auto;
+}
+
+.superteam-head {
+  padding: 12px 0 28px;
+  text-align: center;
+}
+
+.superteam-eyebrow {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.24em;
+}
+
+.superteam-head h1 {
+  margin: 10px 0 8px;
+  font-size: 30px;
+}
+
+.superteam-subtitle {
+  margin: 0 auto;
+  max-width: 620px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.superteam-stats {
+  display: flex;
+  justify-content: center;
+  gap: 28px;
+  margin-top: 20px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.superteam-stats strong {
+  margin-right: 4px;
+  color: var(--ink);
+  font-size: 18px;
+}
+
+.superteam-section {
+  margin-top: 28px;
+}
+
+.superteam-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.superteam-section-head h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.superteam-section-head span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.superteam-source-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.super-source-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  color: var(--text);
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    transform 150ms ease;
+}
+
+.super-source-card:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  transform: translateY(-1px);
+}
+
+.super-source-card.is-connected {
+  border-color: rgba(37, 99, 235, 0.35);
+}
+
+.super-source-card.is-disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.super-source-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  color: var(--blue);
+  background: var(--blue-soft);
+  border-radius: 10px;
+}
+
+.super-source-body {
+  display: grid;
+  gap: 6px;
+}
+
+.super-source-body strong {
+  font-size: 14px;
+}
+
+.super-source-body small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.super-source-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.super-source-count {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.superteam-step-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.super-step-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 22px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+
+.super-step-card.is-locked {
+  color: var(--muted);
+  background: var(--soft);
+}
+
+.super-step-card.is-active {
+  border-color: rgba(37, 99, 235, 0.45);
+}
+
+.super-step-card.is-done {
+  background: var(--soft);
+}
+
+.super-step-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.super-step-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: var(--ink);
+  font-size: 13px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+}
+
+.super-step-card.is-active .super-step-index {
+  color: var(--blue);
+  border-color: var(--blue);
+}
+
+.super-step-card h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.super-step-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.super-step-progress {
+  height: 6px;
+  overflow: hidden;
+  background: var(--soft);
+  border-radius: 999px;
+}
+
+.super-step-progress span {
+  display: block;
+  height: 100%;
+  background: var(--blue);
+  border-radius: 999px;
+}
+
+.super-step-card.is-done .super-step-progress span {
+  background: var(--muted);
+}
+
+.super-step-summary {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.super-step-action {
+  margin-top: auto;
+  padding: 9px 14px;
+  color: var(--surface);
+  background: var(--blue);
+  border: 1px solid var(--blue);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.super-step-action:disabled {
+  color: var(--muted);
+  background: transparent;
+  border-color: var(--line-strong);
+  cursor: not-allowed;
+}
+
+.superteam-dialog-note {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.superteam-dialog-form {
+  display: grid;
+  gap: 14px;
+}
+
+.superteam-field {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.superteam-error {
+  margin: 0;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.superteam-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--canvas);
+}
+
+.superteam-editor-body {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  grid-template-columns: 360px minmax(0, 1fr);
+  gap: 16px;
+  padding: 16px;
+  overflow: hidden;
+}
+
+.superteam-chat {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+
+.superteam-chat-bubble {
+  padding: 12px 14px;
+  background: var(--soft);
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.superteam-chat-bubble.agent {
+  background: var(--blue-soft);
+}
+
+.superteam-chat-role {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.superteam-chat-input {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.superteam-chat-input input {
+  flex: 1;
+  padding: 9px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+}
+
+.superteam-workbench {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  padding: 18px;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+
+.superteam-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.superteam-tab {
+  padding: 7px 14px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.superteam-tab.active {
+  color: var(--blue);
+  background: var(--blue-soft);
+  border-color: rgba(37, 99, 235, 0.3);
+}
+
+.superteam-tab-body {
+  min-height: 0;
+  flex: 1;
+  padding-top: 16px;
+  overflow-y: auto;
+}
+
+.superteam-footer-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.superteam-footer-action p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.superteam-primary {
+  padding: 9px 16px;
+  color: var(--surface);
+  background: var(--blue);
+  border: 1px solid var(--blue);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.superteam-primary:disabled {
+  color: var(--muted);
+  background: transparent;
+  border-color: var(--line-strong);
+  cursor: not-allowed;
+}
+
+.super-mindmap {
+  display: grid;
+  justify-items: center;
+  gap: 22px;
+  padding: 18px;
+}
+
+.super-mindmap-root {
+  padding: 10px 22px;
+  color: var(--surface);
+  background: var(--blue);
+  border-radius: 999px;
+  font-size: 14px;
+}
+
+.super-mindmap-branches {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.super-mindmap-branch {
+  padding: 14px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.super-mindmap-branch h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.super-mindmap-branch ul {
+  margin: 0;
+  padding-left: 16px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.9;
+}
+
+.super-graph {
+  display: grid;
+  place-items: center;
+  padding: 12px;
+}
+
+.super-graph svg {
+  width: 100%;
+  max-width: 640px;
+}
+
+.super-graph-edge {
+  stroke: var(--line-strong);
+  stroke-width: 1.5;
+}
+
+.super-graph-node {
+  fill: var(--soft);
+  stroke: var(--line-strong);
+  stroke-width: 1.5;
+}
+
+.super-graph-node.is-source {
+  fill: var(--blue-soft);
+  stroke: var(--blue);
+}
+
+.super-graph-node.is-metric {
+  fill: var(--surface);
+  stroke: var(--muted);
+}
+
+.super-graph-label {
+  fill: var(--text);
+  font-size: 11px;
+}
+
+.super-doc {
+  display: grid;
+  gap: 16px;
+  max-width: 720px;
+  padding: 8px 4px;
+}
+
+.super-doc h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.super-doc p {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.9;
+}
+
+.super-doc ul {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.9;
+}
+
+.super-event-list {
+  display: grid;
+  gap: 10px;
+}
+
+.super-event-row {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.super-event-row.is-ignored {
+  color: var(--muted);
+  background: var(--soft);
+}
+
+.super-event-row strong {
+  font-size: 13px;
+}
+
+.super-event-row small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.super-event-scores {
+  display: flex;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.super-stage-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.super-stage-chip {
+  padding: 6px 12px;
+  color: var(--muted);
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.super-stage-chip.is-done {
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+
+.super-stage-chip.is-active {
+  color: var(--blue);
+  background: var(--blue-soft);
+  border-color: rgba(37, 99, 235, 0.35);
+}
+
+.super-inject-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.super-inject-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+.super-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.super-chart-card {
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.super-chart-card h4 {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+
+.super-chart-card > span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.super-chart-card strong {
+  display: block;
+  margin: 8px 0 12px;
+  font-size: 22px;
+}
+
+.super-chart-card svg {
+  width: 100%;
+  height: 90px;
+}
+
+.super-chart-line {
+  fill: none;
+  stroke: var(--blue);
+  stroke-width: 2;
+}
+
+.super-chart-area {
+  fill: var(--blue-soft);
+  opacity: 0.7;
+}
+
+.super-task-list {
+  display: grid;
+  gap: 10px;
+}
+
+.super-task-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.super-task-item strong {
+  font-size: 13px;
+}
+
+.super-task-item small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+@media (max-width: 900px) {
+  .superteam-page {
+    padding: 24px 16px 32px;
+  }
+
+  .superteam-source-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .superteam-step-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .superteam-editor-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .super-mindmap-branches {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .super-chart-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .superteam-source-grid,
+  .super-mindmap-branches {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .super-event-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
