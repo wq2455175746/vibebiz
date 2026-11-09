@@ -511,3 +511,172 @@ func contentKind(previewPath string) string {
 	}
 	return "html"
 }
+
+type DiscoverResult struct {
+	Cards    []Card `json:"cards"`
+	Total    int64  `json:"total"`
+	Page     int    `json:"page"`
+	PageSize int    `json:"pageSize"`
+}
+
+type AdminRow struct {
+	ID           string    `json:"id"`
+	OwnerUserID  int64     `json:"ownerUserId"`
+	OwnerName    string    `json:"ownerName"`
+	Headline     string    `json:"headline"`
+	Tags         []string  `json:"tags"`
+	ProjectCount int       `json:"projectCount"`
+	FeaturedType string    `json:"featuredType"`
+	Published    bool      `json:"published"`
+	Hidden       bool      `json:"hidden"`
+	Status       string    `json:"status"`
+	UpdatedAt    time.Time `json:"updatedAt"`
+}
+
+type AdminListResult struct {
+	Rows     []AdminRow `json:"items"`
+	Total    int64      `json:"total"`
+	Page     int        `json:"page"`
+	PageSize int        `json:"pageSize"`
+}
+
+type PublicCardSummary struct {
+	ID        string `json:"id"`
+	OwnerName string `json:"ownerName"`
+	AvatarURL string `json:"avatarUrl"`
+}
+
+type PublicProject struct {
+	Card PublicCardSummary `json:"card"`
+	Item CardItem          `json:"item"`
+}
+
+func (s *Service) Discover(ctx context.Context, page, pageSize int) (*DiscoverResult, error) {
+	page, pageSize = normalizePage(page, pageSize, 12, 50)
+	records, total, err := s.Repo.Discover(ctx, page, pageSize)
+	if err != nil {
+		return nil, err
+	}
+	cards := make([]Card, 0, len(records))
+	for _, rec := range records {
+		card, err := s.resolve(ctx, rec, nil, false)
+		if err != nil {
+			return nil, err
+		}
+		if len(card.Items) == 0 {
+			continue
+		}
+		cards = append(cards, *card)
+	}
+	return &DiscoverResult{Cards: cards, Total: total, Page: page, PageSize: pageSize}, nil
+}
+
+func (s *Service) AdminList(ctx context.Context, keyword string, page, pageSize int) (*AdminListResult, error) {
+	page, pageSize = normalizePage(page, pageSize, 10, 100)
+	records, total, err := s.Repo.AdminList(ctx, keyword, page, pageSize)
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]AdminRow, 0, len(records))
+	for _, rec := range records {
+		tags := rec.Tags
+		if tags == nil {
+			tags = []string{}
+		}
+		rows = append(rows, AdminRow{
+			ID: rec.PublicID, OwnerUserID: rec.UserID, OwnerName: rec.OwnerName,
+			Headline: rec.Headline, Tags: tags, ProjectCount: len(rec.Items),
+			FeaturedType: featuredLabel(rec.FeaturedType),
+			Published:    rec.Published, Hidden: rec.Hidden, Status: cardStatus(rec),
+			UpdatedAt: rec.UpdatedAt,
+		})
+	}
+	return &AdminListResult{Rows: rows, Total: total, Page: page, PageSize: pageSize}, nil
+}
+
+func (s *Service) AdminSetHidden(ctx context.Context, publicID string, hidden bool) (*AdminRow, error) {
+	rec, err := s.Repo.GetByPublicID(ctx, publicID)
+	if err != nil {
+		return nil, ErrNotFound
+	}
+	if err := s.Repo.SetHidden(ctx, rec.ID, hidden); err != nil {
+		return nil, err
+	}
+	return &AdminRow{ID: rec.PublicID, Hidden: hidden, Status: cardStatus(&CardRecord{Hidden: hidden, Published: rec.Published})}, nil
+}
+
+func (s *Service) AdminDelete(ctx context.Context, publicID string) error {
+	rec, err := s.Repo.GetByPublicID(ctx, publicID)
+	if err != nil {
+		return ErrNotFound
+	}
+	key, err := s.Repo.Delete(ctx, rec.ID)
+	if err != nil {
+		return err
+	}
+	if key != "" && s.S3 != nil {
+		_ = s.S3.Delete(ctx, key)
+	}
+	return nil
+}
+
+func (s *Service) PublicProject(ctx context.Context, projectID string) (*PublicProject, error) {
+	project, pub, err := s.validateProject(ctx, projectID, nil, false)
+	if err != nil {
+		return nil, ErrNotFound
+	}
+	ownerName := ""
+	avatar := ""
+	cardID := ""
+	if rec, err := s.Repo.FindByProject(ctx, projectID); err == nil && rec != nil && !rec.Hidden {
+		cardID = rec.PublicID
+		ownerName = rec.OwnerName
+		avatar = s.avatarURL(ctx, rec.OwnerAvatarS3Path)
+	} else if owner, err := s.Repo.OwnerProfile(ctx, project.OwnerUserID); err == nil {
+		ownerName = owner.Nickname
+		if ownerName == "" {
+			ownerName = owner.Username
+		}
+		avatar = s.avatarURL(ctx, owner.AvatarS3Path)
+	}
+	return &PublicProject{
+		Card: PublicCardSummary{ID: cardID, OwnerName: ownerName, AvatarURL: avatar},
+		Item: s.cardItem(ctx, project, pub),
+	}, nil
+}
+
+func normalizePage(page, pageSize, defaultSize, maxSize int) (int, int) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = defaultSize
+	}
+	if pageSize > maxSize {
+		pageSize = maxSize
+	}
+	return page, pageSize
+}
+
+func featuredLabel(value string) string {
+	switch value {
+	case "project":
+		return "项目"
+	case "pdf":
+		return "PDF"
+	case "image":
+		return "图片"
+	default:
+		return "—"
+	}
+}
+
+func cardStatus(rec *CardRecord) string {
+	if rec.Hidden {
+		return "已隐藏"
+	}
+	if !rec.Published {
+		return "未发布"
+	}
+	return "正常"
+}

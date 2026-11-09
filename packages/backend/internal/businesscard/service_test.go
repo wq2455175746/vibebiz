@@ -22,6 +22,11 @@ type fakeRepo struct {
 	setFeaturedErr   error
 	clearFeaturedErr error
 	publishErr       error
+	discoverRecords  []*CardRecord
+	discoverTotal    int64
+	adminRecords     []*CardRecord
+	adminTotal       int64
+	FindByProjectFn  func(context.Context, string) (*CardRecord, error)
 }
 
 func (f *fakeRepo) GetOrCreate(context.Context, int64) (*CardRecord, error) {
@@ -110,12 +115,15 @@ func (f *fakeRepo) Delete(context.Context, int64) (string, error) {
 	return f.card.FeaturedS3Key, nil
 }
 func (f *fakeRepo) Discover(context.Context, int, int) ([]*CardRecord, int64, error) {
-	return nil, 0, nil
+	return f.discoverRecords, f.discoverTotal, nil
 }
 func (f *fakeRepo) AdminList(context.Context, string, int, int) ([]*CardRecord, int64, error) {
-	return nil, 0, nil
+	return f.adminRecords, f.adminTotal, nil
 }
-func (f *fakeRepo) FindByProject(context.Context, string) (*CardRecord, error) {
+func (f *fakeRepo) FindByProject(ctx context.Context, projectID string) (*CardRecord, error) {
+	if f.FindByProjectFn != nil {
+		return f.FindByProjectFn(ctx, projectID)
+	}
 	return f.card, nil
 }
 func (f *fakeRepo) OwnerProfile(context.Context, int64) (*OwnerProfile, error) {
@@ -247,5 +255,71 @@ func TestUploadFeaturedRejectsTooLarge(t *testing.T) {
 	_, err := svc.UploadFeatured(context.Background(), 7, []int64{10}, "application/pdf", "x.pdf", 5, strings.NewReader("%PDF-"))
 	if !errors.Is(err, ErrFileTooLarge) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestDiscoverFiltersCardsWithoutVisibleItems(t *testing.T) {
+	repo := &fakeRepo{
+		discoverRecords: []*CardRecord{
+			{ID: 1, PublicID: "c1", UserID: 7, OwnerName: "alice", Items: []ItemRecord{{ProjectID: "p1"}}},
+			{ID: 2, PublicID: "c2", UserID: 8, OwnerName: "bob"},
+		},
+		discoverTotal: 2,
+	}
+	svc, _, _, _ := newTestService(repo)
+	result, err := svc.Discover(context.Background(), 1, 12)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Cards) != 1 || result.Cards[0].ID != "c1" {
+		t.Fatalf("cards = %+v", result.Cards)
+	}
+}
+
+func TestAdminListBuildsStatusAndFeaturedLabel(t *testing.T) {
+	repo := &fakeRepo{adminRecords: []*CardRecord{
+		{ID: 1, PublicID: "c1", OwnerName: "alice", FeaturedType: "pdf", Published: true},
+		{ID: 2, PublicID: "c2", OwnerName: "bob", Hidden: true},
+		{ID: 3, PublicID: "c3", OwnerName: "carol"},
+	}, adminTotal: 3}
+	svc, _, _, _ := newTestService(repo)
+	result, err := svc.AdminList(context.Background(), "", 1, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Rows[0].Status != "正常" || result.Rows[0].FeaturedType != "PDF" {
+		t.Fatalf("row0 = %+v", result.Rows[0])
+	}
+	if result.Rows[1].Status != "已隐藏" {
+		t.Fatalf("row1 = %+v", result.Rows[1])
+	}
+	if result.Rows[2].Status != "未发布" {
+		t.Fatalf("row2 = %+v", result.Rows[2])
+	}
+}
+
+func TestAdminDeleteDeletesFeaturedS3Object(t *testing.T) {
+	repo := &fakeRepo{card: &CardRecord{ID: 1, PublicID: "c1", FeaturedS3Key: "cards/7/a.pdf"}}
+	svc, _, _, s3 := newTestService(repo)
+	if err := svc.AdminDelete(context.Background(), "c1"); err != nil {
+		t.Fatal(err)
+	}
+	if len(s3.deleted) != 1 || s3.deleted[0] != "cards/7/a.pdf" {
+		t.Fatalf("deleted = %+v", s3.deleted)
+	}
+}
+
+func TestPublicProjectFallsBackToProjectOwner(t *testing.T) {
+	repo := &fakeRepo{}
+	repo.card = nil
+	svc, _, _, _ := newTestService(repo)
+	svc.Repo.(*fakeRepo).FindByProjectFn = nil
+	repo.FindByProjectFn = func(context.Context, string) (*CardRecord, error) { return nil, ErrNotFound }
+	project, err := svc.PublicProject(context.Background(), "p1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if project.Item.ProjectID != "p1" || project.Card.OwnerName != "alice" {
+		t.Fatalf("project = %+v", project)
 	}
 }
