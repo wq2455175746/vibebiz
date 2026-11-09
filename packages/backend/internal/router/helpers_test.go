@@ -287,7 +287,7 @@ func newCP(t *testing.T, projects store.ProjectStore) (*echo.Echo, *observabilit
 		t.Fatal(err)
 	}
 	guideHandler := handler.NewChannelGuideHandler(guideService)
-	RegisterControl(e, admin.NewMemoryRepository(), projects, staticProvisioner{id: 1}, obs, authState.authn, authState.handler, &handler.SettingsHandler{}, &handler.StorageHandler{}, authState.metas, newNotificationHandler(t), nil, newModelHandler(t), newRoleHandler(t), nil, 0, nil, nil, nil, nil, nil, nil, nil, nil, handler.NewChannelPackageHandler(nil, projects), guideHandler, nil, nil, nil, nil, nil, nil)
+	RegisterControl(e, admin.NewMemoryRepository(), projects, staticProvisioner{id: 1}, obs, authState.authn, authState.handler, &handler.SettingsHandler{}, &handler.StorageHandler{}, authState.metas, newNotificationHandler(t), nil, newModelHandler(t), newRoleHandler(t), nil, 0, nil, nil, nil, nil, nil, nil, nil, nil, handler.NewChannelPackageHandler(nil, projects), guideHandler, nil, nil, nil, nil, nil, nil, nil)
 	return e, obs, authState
 }
 

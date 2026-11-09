@@ -15,7 +15,7 @@ import (
 	"vibebiz/internal/usage"
 )
 
-func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.ProjectStore, provisioner handler.ProjectInitializer, obs *observability.Provider, authn *auth.Authenticator, authHandler *handler.AuthHandler, settingsHandler *handler.SettingsHandler, storageHandler *handler.StorageHandler, metas auth.ProjectMetaStore, notifications *handler.NotificationHandler, registry *handler.SandboxRegistryHandler, models *handler.ModelHandler, roles *handler.RoleHandler, coverSigner handler.CoverURLSigner, coverExpiry time.Duration, adminSandbox handler.AdminSandbox, templates *handler.TemplateHandler, harness handler.HarnessImporter, stageStore projectstage.Store, stageSandbox handler.StageSandbox, notificationChannels *handler.NotificationChannelHandler, fdeResources *handler.FdeResourceHandler, publishApp *handler.PublishHandler, channelPackages *handler.ChannelPackageHandler, channelGuides *handler.ChannelGuideHandler, cloneHandler *handler.CloneHandler, usageService *usage.Service, accessLogs *handler.AccessLogHandler, skillManager *handler.SkillManager, leaderboardHandler *handler.LeaderboardHandler, evolutionHandler *handler.EvolutionHandler) {
+func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.ProjectStore, provisioner handler.ProjectInitializer, obs *observability.Provider, authn *auth.Authenticator, authHandler *handler.AuthHandler, settingsHandler *handler.SettingsHandler, storageHandler *handler.StorageHandler, metas auth.ProjectMetaStore, notifications *handler.NotificationHandler, registry *handler.SandboxRegistryHandler, models *handler.ModelHandler, roles *handler.RoleHandler, coverSigner handler.CoverURLSigner, coverExpiry time.Duration, adminSandbox handler.AdminSandbox, templates *handler.TemplateHandler, harness handler.HarnessImporter, stageStore projectstage.Store, stageSandbox handler.StageSandbox, notificationChannels *handler.NotificationChannelHandler, fdeResources *handler.FdeResourceHandler, publishApp *handler.PublishHandler, channelPackages *handler.ChannelPackageHandler, channelGuides *handler.ChannelGuideHandler, cloneHandler *handler.CloneHandler, usageService *usage.Service, accessLogs *handler.AccessLogHandler, skillManager *handler.SkillManager, leaderboardHandler *handler.LeaderboardHandler, evolutionHandler *handler.EvolutionHandler, cardHandler *handler.CardHandler) {
 	var roleStore handler.AgentRoleStore
 	if roles != nil {
 		roleStore = roles.Service
@@ -69,6 +69,16 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 	if publishApp != nil {
 		meAPI.GET("/published-projects", publishApp.ListPublished)
 		meAPI.GET("/published-projects/stats", publishApp.PublishedStats)
+	}
+	if cardHandler != nil {
+		meAPI.GET("/card", cardHandler.GetMine)
+		meAPI.PUT("/card", cardHandler.UpdateMine)
+		meAPI.POST("/card/items", cardHandler.AddItem)
+		meAPI.DELETE("/card/items/:projectId", cardHandler.RemoveItem)
+		meAPI.PUT("/card/featured", cardHandler.SetFeatured)
+		meAPI.POST("/card/featured/upload", cardHandler.UploadFeatured)
+		meAPI.DELETE("/card/featured", cardHandler.ClearFeatured)
+		meAPI.POST("/card/publish", cardHandler.Publish)
 	}
 	if channelGuides != nil {
 		api.GET("/channel-guides", channelGuides.PublicList, authn.RequireUser)
@@ -144,6 +154,12 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 		api.GET("/leaderboard", leaderboardHandler.ListPublic, authn.RequireUser)
 	}
 
+	if cardHandler != nil {
+		api.GET("/cards/discover", cardHandler.Discover, authn.RequireUser)
+		api.GET("/public/cards/:id", cardHandler.PublicCard)
+		api.GET("/public/card-projects/:projectId", cardHandler.PublicProject)
+	}
+
 	if evolutionHandler != nil {
 		evolveAPI := api.Group("/evolve", authn.RequireUser)
 		evolveAPI.GET("", evolutionHandler.List)
@@ -203,6 +219,11 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 		adminProtected.GET("/leaderboard", leaderboardHandler.ListAdmin)
 		adminProtected.PUT("/leaderboard/:projectId/hidden", leaderboardHandler.Hide)
 		adminProtected.DELETE("/leaderboard/:projectId", leaderboardHandler.Delete)
+	}
+	if cardHandler != nil {
+		adminProtected.GET("/cards", cardHandler.AdminList)
+		adminProtected.PUT("/cards/:id/hidden", cardHandler.AdminHide)
+		adminProtected.DELETE("/cards/:id", cardHandler.AdminDelete)
 	}
 	if evolutionHandler != nil {
 		adminProtected.GET("/evolve", evolutionHandler.AdminSnapshot)
