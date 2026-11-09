@@ -40,30 +40,67 @@ export const useCardStore = defineStore('card', () => {
   const hasShareContent = computed(() => (mine.value?.items.length ?? 0) > 0)
 
   let profileTimer: number | undefined
-  let profilePending = false
+  let dirty = false
+  let inFlight: Promise<void> | null = null
+
+  function syncSaving(): void {
+    saving.value = dirty || inFlight !== null
+  }
+
+  function applyCard(card: BusinessCard): void {
+    if (dirty && mine.value) {
+      mine.value = { ...card, headline: mine.value.headline, tags: [...mine.value.tags] }
+    } else {
+      mine.value = card
+    }
+  }
 
   async function flushProfile(): Promise<void> {
     if (profileTimer !== undefined) {
       window.clearTimeout(profileTimer)
       profileTimer = undefined
     }
-    if (!profilePending || !mine.value) return
-    profilePending = false
-    const input = { headline: mine.value.headline, tags: [...mine.value.tags] }
-    try {
-      mine.value = await updateMyCard(input)
-      error.value = ''
-    } catch (cause) {
-      error.value = messageOf(cause, '名片保存失败')
-      throw cause
-    } finally {
-      saving.value = false
+
+    if (inFlight) {
+      await inFlight
+      if (dirty) return flushProfile()
+      return
     }
+
+    if (!dirty || !mine.value) {
+      syncSaving()
+      return
+    }
+
+    const snapshot = { headline: mine.value.headline, tags: [...mine.value.tags] }
+    dirty = false
+
+    const run = (async () => {
+      try {
+        const updated = await updateMyCard(snapshot)
+        error.value = ''
+        if (dirty) {
+          scheduleProfile()
+        } else {
+          mine.value = updated
+        }
+      } catch (cause) {
+        error.value = messageOf(cause, '名片保存失败')
+        dirty = true
+      } finally {
+        inFlight = null
+        syncSaving()
+      }
+    })()
+
+    inFlight = run
+    syncSaving()
+    await run
   }
 
   function scheduleProfile(): void {
     if (!mine.value) return
-    profilePending = true
+    dirty = true
     saving.value = true
     if (profileTimer !== undefined) window.clearTimeout(profileTimer)
     profileTimer = window.setTimeout(() => {
@@ -75,7 +112,7 @@ export const useCardStore = defineStore('card', () => {
   async function loadMine(): Promise<void> {
     loading.value = true
     try {
-      mine.value = await getMyCard()
+      applyCard(await getMyCard())
       error.value = ''
     } catch (cause) {
       error.value = messageOf(cause, '名片加载失败')
@@ -108,7 +145,7 @@ export const useCardStore = defineStore('card', () => {
 
   async function addProject(projectId: string): Promise<void> {
     try {
-      mine.value = await addCardProject(projectId)
+      applyCard(await addCardProject(projectId))
       error.value = ''
     } catch (cause) {
       error.value = messageOf(cause, '添加项目失败')
@@ -118,7 +155,7 @@ export const useCardStore = defineStore('card', () => {
 
   async function removeProject(projectId: string): Promise<void> {
     try {
-      mine.value = await removeCardProject(projectId)
+      applyCard(await removeCardProject(projectId))
       error.value = ''
     } catch (cause) {
       error.value = messageOf(cause, '移除项目失败')
@@ -129,7 +166,7 @@ export const useCardStore = defineStore('card', () => {
   async function setFeatured(featured: CardFeatured): Promise<void> {
     if (featured?.kind !== 'project') throw new Error('unsupported featured')
     try {
-      mine.value = await setCardFeaturedProject(featured.projectId)
+      applyCard(await setCardFeaturedProject(featured.projectId))
       error.value = ''
     } catch (cause) {
       error.value = messageOf(cause, '设置主预览失败')
@@ -142,7 +179,7 @@ export const useCardStore = defineStore('card', () => {
     if (message) throw new Error(message)
     uploadingFeatured.value = true
     try {
-      mine.value = await uploadCardFeatured(file)
+      applyCard(await uploadCardFeatured(file))
       error.value = ''
     } catch (cause) {
       error.value = messageOf(cause, '上传主预览失败')
@@ -154,7 +191,7 @@ export const useCardStore = defineStore('card', () => {
 
   async function clearFeatured(): Promise<void> {
     try {
-      mine.value = await clearCardFeatured()
+      applyCard(await clearCardFeatured())
       error.value = ''
     } catch (cause) {
       error.value = messageOf(cause, '清除主预览失败')
@@ -165,7 +202,7 @@ export const useCardStore = defineStore('card', () => {
   async function publish(): Promise<string> {
     try {
       const published = await publishMyCard()
-      mine.value = published
+      applyCard(published)
       error.value = ''
       return `/share/card/${published.id}`
     } catch (cause) {

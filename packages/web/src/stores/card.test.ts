@@ -2,6 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import * as api from '@/api/cards'
+import type { BusinessCard } from '@/types'
 import { useCardStore } from './card'
 
 vi.mock('@/api/cards', () => ({
@@ -90,5 +91,41 @@ describe('card store', () => {
     await store.loadDiscover(2, true)
     expect(store.discoverCards.map((item) => item.id)).toEqual(['card-1', 'card-2'])
     expect(store.discoverTotal).toBe(2)
+  })
+
+  it('keeps newer edits when an earlier save resolves late', async () => {
+    vi.useFakeTimers()
+    vi.mocked(api.getMyCard).mockResolvedValue(card())
+    let resolveFirst!: (value: BusinessCard) => void
+    vi.mocked(api.updateMyCard)
+      .mockImplementationOnce(
+        () =>
+          new Promise<BusinessCard>((resolve) => {
+            resolveFirst = resolve
+          }),
+      )
+      .mockResolvedValueOnce(card({ headline: 'second' }))
+
+    const store = useCardStore()
+    await store.loadMine()
+
+    store.setHeadline('first')
+    await vi.advanceTimersByTimeAsync(400)
+    expect(api.updateMyCard).toHaveBeenCalledTimes(1)
+    expect(store.saving).toBe(true)
+
+    store.setHeadline('second')
+    expect(store.saving).toBe(true)
+
+    resolveFirst(card({ headline: 'first' }))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(store.mine?.headline).toBe('second')
+    expect(store.saving).toBe(true)
+
+    await vi.advanceTimersByTimeAsync(400)
+    expect(api.updateMyCard).toHaveBeenCalledTimes(2)
+    expect(api.updateMyCard).toHaveBeenLastCalledWith({ headline: 'second', tags: [] })
+    expect(store.mine?.headline).toBe('second')
+    expect(store.saving).toBe(false)
   })
 })
