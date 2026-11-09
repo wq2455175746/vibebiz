@@ -34,6 +34,7 @@ export const useCardStore = defineStore('card', () => {
   const discoverCards = ref<BusinessCard[]>([])
   const discoverTotal = ref(0)
   const discoverPage = ref(1)
+  const discoverPageSize = ref(DISCOVER_PAGE_SIZE)
   const discoverLoading = ref(false)
 
   const items = computed<CardProjectItem[]>(() => mine.value?.items ?? [])
@@ -44,7 +45,7 @@ export const useCardStore = defineStore('card', () => {
   let inFlight: Promise<void> | null = null
 
   function syncSaving(): void {
-    saving.value = dirty || inFlight !== null
+    saving.value = profileTimer !== undefined || inFlight !== null
   }
 
   function applyCard(card: BusinessCard): void {
@@ -81,8 +82,13 @@ export const useCardStore = defineStore('card', () => {
         error.value = ''
         if (dirty) {
           scheduleProfile()
-        } else {
-          mine.value = updated
+        } else if (mine.value) {
+          mine.value = {
+            ...mine.value,
+            headline: updated.headline,
+            tags: [...updated.tags],
+            updatedAt: updated.updatedAt,
+          }
         }
       } catch (cause) {
         error.value = messageOf(cause, '名片保存失败')
@@ -218,6 +224,7 @@ export const useCardStore = defineStore('card', () => {
       discoverCards.value = append ? [...discoverCards.value, ...result.cards] : result.cards
       discoverTotal.value = result.total
       discoverPage.value = result.page
+      discoverPageSize.value = result.pageSize
       error.value = ''
     } catch (cause) {
       error.value = messageOf(cause, '发现页加载失败')
@@ -244,6 +251,7 @@ export const useCardStore = defineStore('card', () => {
     discoverCards,
     discoverTotal,
     discoverPage,
+    discoverPageSize,
     discoverLoading,
     items,
     hasShareContent,

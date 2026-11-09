@@ -136,5 +136,19 @@ describe('DiscoverPanel', () => {
     await flush()
     expect(host.textContent).toContain('还没有人发布名片。')
     expect(host.textContent).not.toContain('已到底')
+    expect(host.querySelector('.discover-more')).toBeNull()
+  })
+
+  it('stops loading when the page size covers the candidate total', async () => {
+    vi.mocked(getDiscoverCards).mockResolvedValue({
+      cards: pageOne.slice(0, 6),
+      total: 10,
+      page: 1,
+      pageSize: 12,
+    })
+    mount()
+    await flush()
+    expect(host.querySelectorAll('.card-tile')).toHaveLength(6)
+    expect(host.querySelector('.discover-more')).toBeNull()
   })
 })

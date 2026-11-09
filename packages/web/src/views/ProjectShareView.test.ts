@@ -9,7 +9,6 @@ import type { CardContentType, PublicProjectCard } from '@/types'
 const projectState = vi.hoisted(() => ({
   cardId: 'demo-1',
   shareUrl: '/p/demo-1-p1',
-  previewUrl: 'https://example.com/demo' as string | undefined,
 }))
 
 vi.mock('vue-router', () => ({ useRoute: () => ({ params: { projectId: 'demo-1-p1' } }) }))
@@ -18,21 +17,19 @@ vi.mock('@/api/cards', () => ({ getPublicCardProject: vi.fn() }))
 const flushPromises = () => new Promise((resolve) => setTimeout(resolve, 0))
 
 function makeProject(type: CardContentType, previewUrl?: string): PublicProjectCard {
-  projectState.previewUrl =
-    previewUrl ??
-    (type === 'pdf' ? 'data:application/pdf;base64,JVBERi0xLjQK' : 'https://example.com/demo')
+  const item: PublicProjectCard['item'] = {
+    projectId: 'demo-1-p1',
+    name: '作品一',
+    description: '',
+    coverUrl: null,
+    type,
+    shareUrl: projectState.shareUrl,
+    addedAt: '2026-11-08T00:00:00.000Z',
+  }
+  if (previewUrl !== undefined) item.previewUrl = previewUrl
   return {
     card: { id: projectState.cardId, ownerName: '林一', avatarUrl: '' },
-    item: {
-      projectId: 'demo-1-p1',
-      name: '作品一',
-      description: '',
-      coverUrl: null,
-      type,
-      shareUrl: projectState.shareUrl,
-      previewUrl: projectState.previewUrl,
-      addedAt: '2026-11-08T00:00:00.000Z',
-    },
+    item,
   }
 }
 
@@ -77,9 +74,11 @@ describe('ProjectShareView', () => {
     expect(host.textContent).toContain('作品一')
   })
 
-  it('renders html in an iframe', async () => {
+  it('renders html in an iframe from the share url', async () => {
     await mount('html')
-    expect(host.querySelector('iframe')).not.toBeNull()
+    const frame = host.querySelector('iframe')
+    expect(frame).not.toBeNull()
+    expect(frame?.getAttribute('src')).toBe('/p/demo-1-p1')
   })
 
   it('does not grant same-origin to html iframes', async () => {
@@ -89,36 +88,23 @@ describe('ProjectShareView', () => {
     expect(sandbox).toContain('allow-scripts')
   })
 
-  it('does not sandbox pdf iframes so Chrome can render them', async () => {
-    await mount('pdf')
-    expect(host.querySelector('iframe')?.getAttribute('sandbox')).toBeNull()
-  })
+  it.each(['image', 'pdf', 'video', 'document'] as const)(
+    'shows the fallback for %s projects without previewUrl',
+    async (type) => {
+      await mount(type)
+      expect(host.textContent).toContain('暂无可预览内容')
+      expect(host.querySelector('img')).toBeNull()
+      expect(host.querySelector('video')).toBeNull()
+      expect(host.querySelector('iframe')).toBeNull()
+      expect(host.querySelector('.share-document')).toBeNull()
+    },
+  )
 
-  it('renders an image', async () => {
-    await mount('image')
-    expect(host.querySelector('img')).not.toBeNull()
-  })
-
-  it('renders a pdf iframe through a blob url', async () => {
-    await mount('pdf')
-    const frame = host.querySelector('iframe')
-    expect(frame).not.toBeNull()
-    expect(frame?.getAttribute('src')?.startsWith('blob:')).toBe(true)
-  })
-
-  it('renders a video', async () => {
-    await mount('video')
-    expect(host.querySelector('video')).not.toBeNull()
-  })
-
-  it('renders a document', async () => {
-    await mount('document')
-    expect(host.querySelector('.share-document')).not.toBeNull()
-  })
-
-  it('shows a placeholder when no preview is available', async () => {
-    await mount('image', '')
-    expect(host.textContent).toContain('暂无可预览内容')
+  it('renders previewUrl when supplied (forward-compatible)', async () => {
+    await mount('image', 'https://example.com/preview.png')
+    const image = host.querySelector('img')
+    expect(image).not.toBeNull()
+    expect(image?.getAttribute('src')).toBe('https://example.com/preview.png')
   })
 
   it('hides the original project entry without a real url', async () => {

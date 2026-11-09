@@ -128,4 +128,47 @@ describe('card store', () => {
     expect(store.mine?.headline).toBe('second')
     expect(store.saving).toBe(false)
   })
+
+  it('keeps item changes made while a profile save is in flight', async () => {
+    vi.useFakeTimers()
+    vi.mocked(api.getMyCard).mockResolvedValue(card())
+    let resolveProfile!: (value: BusinessCard) => void
+    vi.mocked(api.updateMyCard).mockImplementationOnce(
+      () =>
+        new Promise<BusinessCard>((resolve) => {
+          resolveProfile = resolve
+        }),
+    )
+    vi.mocked(api.addCardProject).mockResolvedValue(
+      card({ items: [{ projectId: 'p1' }] }),
+    )
+
+    const store = useCardStore()
+    await store.loadMine()
+
+    store.setHeadline('x')
+    await vi.advanceTimersByTimeAsync(400)
+    await store.addProject('p1')
+    expect(store.items).toHaveLength(1)
+
+    resolveProfile(card({ headline: 'x' }))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(store.mine?.headline).toBe('x')
+    expect(store.items.map((item) => item.projectId)).toEqual(['p1'])
+  })
+
+  it('clears saving after a failed profile save and keeps the error', async () => {
+    vi.useFakeTimers()
+    vi.mocked(api.getMyCard).mockResolvedValue(card())
+    vi.mocked(api.updateMyCard).mockRejectedValue(new Error('boom'))
+
+    const store = useCardStore()
+    await store.loadMine()
+
+    store.setHeadline('x')
+    expect(store.saving).toBe(true)
+    await vi.advanceTimersByTimeAsync(400)
+    expect(store.saving).toBe(false)
+    expect(store.error).toBe('boom')
+  })
 })

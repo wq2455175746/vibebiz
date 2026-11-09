@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"path/filepath"
 	"strings"
 	"time"
@@ -110,7 +111,10 @@ func (s *Service) GetMine(ctx context.Context, userID int64, workspaceIDs []int6
 func (s *Service) GetPublic(ctx context.Context, publicID string) (*Card, error) {
 	rec, err := s.Repo.GetByPublicID(ctx, publicID)
 	if err != nil {
-		return nil, ErrNotFound
+		if errors.Is(err, ErrNotFound) {
+			return nil, ErrNotFound
+		}
+		return nil, err
 	}
 	if rec.Hidden {
 		return nil, ErrNotFound
@@ -230,7 +234,7 @@ func (s *Service) ClearFeatured(ctx context.Context, userID int64, workspaceIDs 
 }
 
 func (s *Service) UploadFeatured(ctx context.Context, userID int64, workspaceIDs []int64, contentType, filename string, size int64, body io.Reader) (*Card, error) {
-	contentType = strings.ToLower(strings.TrimSpace(contentType))
+	contentType = strings.TrimSpace(contentType)
 	if size <= 0 || size > s.MaxFeaturedBytes {
 		return nil, ErrFileTooLarge
 	}
@@ -245,6 +249,11 @@ func (s *Service) UploadFeatured(ctx context.Context, userID int64, workspaceIDs
 	if int64(len(data)) != size {
 		return nil, ErrInvalidFile
 	}
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return nil, ErrInvalidFile
+	}
+	contentType = strings.ToLower(mediaType)
 	fileType, ext, ok := detectFeatured(data, contentType)
 	if !ok {
 		return nil, ErrInvalidFile
@@ -623,7 +632,10 @@ func (s *Service) AdminDelete(ctx context.Context, publicID string) error {
 func (s *Service) PublicProject(ctx context.Context, projectID string) (*PublicProject, error) {
 	project, pub, err := s.validateProject(ctx, projectID, nil, false)
 	if err != nil {
-		return nil, ErrNotFound
+		if errors.Is(err, ErrInvalidProject) {
+			return nil, ErrNotFound
+		}
+		return nil, err
 	}
 	ownerName := ""
 	avatar := ""

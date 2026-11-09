@@ -128,7 +128,7 @@ func (r cardRow) record(items []ItemRecord) *CardRecord {
 
 func (r *MySQLRepository) baseCardQuery(ctx context.Context) *gorm.DB {
 	return r.db.WithContext(ctx).Table("business_card AS bc").
-		Joins("JOIN user AS u ON u.id = bc.user_id AND u.deleted_at IS NULL").
+		Joins("LEFT JOIN user AS u ON u.id = bc.user_id").
 		Where("bc.deleted_at IS NULL")
 }
 
@@ -337,7 +337,7 @@ func (r *MySQLRepository) FindByProject(ctx context.Context, projectID string) (
 	err := r.db.WithContext(ctx).Table("business_card_item AS i").
 		Select(cardSelect).
 		Joins("JOIN business_card AS bc ON bc.id = i.card_id AND bc.deleted_at IS NULL").
-		Joins("JOIN user AS u ON u.id = bc.user_id AND u.deleted_at IS NULL").
+		Joins("LEFT JOIN user AS u ON u.id = bc.user_id").
 		Where("i.deleted_at IS NULL AND i.project_public_id = ?", projectID).
 		Take(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {

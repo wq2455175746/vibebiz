@@ -11,7 +11,9 @@ const store = useCardStore()
 const router = useRouter()
 
 const finished = computed(
-  () => store.discoverTotal > 0 && store.discoverCards.length >= store.discoverTotal,
+  () =>
+    store.discoverTotal === 0 ||
+    store.discoverPage * store.discoverPageSize >= store.discoverTotal,
 )
 const error = computed(() => store.error)
 
@@ -90,7 +92,7 @@ onBeforeUnmount(() => observer?.disconnect())
     <div ref="sentinel" class="discover-sentinel" />
     <div class="discover-more-wrap">
       <button
-        v-if="!finished"
+        v-if="!finished || store.discoverLoading"
         class="discover-more"
         type="button"
         :disabled="store.discoverLoading"
@@ -98,7 +100,7 @@ onBeforeUnmount(() => observer?.disconnect())
       >
         {{ store.discoverLoading ? '加载中…' : '加载更多' }}
       </button>
-      <span v-else class="discover-end">已到底</span>
+      <span v-else-if="store.discoverTotal > 0" class="discover-end">已到底</span>
     </div>
   </div>
 </template>

@@ -100,6 +100,25 @@ describe('CardsView', () => {
     expect(listMock).toHaveBeenCalledTimes(2)
   })
 
+  it('restores a hidden card and reloads', async () => {
+    listMock.mockResolvedValue({
+      items: [{ ...card('c1'), hidden: true, status: '已隐藏' }],
+      total: 1,
+      page: 1,
+      pageSize: 10,
+    })
+    mount()
+    await flush()
+    const restoreButton = Array.from(host.querySelectorAll<HTMLButtonElement>('button')).find(
+      (button) => button.textContent?.includes('恢复'),
+    )
+    expect(restoreButton).toBeDefined()
+    restoreButton?.click()
+    await flush()
+    expect(hideMock).toHaveBeenCalledWith('c1', false)
+    expect(listMock).toHaveBeenCalledTimes(2)
+  })
+
   it('deletes a card after confirmation', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     mount()

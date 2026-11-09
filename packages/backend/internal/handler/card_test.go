@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -224,6 +225,27 @@ func TestCardPublicAndAdminRoutes(t *testing.T) {
 	e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/cp/api/v1/admin/cards", nil))
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"total"`) {
 		t.Fatalf("admin status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCardPublicEndpointsReturn500OnInfraError(t *testing.T) {
+	e, fake := newCardEcho(t)
+	fake.getPublic = func(context.Context, string) (*businesscard.Card, error) {
+		return nil, errors.New("database unavailable")
+	}
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/cp/api/v1/public/cards/card-1", nil))
+	if rec.Code != http.StatusInternalServerError || !strings.Contains(rec.Body.String(), `"code":50016`) {
+		t.Fatalf("public card status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	fake.publicProject = func(context.Context, string) (*businesscard.PublicProject, error) {
+		return nil, errors.New("database unavailable")
+	}
+	rec = httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/cp/api/v1/public/card-projects/p1", nil))
+	if rec.Code != http.StatusInternalServerError || !strings.Contains(rec.Body.String(), `"code":50016`) {
+		t.Fatalf("public project status=%d body=%s", rec.Code, rec.Body.String())
 	}
 }
 

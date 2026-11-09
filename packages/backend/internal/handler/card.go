@@ -129,7 +129,7 @@ func (h *CardHandler) UploadFeatured(c echo.Context) error {
 	}
 	contentType := strings.TrimSpace(c.Request().Header.Get(echo.HeaderContentType))
 	name := c.Request().Header.Get("X-File-Name")
-	if decoded, err := url.QueryUnescape(name); err == nil {
+	if decoded, err := url.PathUnescape(name); err == nil {
 		name = decoded
 	}
 	if strings.TrimSpace(name) == "" {
@@ -188,7 +188,7 @@ func (h *CardHandler) Discover(c echo.Context) error {
 func (h *CardHandler) PublicCard(c echo.Context) error {
 	card, err := h.Service.GetPublic(c.Request().Context(), c.Param("id"))
 	if err != nil {
-		return response.Fail(c, http.StatusNotFound, 40410, "card not found")
+		return cardError(c, err)
 	}
 	return h.okCard(c, card)
 }
@@ -196,7 +196,10 @@ func (h *CardHandler) PublicCard(c echo.Context) error {
 func (h *CardHandler) PublicProject(c echo.Context) error {
 	project, err := h.Service.PublicProject(c.Request().Context(), c.Param("projectId"))
 	if err != nil {
-		return response.Fail(c, http.StatusNotFound, 40411, "project not found")
+		if errors.Is(err, businesscard.ErrNotFound) || errors.Is(err, businesscard.ErrInvalidProject) {
+			return response.Fail(c, http.StatusNotFound, 40411, "project not found")
+		}
+		return cardError(c, err)
 	}
 	if project != nil {
 		items := []businesscard.CardItem{project.Item}
@@ -226,6 +229,9 @@ func (h *CardHandler) AdminHide(c echo.Context) error {
 	row, err := h.Service.AdminSetHidden(c.Request().Context(), c.Param("id"), req.Hidden)
 	if err != nil {
 		return cardError(c, err)
+	}
+	if row == nil {
+		return response.Fail(c, http.StatusInternalServerError, 50016, "business card request failed")
 	}
 	return response.OK(c, map[string]any{"id": row.ID, "hidden": row.Hidden})
 }
