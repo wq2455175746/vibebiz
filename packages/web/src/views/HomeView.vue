@@ -20,6 +20,7 @@ import ProjectCard from '@/components/home/ProjectCard.vue'
 import TemplateCard from '@/components/home/TemplateCard.vue'
 import ProjectPickerDialog from '@/components/home/ProjectPickerDialog.vue'
 import ScheduledTasksPanel from '@/components/scheduled/ScheduledTasksPanel.vue'
+import SuperTeamPanel from '@/components/superteam/SuperTeamPanel.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useResourceStore } from '@/stores/resources'
 import {
@@ -55,6 +56,7 @@ const isClonesPage = computed(() => route.name === 'clones')
 const isLeaderboardPage = computed(() => route.name === 'leaderboard')
 const isMyCardPage = computed(() => route.name === 'my-card')
 const isDiscoverPage = computed(() => route.name === 'discover')
+const isSuperTeamPage = computed(() => route.name === 'super-team')
 const enterpriseProjects = computed(() =>
   projects.value.filter((project) => isEnterpriseProject(project)),
 )
@@ -335,6 +337,8 @@ onMounted(async () => {
       <MyCardPanel v-else-if="isMyCardPage" />
 
       <DiscoverPanel v-else-if="isDiscoverPage" />
+
+      <SuperTeamPanel v-else-if="isSuperTeamPage" />
 
       <div v-else class="home-main-inner">
         <HomeHero

@@ -181,6 +181,7 @@ const navigation = [
   { label: '发现', icon: 'pi pi-compass', route: 'discover', visible: true },
   { label: '排行榜', icon: 'pi pi-trophy', route: 'leaderboard', visible: true },
   { label: '企业工程开发', icon: 'pi pi-sitemap', route: 'enterprise', visible: true },
+  { label: '超级团队', icon: 'pi pi-users', route: 'super-team', visible: true },
   { label: '克隆', icon: 'pi pi-copy', route: 'clones', visible: true },
   { label: '资源', icon: 'pi pi-book', route: 'resources', visible: true },
   { label: '我的项目', icon: 'pi pi-folder', route: 'projects', visible: true },

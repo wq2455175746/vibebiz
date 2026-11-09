@@ -9,6 +9,9 @@ import EvolutionView from '@/views/EvolutionView.vue'
 import HomeView from '@/views/HomeView.vue'
 import LoginView from '@/views/LoginView.vue'
 import ProjectShareView from '@/views/ProjectShareView.vue'
+import SuperTeamDevelopmentView from '@/views/SuperTeamDevelopmentView.vue'
+import SuperTeamOperationsView from '@/views/SuperTeamOperationsView.vue'
+import SuperTeamRequirementsView from '@/views/SuperTeamRequirementsView.vue'
 
 import { settingsRoute } from './settingsRoutes'
 
@@ -25,12 +28,33 @@ const router = createRouter({
     { path: '/resources', name: 'resources', component: HomeView },
     { path: '/clones', name: 'clones', component: HomeView },
     { path: '/scheduled-tasks', name: 'scheduled-tasks', component: HomeView },
+    { path: '/super-team', name: 'super-team', component: HomeView },
+    {
+      path: '/super-team/requirements',
+      name: 'super-team-requirements',
+      component: SuperTeamRequirementsView,
+    },
+    {
+      path: '/super-team/development',
+      name: 'super-team-development',
+      component: SuperTeamDevelopmentView,
+    },
+    {
+      path: '/super-team/operations',
+      name: 'super-team-operations',
+      component: SuperTeamOperationsView,
+    },
     { path: '/evolve', name: 'evolution', component: EvolutionView },
     { path: '/clone/editor/:id', name: 'clone-editor', component: CloneEditorView },
     { path: '/enterprise/editor/:id', name: 'enterprise-editor', component: EnterpriseEditorView },
     settingsRoute,
     { path: '/editor/:id', name: 'editor', component: EditorView },
-    { path: '/share/card/:id', name: 'card-share', component: CardShareView, meta: { public: true } },
+    {
+      path: '/share/card/:id',
+      name: 'card-share',
+      component: CardShareView,
+      meta: { public: true },
+    },
     {
       path: '/share/project/:projectId',
       name: 'project-share',
@@ -73,15 +97,17 @@ router.afterEach((to) => {
                 ? 'Vibebiz · 发现'
                 : name === 'card-share' || name === 'project-share'
                   ? 'Vibebiz · 名片分享'
-                  : name.startsWith('settings')
-                    ? 'Vibebiz · 设置'
-                    : name === 'clones'
-                      ? 'Vibebiz · 克隆'
-                      : name === 'leaderboard'
-                        ? 'Vibebiz · 排行榜'
-                        : name === 'evolution'
-                          ? 'Vibebiz · 集思进化计划'
-                          : 'Vibebiz'
+                  : name.startsWith('super-team')
+                    ? 'Vibebiz · 超级团队'
+                    : name.startsWith('settings')
+                      ? 'Vibebiz · 设置'
+                      : name === 'clones'
+                        ? 'Vibebiz · 克隆'
+                        : name === 'leaderboard'
+                          ? 'Vibebiz · 排行榜'
+                          : name === 'evolution'
+                            ? 'Vibebiz · 集思进化计划'
+                            : 'Vibebiz'
 })
 
 export default router
