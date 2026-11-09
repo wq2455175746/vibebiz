@@ -1,35 +1,25 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import CardTile from './CardTile.vue'
 import { useCardStore } from '@/stores/card'
-import type { BusinessCard, CardFeatured } from '@/types'
-import { dataUrlToBlob } from '@/utils/media'
+import type { CardFeatured } from '@/types'
 import '@/styles/card.css'
 
 const store = useCardStore()
 const router = useRouter()
-const cards = ref<BusinessCard[]>([])
-const page = ref(1)
-const loading = ref(false)
-const finished = ref(false)
-const error = ref('')
+
+const finished = computed(() => store.discoverCards.length >= store.discoverTotal)
+const error = computed(() => store.error)
 
 async function loadMore() {
-  if (loading.value || finished.value) return
-  loading.value = true
-  error.value = ''
+  if (store.discoverLoading || finished.value) return
+  const next = store.discoverCards.length === 0 ? 1 : store.discoverPage + 1
   try {
-    await new Promise((resolve) => setTimeout(resolve, 300))
-    const result = store.listDiscover(page.value, 6)
-    cards.value = [...cards.value, ...result.items]
-    finished.value = cards.value.length >= result.total
-    page.value += 1
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : '加载名片失败'
-  } finally {
-    loading.value = false
+    await store.loadDiscover(next, next > 1)
+  } catch {
+    // error is surfaced through store.error
   }
 }
 
@@ -38,7 +28,7 @@ function open(id: string) {
 }
 
 function openFeatured(id: string) {
-  const card = cards.value.find((item) => item.id === id)
+  const card = store.discoverCards.find((item) => item.id === id)
   if (!card) return
   const featured: CardFeatured =
     card.featured ??
@@ -48,21 +38,14 @@ function openFeatured(id: string) {
     void router.push({ name: 'project-share', params: { projectId: featured.projectId } })
     return
   }
-  openFile(featured)
-}
-
-function openFile(file: Extract<CardFeatured, { kind: 'file' }>) {
-  const url = URL.createObjectURL(dataUrlToBlob(file.dataUrl))
-  window.open(url, '_blank', 'noopener,noreferrer')
-  window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  window.open(featured.url, '_blank', 'noopener,noreferrer')
 }
 
 const sentinel = ref<HTMLElement | null>(null)
 let observer: IntersectionObserver | null = null
 
 onMounted(() => {
-  store.load()
-  void loadMore()
+  void store.loadDiscover(1, false).catch(() => undefined)
   if (typeof IntersectionObserver !== 'undefined' && sentinel.value) {
     observer = new IntersectionObserver((entries) => {
       if (entries.some((entry) => entry.isIntersecting)) void loadMore()
@@ -81,15 +64,17 @@ onBeforeUnmount(() => observer?.disconnect())
         <h1>发现 · 编码伙伴</h1>
         <p>看看其他开发者正在做什么，找到同频的人。</p>
       </div>
-      <span class="tag">{{ cards.length }} 张名片</span>
+      <span class="tag">{{ store.discoverCards.length }} 张名片</span>
     </header>
 
     <p v-if="error" class="error-text">{{ error }}</p>
-    <p v-if="!loading && cards.length === 0" class="card-empty">还没有人发布名片。</p>
+    <p v-if="!store.discoverLoading && store.discoverCards.length === 0" class="card-empty">
+      还没有人发布名片。
+    </p>
 
     <div class="discover-grid">
       <CardTile
-        v-for="card in cards"
+        v-for="card in store.discoverCards"
         :key="card.id"
         :card="card"
         @open="open"
@@ -103,10 +88,10 @@ onBeforeUnmount(() => observer?.disconnect())
         v-if="!finished"
         class="discover-more"
         type="button"
-        :disabled="loading"
+        :disabled="store.discoverLoading"
         @click="loadMore"
       >
-        {{ loading ? '加载中…' : '加载更多' }}
+        {{ store.discoverLoading ? '加载中…' : '加载更多' }}
       </button>
       <span v-else class="discover-end">已到底</span>
     </div>

@@ -2,7 +2,6 @@ import { createApp, type App } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import CardTile from './CardTile.vue'
-import { mockCards } from '@/mocks/cards'
 import { emptyCard } from '@/utils/card'
 import type { BusinessCard, CardProjectItem } from '@/types'
 
@@ -13,7 +12,8 @@ const item: CardProjectItem = {
   projectId: 'p1',
   name: '作品一',
   description: '',
-  coverUrl: 'data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%2F%3E',
+  coverUrl:
+    'data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%2F%3E',
   type: 'html',
   shareUrl: '/p/p1',
   addedAt: '2026-11-08T00:00:00.000Z',
@@ -74,10 +74,5 @@ describe('CardTile', () => {
 
     host.querySelector<HTMLElement>('.card-tile-preview')?.click()
     expect(openFeatured).toHaveBeenCalledWith('demo-1')
-  })
-
-  it('ships distinct preview covers for the mock cards', () => {
-    const covers = mockCards.slice(0, 4).map((card) => card.items[0]?.coverUrl)
-    expect(new Set(covers).size).toBe(4)
   })
 })
