@@ -1,230 +1,230 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
-import { getProject } from '@/api/projects'
-import { mockCards } from '@/mocks/cards'
-import { useAuthStore } from '@/stores/auth'
-import type {
-  BusinessCard,
-  CardContentType,
-  CardFeatured,
-  CardProjectItem,
-  PublishedProject,
-} from '@/types'
 import {
-  addCardTag,
-  canAddCardItem,
-  cardContentType,
-  decodeCard,
-  decodeCards,
-  emptyCard,
-  isPdfFile,
-  normalizeCard,
-  pageCards,
-  readFileAsDataUrl,
-  sortDiscoverCards,
-  validateCardUpload,
-} from '@/utils/card'
+  addCardProject,
+  clearCardFeatured,
+  getDiscoverCards,
+  getMyCard,
+  getPublicCard,
+  getPublicCardProject,
+  publishMyCard,
+  removeCardProject,
+  setCardFeaturedProject,
+  updateMyCard,
+  uploadCardFeatured,
+} from '@/api/cards'
+import type { BusinessCard, CardFeatured, CardProjectItem, PublicProjectCard } from '@/types'
+import { addCardTag, validateCardUpload } from '@/utils/card'
 
-const MINE_KEY = 'vibebiz:cards:mine:v1'
-const DISCOVER_KEY = 'vibebiz:cards:discover:v2'
+const PROFILE_DEBOUNCE_MS = 400
+const DISCOVER_PAGE_SIZE = 12
+
+function messageOf(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback
+}
 
 export const useCardStore = defineStore('card', () => {
-  const mine = ref<BusinessCard>(emptyCard())
-  const discoverMock = ref<BusinessCard[]>([])
+  const mine = ref<BusinessCard | null>(null)
   const loading = ref(false)
   const saving = ref(false)
+  const uploadingFeatured = ref(false)
   const error = ref('')
-  let saveTimer: number | undefined
 
-  const items = computed(() => mine.value.items)
-  const hasShareContent = computed(() => mine.value.items.length > 0)
-  const discoverCards = computed(() =>
-    sortDiscoverCards([...(mine.value.published ? [mine.value] : []), ...discoverMock.value]),
-  )
+  const discoverCards = ref<BusinessCard[]>([])
+  const discoverTotal = ref(0)
+  const discoverPage = ref(1)
+  const discoverLoading = ref(false)
 
-  function persistMine() {
+  const items = computed<CardProjectItem[]>(() => mine.value?.items ?? [])
+  const hasShareContent = computed(() => (mine.value?.items.length ?? 0) > 0)
+
+  let profileTimer: number | undefined
+  let profilePending = false
+
+  async function flushProfile(): Promise<void> {
+    if (profileTimer !== undefined) {
+      window.clearTimeout(profileTimer)
+      profileTimer = undefined
+    }
+    if (!profilePending || !mine.value) return
+    profilePending = false
+    const input = { headline: mine.value.headline, tags: [...mine.value.tags] }
     try {
-      localStorage.setItem(MINE_KEY, JSON.stringify(mine.value))
+      mine.value = await updateMyCard(input)
       error.value = ''
-    } catch {
-      error.value = '本地存储空间不足，名片未能保存'
-    }
-  }
-
-  function persistDiscover() {
-    try {
-      localStorage.setItem(DISCOVER_KEY, JSON.stringify(discoverMock.value))
-    } catch {
-      error.value = '本地存储空间不足，发现页数据未能保存'
-    }
-  }
-
-  function saveNow() {
-    saving.value = true
-    try {
-      mine.value = { ...mine.value, updatedAt: new Date().toISOString() }
-      persistMine()
+    } catch (cause) {
+      error.value = messageOf(cause, '名片保存失败')
+      throw cause
     } finally {
       saving.value = false
     }
   }
 
-  function scheduleSave() {
+  function scheduleProfile(): void {
+    if (!mine.value) return
+    profilePending = true
     saving.value = true
-    if (saveTimer) window.clearTimeout(saveTimer)
-    saveTimer = window.setTimeout(saveNow, 300)
+    if (profileTimer !== undefined) window.clearTimeout(profileTimer)
+    profileTimer = window.setTimeout(() => {
+      profileTimer = undefined
+      void flushProfile().catch(() => undefined)
+    }, PROFILE_DEBOUNCE_MS)
   }
 
-  function load() {
+  async function loadMine(): Promise<void> {
     loading.value = true
-    const auth = useAuthStore()
-    const stored = decodeCard(localStorage.getItem(MINE_KEY)) ?? emptyCard()
-    mine.value = normalizeCard({
-      ...stored,
-      ownerUserId: auth.user?.id ?? stored.ownerUserId,
-      ownerName: auth.user?.username ?? stored.ownerName,
-      avatarUrl: auth.user?.avatarUrl ?? stored.avatarUrl,
-    })
-    const storedMock = decodeCards(localStorage.getItem(DISCOVER_KEY))
-    discoverMock.value = storedMock.length
-      ? storedMock
-      : mockCards.map((card) => normalizeCard(card))
-    if (!storedMock.length) persistDiscover()
-    loading.value = false
+    try {
+      mine.value = await getMyCard()
+      error.value = ''
+    } catch (cause) {
+      error.value = messageOf(cause, '名片加载失败')
+    } finally {
+      loading.value = false
+    }
   }
 
-  function setHeadline(value: string) {
+  function setHeadline(value: string): void {
+    if (!mine.value) return
     mine.value = { ...mine.value, headline: value.slice(0, 80) }
-    scheduleSave()
+    scheduleProfile()
   }
 
   function addTag(raw: string): string {
+    if (!mine.value) return ''
     const result = addCardTag(mine.value.tags, raw)
     if (!result.error) {
       mine.value = { ...mine.value, tags: result.tags }
-      saveNow()
+      scheduleProfile()
     }
     return result.error
   }
 
-  function removeTag(tag: string) {
+  function removeTag(tag: string): void {
+    if (!mine.value) return
     mine.value = { ...mine.value, tags: mine.value.tags.filter((item) => item !== tag) }
-    saveNow()
+    scheduleProfile()
   }
 
-  function removeItem(projectId: string) {
-    const nextItems = mine.value.items.filter((item) => item.projectId !== projectId)
-    const featured =
-      mine.value.featured?.kind === 'project' && mine.value.featured.projectId === projectId
-        ? null
-        : mine.value.featured
-    mine.value = { ...mine.value, items: nextItems, featured }
-    saveNow()
-  }
-
-  async function addPublishedProject(published: PublishedProject): Promise<CardProjectItem> {
-    if (!canAddCardItem(mine.value.items, published.projectId)) {
-      throw new Error('项目已添加或已达到 5 个上限')
-    }
-    let type: CardContentType = 'html'
+  async function addProject(projectId: string): Promise<void> {
     try {
-      const project = await getProject(published.projectId)
-      type = cardContentType(project.previewPath)
-    } catch {
-      type = 'html'
+      mine.value = await addCardProject(projectId)
+      error.value = ''
+    } catch (cause) {
+      error.value = messageOf(cause, '添加项目失败')
+      throw cause
     }
-    if (!canAddCardItem(mine.value.items, published.projectId)) {
-      throw new Error('项目已添加或已达到 5 个上限')
-    }
-    const item: CardProjectItem = {
-      projectId: published.projectId,
-      name: published.name,
-      description: published.description,
-      coverUrl: published.coverUrl,
-      type,
-      shareUrl: published.url,
-      addedAt: new Date().toISOString(),
-    }
-    mine.value = { ...mine.value, items: [...mine.value.items, item] }
-    saveNow()
-    return item
   }
 
-  function setFeatured(featured: CardFeatured) {
-    if (featured?.kind === 'project') {
-      const exists = mine.value.items.some((item) => item.projectId === featured.projectId)
-      if (!exists) throw new Error('主预览项目必须来自已添加项目')
+  async function removeProject(projectId: string): Promise<void> {
+    try {
+      mine.value = await removeCardProject(projectId)
+      error.value = ''
+    } catch (cause) {
+      error.value = messageOf(cause, '移除项目失败')
+      throw cause
     }
-    mine.value = { ...mine.value, featured }
-    saveNow()
   }
 
-  async function setFeaturedFile(file: File): Promise<void> {
+  async function setFeatured(featured: CardFeatured): Promise<void> {
+    if (featured?.kind !== 'project') throw new Error('unsupported featured')
+    try {
+      mine.value = await setCardFeaturedProject(featured.projectId)
+      error.value = ''
+    } catch (cause) {
+      error.value = messageOf(cause, '设置主预览失败')
+      throw cause
+    }
+  }
+
+  async function uploadFeatured(file: File): Promise<void> {
     const message = validateCardUpload(file)
     if (message) throw new Error(message)
-    const dataUrl = await readFileAsDataUrl(file)
-    const isPdf = isPdfFile(file)
-    setFeatured({
-      kind: 'file',
-      fileType: isPdf ? 'pdf' : 'image',
-      name: file.name,
-      size: file.size,
-      dataUrl,
-    })
-  }
-
-  function clearFeatured() {
-    mine.value = { ...mine.value, featured: null }
-    saveNow()
-  }
-
-  function publish(): BusinessCard {
-    if (!hasShareContent.value) throw new Error('请先添加项目')
-    mine.value = { ...mine.value, published: true }
-    saveNow()
-    return mine.value
-  }
-
-  function getCardById(id: string): BusinessCard | null {
-    if (id === 'me') return mine.value
-    return discoverMock.value.find((card) => card.id === id) ?? null
-  }
-
-  function findProject(projectId: string): { card: BusinessCard; item: CardProjectItem } | null {
-    for (const card of [mine.value, ...discoverMock.value]) {
-      const item = card.items.find((entry) => entry.projectId === projectId)
-      if (item) return { card, item }
+    uploadingFeatured.value = true
+    try {
+      mine.value = await uploadCardFeatured(file)
+      error.value = ''
+    } catch (cause) {
+      error.value = messageOf(cause, '上传主预览失败')
+      throw cause
+    } finally {
+      uploadingFeatured.value = false
     }
-    return null
   }
 
-  function listDiscover(page: number, pageSize = 6): { items: BusinessCard[]; total: number } {
-    const all = discoverCards.value
-    return { items: pageCards(all, page, pageSize), total: all.length }
+  async function clearFeatured(): Promise<void> {
+    try {
+      mine.value = await clearCardFeatured()
+      error.value = ''
+    } catch (cause) {
+      error.value = messageOf(cause, '清除主预览失败')
+      throw cause
+    }
+  }
+
+  async function publish(): Promise<string> {
+    try {
+      const published = await publishMyCard()
+      mine.value = published
+      error.value = ''
+      return `/share/card/${published.id}`
+    } catch (cause) {
+      error.value = messageOf(cause, '发布失败')
+      throw cause
+    }
+  }
+
+  async function loadDiscover(page = 1, append = false): Promise<void> {
+    discoverLoading.value = true
+    try {
+      const result = await getDiscoverCards({ page, pageSize: DISCOVER_PAGE_SIZE })
+      discoverCards.value = append ? [...discoverCards.value, ...result.cards] : result.cards
+      discoverTotal.value = result.total
+      discoverPage.value = result.page
+      error.value = ''
+    } catch (cause) {
+      error.value = messageOf(cause, '发现页加载失败')
+      throw cause
+    } finally {
+      discoverLoading.value = false
+    }
+  }
+
+  function fetchPublicCard(id: string): Promise<BusinessCard> {
+    return getPublicCard(id)
+  }
+
+  function fetchPublicProject(projectId: string): Promise<PublicProjectCard> {
+    return getPublicCardProject(projectId)
   }
 
   return {
     mine,
-    discoverMock,
     loading,
     saving,
+    uploadingFeatured,
     error,
+    discoverCards,
+    discoverTotal,
+    discoverPage,
+    discoverLoading,
     items,
     hasShareContent,
-    discoverCards,
-    load,
+    loadMine,
+    flushProfile,
     setHeadline,
     addTag,
     removeTag,
-    removeItem,
-    addPublishedProject,
+    addProject,
+    removeProject,
+    removeItem: removeProject,
     setFeatured,
-    setFeaturedFile,
+    setFeaturedProject: (projectId: string) => setFeatured({ kind: 'project', projectId }),
+    uploadFeatured,
     clearFeatured,
     publish,
-    getCardById,
-    findProject,
-    listDiscover,
+    loadDiscover,
+    fetchPublicCard,
+    fetchPublicProject,
   }
 })
