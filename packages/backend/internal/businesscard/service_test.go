@@ -213,3 +213,39 @@ func TestPublishRequiresVisibleProject(t *testing.T) {
 
 var _ = bytes.NewReader
 var _ = strings.TrimSpace
+
+func TestUploadFeaturedRejectsMismatchedMagic(t *testing.T) {
+	repo := &fakeRepo{}
+	svc, _, _, _ := newTestService(repo)
+	body := strings.NewReader("<html>not a pdf</html>")
+	_, err := svc.UploadFeatured(context.Background(), 7, []int64{10}, "application/pdf", "x.pdf", int64(body.Len()), body)
+	if !errors.Is(err, ErrInvalidFile) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestUploadFeaturedStoresS3KeyAndDeletesOld(t *testing.T) {
+	repo := &fakeRepo{card: &CardRecord{ID: 1, PublicID: "card-1", UserID: 7, FeaturedS3Key: "cards/7/old.pdf"}}
+	svc, _, _, s3 := newTestService(repo)
+	data := []byte("%PDF-1.4\n")
+	_, err := svc.UploadFeatured(context.Background(), 7, []int64{10}, "application/pdf", "resume.pdf", int64(len(data)), bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s3.putKey != "cards/7/fixed-id.pdf" {
+		t.Fatalf("key = %q", s3.putKey)
+	}
+	if len(s3.deleted) != 1 || s3.deleted[0] != "cards/7/old.pdf" {
+		t.Fatalf("deleted = %+v", s3.deleted)
+	}
+}
+
+func TestUploadFeaturedRejectsTooLarge(t *testing.T) {
+	repo := &fakeRepo{}
+	svc, _, _, _ := newTestService(repo)
+	svc.MaxFeaturedBytes = 4
+	_, err := svc.UploadFeatured(context.Background(), 7, []int64{10}, "application/pdf", "x.pdf", 5, strings.NewReader("%PDF-"))
+	if !errors.Is(err, ErrFileTooLarge) {
+		t.Fatalf("err = %v", err)
+	}
+}

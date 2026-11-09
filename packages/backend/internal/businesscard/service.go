@@ -1,8 +1,10 @@
 package businesscard
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"path/filepath"
 	"strings"
@@ -225,6 +227,82 @@ func (s *Service) ClearFeatured(ctx context.Context, userID int64, workspaceIDs 
 		_ = s.S3.Delete(ctx, oldKey)
 	}
 	return s.GetMine(ctx, userID, workspaceIDs)
+}
+
+func (s *Service) UploadFeatured(ctx context.Context, userID int64, workspaceIDs []int64, contentType, filename string, size int64, body io.Reader) (*Card, error) {
+	contentType = strings.ToLower(strings.TrimSpace(contentType))
+	if size <= 0 || size > s.MaxFeaturedBytes {
+		return nil, ErrFileTooLarge
+	}
+	rec, err := s.Repo.GetOrCreate(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	data, err := io.ReadAll(io.LimitReader(body, size+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) != size {
+		return nil, ErrInvalidFile
+	}
+	fileType, ext, ok := detectFeatured(data, contentType)
+	if !ok {
+		return nil, ErrInvalidFile
+	}
+	if s.S3 == nil {
+		return nil, ErrStorageUnavailable
+	}
+	oldKey := rec.FeaturedS3Key
+	key := fmt.Sprintf("cards/%d/%s.%s", userID, s.nextID(), ext)
+	if err := s.S3.Put(ctx, key, contentType, size, bytes.NewReader(data)); err != nil {
+		return nil, err
+	}
+	if err := s.Repo.SetFeaturedFile(ctx, rec.ID, key, sanitizeFilename(filename), fileType, size); err != nil {
+		_ = s.S3.Delete(ctx, key)
+		return nil, err
+	}
+	if oldKey != "" && oldKey != key {
+		_ = s.S3.Delete(ctx, oldKey)
+	}
+	return s.GetMine(ctx, userID, workspaceIDs)
+}
+
+func detectFeatured(data []byte, contentType string) (string, string, bool) {
+	switch contentType {
+	case "application/pdf":
+		if bytes.HasPrefix(data, []byte("%PDF-")) {
+			return "pdf", "pdf", true
+		}
+	case "image/png":
+		if bytes.HasPrefix(data, []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a}) {
+			return "image", "png", true
+		}
+	case "image/jpeg":
+		if bytes.HasPrefix(data, []byte{0xff, 0xd8, 0xff}) {
+			return "image", "jpg", true
+		}
+	case "image/gif":
+		if bytes.HasPrefix(data, []byte("GIF87a")) || bytes.HasPrefix(data, []byte("GIF89a")) {
+			return "image", "gif", true
+		}
+	case "image/webp":
+		if len(data) >= 12 && string(data[0:4]) == "RIFF" && string(data[8:12]) == "WEBP" {
+			return "image", "webp", true
+		}
+	}
+	return "", "", false
+}
+
+func sanitizeFilename(name string) string {
+	name = strings.TrimSpace(filepath.Base(name))
+	if name == "." || name == "/" {
+		name = ""
+	}
+	runes := []rune(name)
+	if len(runes) > 255 {
+		name = string(runes[:255])
+	}
+	return name
 }
 
 func (s *Service) Publish(ctx context.Context, userID int64, workspaceIDs []int64) (*Card, error) {
