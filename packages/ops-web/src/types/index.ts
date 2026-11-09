@@ -450,12 +450,15 @@ export interface ChannelGuideCreateInput extends ChannelGuideInput {
 
 export interface AdminCardSummary {
   id: string
+  ownerUserId: number
   ownerName: string
-  user: string
+  headline: string
   tags: string[]
   projectCount: number
   featuredType: string
+  published: boolean
   hidden: boolean
+  status: string
   updatedAt: string
 }
 

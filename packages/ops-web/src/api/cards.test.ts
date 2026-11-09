@@ -1,46 +1,37 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { request } from './client'
 import { deleteCard, listCards, updateCardHidden } from './cards'
 
-const store = new Map<string, string>()
+vi.mock('./client', () => ({ request: vi.fn() }))
+const requestMock = vi.mocked(request)
 
-beforeEach(() => {
-  store.clear()
-  vi.stubGlobal('localStorage', {
-    getItem: (key: string) => store.get(key) ?? null,
-    setItem: (key: string, value: string) => {
-      store.set(key, value)
-    },
-    removeItem: (key: string) => {
-      store.delete(key)
-    },
-    clear: () => store.clear(),
-  })
-})
+beforeEach(() => requestMock.mockReset())
 
 describe('cards api', () => {
-  it('seeds and paginates cards', async () => {
-    const result = await listCards({ page: 1, pageSize: 5 })
-    expect(result.items).toHaveLength(5)
-    expect(result.total).toBeGreaterThan(5)
+  it('lists cards with query params', async () => {
+    requestMock.mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 10 })
+    await listCards({ page: 2, pageSize: 10, keyword: 'alice' })
+    expect(requestMock).toHaveBeenCalledWith({
+      method: 'get',
+      url: '/cards',
+      params: { page: 2, pageSize: 10, keyword: 'alice' },
+    })
   })
 
-  it('filters by keyword', async () => {
-    const result = await listCards({ keyword: '林一' })
-    expect(result.items.some((card) => card.ownerName.includes('林一'))).toBe(true)
-  })
-
-  it('toggles hidden state', async () => {
-    const first = (await listCards({ page: 1, pageSize: 1 })).items[0]!
-    await updateCardHidden(first.id, true)
-    const reloaded = await listCards({ keyword: first.ownerName })
-    expect(reloaded.items.find((card) => card.id === first.id)?.hidden).toBe(true)
+  it('hides a card', async () => {
+    requestMock.mockResolvedValue({})
+    await updateCardHidden('c1', true)
+    expect(requestMock).toHaveBeenCalledWith({
+      method: 'put',
+      url: '/cards/c1/hidden',
+      data: { hidden: true },
+    })
   })
 
   it('deletes a card', async () => {
-    const first = (await listCards({ page: 1, pageSize: 1 })).items[0]!
-    await deleteCard(first.id)
-    const reloaded = await listCards({})
-    expect(reloaded.items.some((card) => card.id === first.id)).toBe(false)
+    requestMock.mockResolvedValue({})
+    await deleteCard('c1')
+    expect(requestMock).toHaveBeenCalledWith({ method: 'delete', url: '/cards/c1' })
   })
 })

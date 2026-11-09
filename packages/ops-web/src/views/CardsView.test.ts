@@ -3,6 +3,7 @@ import PrimeVue from 'primevue/config'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { deleteCard, listCards, updateCardHidden } from '@/api/cards'
+import type { AdminCardSummary } from '@/types'
 import CardsView from './CardsView.vue'
 
 vi.mock('@/api/cards', () => ({
@@ -23,6 +24,22 @@ async function flush() {
   await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
+function card(id: string): AdminCardSummary {
+  return {
+    id,
+    ownerUserId: 1,
+    ownerName: `owner-${id}`,
+    headline: `headline-${id}`,
+    tags: ['Vue'],
+    projectCount: 1,
+    featuredType: '项目',
+    published: false,
+    hidden: false,
+    status: '未发布',
+    updatedAt: '2026-11-08T10:00:00.000Z',
+  }
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   Object.defineProperty(window, 'matchMedia', {
@@ -39,18 +56,7 @@ beforeEach(() => {
     })),
   })
   listMock.mockResolvedValue({
-    items: [
-      {
-        id: 'demo-1',
-        ownerName: '林一',
-        user: 'alice',
-        tags: ['Vue', '游戏'],
-        projectCount: 3,
-        featuredType: 'HTML',
-        hidden: false,
-        updatedAt: '2026-11-08T10:00:00.000Z',
-      },
-    ],
+    items: [card('c1')],
     total: 1,
     page: 1,
     pageSize: 10,
@@ -74,12 +80,12 @@ function mount() {
 }
 
 describe('CardsView', () => {
-  it('renders card rows', async () => {
+  it('renders owner name, headline and status', async () => {
     mount()
     await flush()
-    expect(host.textContent).toContain('林一')
-    expect(host.textContent).toContain('alice')
-    expect(host.textContent).toContain('Vue')
+    expect(host.textContent).toContain('owner-c1')
+    expect(host.textContent).toContain('headline-c1')
+    expect(host.textContent).toContain('未发布')
   })
 
   it('hides a card and reloads', async () => {
@@ -90,7 +96,7 @@ describe('CardsView', () => {
     )
     hideButton?.click()
     await flush()
-    expect(hideMock).toHaveBeenCalledWith('demo-1', true)
+    expect(hideMock).toHaveBeenCalledWith('c1', true)
     expect(listMock).toHaveBeenCalledTimes(2)
   })
 
@@ -103,27 +109,17 @@ describe('CardsView', () => {
     )
     deleteButton?.click()
     await flush()
-    expect(deleteMock).toHaveBeenCalledWith('demo-1')
+    expect(deleteMock).toHaveBeenCalledWith('c1')
   })
 
   it('returns to the previous page after deleting the last row on a later page', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
-    const row = (id: string) => ({
-      id,
-      ownerName: id,
-      user: id,
-      tags: [],
-      projectCount: 1,
-      featuredType: 'HTML',
-      hidden: false,
-      updatedAt: '2026-11-08T10:00:00.000Z',
-    })
     listMock.mockImplementation(async (query) => {
       if ((query?.page ?? 1) === 2) {
-        return { items: [row('demo-11')], total: 11, page: 2, pageSize: 10 }
+        return { items: [card('c11')], total: 11, page: 2, pageSize: 10 }
       }
       return {
-        items: Array.from({ length: 10 }, (_, index) => row(`demo-${index + 1}`)),
+        items: Array.from({ length: 10 }, (_, index) => card(`c${index + 1}`)),
         total: 11,
         page: 1,
         pageSize: 10,
@@ -142,7 +138,7 @@ describe('CardsView', () => {
     )
     deleteButton?.click()
     await flush()
-    expect(deleteMock).toHaveBeenCalledWith('demo-11')
+    expect(deleteMock).toHaveBeenCalledWith('c11')
     expect(listMock).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1 }))
   })
 })

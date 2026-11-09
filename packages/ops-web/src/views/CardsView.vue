@@ -14,11 +14,11 @@ const { rows, total, page, pageSize, keyword, loading, error, load, search, setP
 
 const columns: TableColumn[] = [
   { key: 'ownerName', label: '名片', width: '140px' },
-  { key: 'user', label: '用户', width: '140px' },
+  { key: 'headline', label: '简介' },
   { key: 'tags', label: '标签', format: (value) => (Array.isArray(value) ? value.join(' / ') : '—') },
   { key: 'projectCount', label: '项目数', width: '90px' },
   { key: 'featuredType', label: '主预览', width: '100px' },
-  { key: 'hidden', label: '状态', width: '100px' },
+  { key: 'status', label: '状态', width: '100px' },
   { key: 'updatedAt', label: '更新时间', width: '180px' },
   { key: 'actions', label: '操作', width: '180px' },
 ]
@@ -86,7 +86,6 @@ async function remove(row: unknown) {
       empty-text="暂无名片"
       @retry="load"
     >
-      <template #cell-hidden="{ value }">{{ value ? '已隐藏' : '正常' }}</template>
       <template #cell-actions="{ row }">
         <div class="row-actions">
           <Button
