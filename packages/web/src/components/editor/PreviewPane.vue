@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
+import Dialog from 'primevue/dialog'
 import { useToast } from 'primevue/usetoast'
 import html2canvas from 'html2canvas'
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -9,6 +10,7 @@ import { readFile } from '@/api/files'
 import { updateProjectPreviewPath, uploadProjectCover } from '@/api/projects'
 import { useProjectStore } from '@/stores/project'
 import { usePreviewLogStore } from '@/stores/previewLogs'
+import { createCoverBlob } from '@/utils/cover'
 import { renderMarkdown } from '@/utils/markdown'
 import { PREVIEW_SANDBOX, buildPreviewUrl, previewKind } from '@/utils/preview'
 
@@ -46,6 +48,9 @@ const kindLabel = computed(
 const PptxPreview = defineAsyncComponent(() => import('./PptxPreview.vue'))
 let captureTimer: ReturnType<typeof setTimeout> | null = null
 const captureBusy = ref(false)
+const coverDialogOpen = ref(false)
+const uploadingCover = ref(false)
+const coverInput = ref<HTMLInputElement | null>(null)
 let captureOnLoad = false
 let capturePending = false
 let reloadPending = false
@@ -230,6 +235,50 @@ function captureNow() {
   void captureCover(true)
 }
 
+function openCoverDialog() {
+  coverDialogOpen.value = true
+}
+
+function useScreenshotCover() {
+  coverDialogOpen.value = false
+  captureNow()
+}
+
+function pickCoverFile() {
+  coverInput.value?.click()
+}
+
+async function onCoverFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file || uploadingCover.value) {
+    return
+  }
+  uploadingCover.value = true
+  try {
+    const blob = await createCoverBlob(file)
+    const cover = await uploadProjectCover(props.projectId, blob)
+    projectStore.setCover(cover.coverUrl, cover.coverS3Path)
+    coverDialogOpen.value = false
+    toast.add({
+      severity: 'success',
+      summary: '封面已更新',
+      detail: '项目封面已替换为上传的图片',
+      life: 2500,
+    })
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: '上传封面失败',
+      detail: (error as Error).message,
+      life: 3000,
+    })
+  } finally {
+    uploadingCover.value = false
+  }
+}
+
 function onFrameLoad() {
   loading.value = false
   if (captureOnLoad) {
@@ -343,15 +392,7 @@ watch(
         aria-label="预览控制台"
         @click="toggleConsole"
       />
-      <Button
-        v-if="kind === 'html'"
-        icon="pi pi-camera"
-        text
-        rounded
-        aria-label="截图并更新简介图"
-        :disabled="captureBusy"
-        @click="captureNow"
-      />
+      <Button icon="pi pi-image" text rounded aria-label="更新项目封面" @click="openCoverDialog" />
       <Button
         icon="pi pi-external-link"
         text
@@ -396,5 +437,47 @@ watch(
       </div>
     </div>
     <PreviewConsole v-if="consoleOpen" @close="consoleOpen = false" />
+    <Dialog
+      v-model:visible="coverDialogOpen"
+      modal
+      header="更新项目封面"
+      :style="{ width: '440px', maxWidth: 'calc(100vw - 32px)' }"
+    >
+      <div class="cover-dialog">
+        <button
+          class="cover-option"
+          type="button"
+          :disabled="kind !== 'html' || captureBusy"
+          @click="useScreenshotCover"
+        >
+          <i class="pi pi-camera" />
+          <span>
+            <strong>截取当前预览</strong>
+            <small>{{
+              kind === 'html' ? '用当前静态预览画面生成封面' : '仅静态 HTML 预览支持截屏'
+            }}</small>
+          </span>
+        </button>
+        <button
+          class="cover-option"
+          type="button"
+          :disabled="uploadingCover"
+          @click="pickCoverFile"
+        >
+          <i class="pi pi-upload" />
+          <span>
+            <strong>{{ uploadingCover ? '上传中…' : '手动上传图片' }}</strong>
+            <small>支持 JPG / PNG，自动裁切为 16:9</small>
+          </span>
+        </button>
+        <input
+          ref="coverInput"
+          class="cover-file-input"
+          type="file"
+          accept="image/*"
+          @change="onCoverFileChange"
+        />
+      </div>
+    </Dialog>
   </div>
 </template>

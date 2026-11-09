@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
 
 import CardTile from './CardTile.vue'
 import { useCardStore } from '@/stores/card'
@@ -8,12 +7,10 @@ import type { CardFeatured } from '@/types'
 import '@/styles/card.css'
 
 const store = useCardStore()
-const router = useRouter()
 
 const finished = computed(
   () =>
-    store.discoverTotal === 0 ||
-    store.discoverPage * store.discoverPageSize >= store.discoverTotal,
+    store.discoverTotal === 0 || store.discoverPage * store.discoverPageSize >= store.discoverTotal,
 )
 const error = computed(() => store.error)
 
@@ -28,7 +25,7 @@ async function loadMore() {
 }
 
 function open(id: string) {
-  void router.push({ name: 'card-share', params: { id } })
+  window.open(`/share/card/${encodeURIComponent(id)}`, '_blank', 'noopener,noreferrer')
 }
 
 function openFeatured(id: string) {
@@ -39,10 +36,14 @@ function openFeatured(id: string) {
     (card.items[0] ? { kind: 'project', projectId: card.items[0].projectId } : null)
   if (!featured) return
   if (featured.kind === 'project') {
-    void router.push({ name: 'project-share', params: { projectId: featured.projectId } })
+    window.open(
+      `/share/project/${encodeURIComponent(featured.projectId)}`,
+      '_blank',
+      'noopener,noreferrer',
+    )
     return
   }
-  window.open(featured.url, '_blank', 'noopener,noreferrer')
+  window.open(`/share/card/${encodeURIComponent(card.id)}/file`, '_blank', 'noopener,noreferrer')
 }
 
 const sentinel = ref<HTMLElement | null>(null)

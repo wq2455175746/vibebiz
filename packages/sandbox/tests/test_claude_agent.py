@@ -350,6 +350,27 @@ def test_build_options_restricts_sandbox_reads_and_network(tmp_path):
     assert payload["permissions"]["blockWritesOutsideWorkingDirectories"] is True
 
 
+def test_build_options_allows_tools_under_forced_default_mode(tmp_path):
+    options = build_options(settings(tmp_path), tmp_path / "project", None)
+
+    allow = set(json.loads(options.settings)["permissions"]["allow"])
+    assert {"Read", "Write", "Edit", "Bash", "Glob", "Grep"} <= allow
+
+
+def test_build_options_allow_includes_web_tools_when_configured(tmp_path):
+    configured = Settings(
+        workspaces_dir=tmp_path / "workspaces",
+        agent_mode="claude",
+        web_search_base_url="http://searxng:8080",
+        web_fetch_allowed_domains="cdn.example.com",
+    )
+    options = build_options(configured, tmp_path / "project", None)
+
+    allow = set(json.loads(options.settings)["permissions"]["allow"])
+    assert "mcp__web__web_search" in allow
+    assert "mcp__web__web_fetch" in allow
+
+
 def test_build_agent_settings_allows_own_skills_only(tmp_path):
     root = tmp_path / "skills"
     config = root / "users" / "7" / ".claude"

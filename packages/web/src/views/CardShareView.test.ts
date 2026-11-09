@@ -107,7 +107,7 @@ describe('CardShareView', () => {
     })
   })
 
-  it('opens a featured file url without converting it to a blob', async () => {
+  it('opens the featured file in a preview tab instead of downloading it', async () => {
     const open = vi.spyOn(window, 'open').mockImplementation(() => null)
     vi.mocked(cardsApi.getPublicCard).mockResolvedValue(
       makeCard({
@@ -122,11 +122,7 @@ describe('CardShareView', () => {
     )
     await mount()
     host.querySelector<HTMLElement>('.share-featured')?.click()
-    expect(open).toHaveBeenCalledWith(
-      'https://example.com/cover.png',
-      '_blank',
-      'noopener,noreferrer',
-    )
+    expect(open).toHaveBeenCalledWith('/share/card/demo-1/file', '_blank', 'noopener,noreferrer')
   })
 
   it('does not render remove buttons on the public share page', async () => {

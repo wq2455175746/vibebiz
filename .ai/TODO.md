@@ -56,6 +56,7 @@
 - [x] 工作区切换、头像 S3 预签名、10GB 默认配额
 
 - [x] 用户登录与会话（Redis Session + HttpOnly Cookie）
+- [ ] 按标签页会话隔离：同浏览器多窗口可同时登录不同账号、互不顶号；Token 走 Header + 预览路径 + WS 子协议，Cookie 仅兼容回退。设计见 `docs/superpowers/specs/2026-11-09-per-tab-session-isolation-design.md`（未实施，待后续优化）
 - [x] DAO 基础层：20 张表 GORM model + 泛型 Repository + MySQL 连接 + sqlmock 测试
 - [x] goose 版本化 SQL 迁移：4 个迁移文件 + `cmd/migrate` + `make db-*` 命令
 - [x] 在目标 MySQL 执行 `db-create` / `db-migrate-up` 并验证 schema（已到 v5）

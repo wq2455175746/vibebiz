@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
+import CardFilePreviewView from '@/views/CardFilePreviewView.vue'
 import CardShareView from '@/views/CardShareView.vue'
 import CloneEditorView from '@/views/CloneEditorView.vue'
 import EditorView from '@/views/EditorView.vue'
@@ -35,6 +36,12 @@ const router = createRouter({
       path: '/share/card/:id',
       name: 'card-share',
       component: CardShareView,
+      meta: { public: true },
+    },
+    {
+      path: '/share/card/:id/file',
+      name: 'card-file-preview',
+      component: CardFilePreviewView,
       meta: { public: true },
     },
     {
@@ -77,7 +84,7 @@ router.afterEach((to) => {
               ? 'Vibebiz · 我的名片'
               : name === 'discover'
                 ? 'Vibebiz · 发现'
-                : name === 'card-share' || name === 'project-share'
+                : name === 'card-share' || name === 'card-file-preview' || name === 'project-share'
                   ? 'Vibebiz · 名片分享'
                   : name.startsWith('super-team')
                     ? 'Vibebiz · 超级团队'

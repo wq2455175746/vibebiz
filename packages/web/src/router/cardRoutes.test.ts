@@ -12,9 +12,12 @@ describe('card routes', () => {
 
   it('marks share pages public', () => {
     const card = router.resolve('/share/card/me')
+    const file = router.resolve('/share/card/me/file')
     const project = router.resolve('/share/project/demo-1-p1')
     expect(card.name).toBe('card-share')
     expect(card.meta.public).toBe(true)
+    expect(file.name).toBe('card-file-preview')
+    expect(file.meta.public).toBe(true)
     expect(project.name).toBe('project-share')
     expect(project.meta.public).toBe(true)
   })

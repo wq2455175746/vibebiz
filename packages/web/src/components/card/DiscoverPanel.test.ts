@@ -96,6 +96,7 @@ afterEach(() => {
   app = null
   host?.remove()
   vi.clearAllMocks()
+  vi.restoreAllMocks()
 })
 
 describe('DiscoverPanel', () => {
@@ -105,6 +106,47 @@ describe('DiscoverPanel', () => {
     expect(getDiscoverCards).toHaveBeenCalledWith({ page: 1, pageSize: 12 })
     expect(host.querySelectorAll('.card-tile')).toHaveLength(6)
     expect(host.textContent).toContain('林一')
+  })
+
+  it('opens the card share page in a new tab from a tile', async () => {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null)
+    mount()
+    await flush()
+    host.querySelector<HTMLElement>('.card-tile')?.click()
+    expect(open).toHaveBeenCalledWith('/share/card/card-1', '_blank', 'noopener,noreferrer')
+  })
+
+  it('opens a featured project in a new tab', async () => {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null)
+    mount()
+    await flush()
+    host.querySelector<HTMLElement>('.card-tile-preview')?.click()
+    expect(open).toHaveBeenCalledWith('/share/project/p1', '_blank', 'noopener,noreferrer')
+  })
+
+  it('opens a featured image in the preview tab instead of downloading it', async () => {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null)
+    vi.mocked(getDiscoverCards).mockResolvedValue({
+      cards: [
+        {
+          ...makeCard(1),
+          featured: {
+            kind: 'file',
+            fileType: 'image',
+            name: 'me.png',
+            size: 1024,
+            url: 'https://example.com/me.png',
+          },
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 12,
+    })
+    mount()
+    await flush()
+    host.querySelector<HTMLElement>('.card-tile-preview')?.click()
+    expect(open).toHaveBeenCalledWith('/share/card/card-1/file', '_blank', 'noopener,noreferrer')
   })
 
   it('loads the next page on click', async () => {

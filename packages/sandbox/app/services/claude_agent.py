@@ -18,7 +18,11 @@ from claude_agent_sdk import (
 
 from app.config import Settings
 from app.observability import AGENT_RUNS, get_logger, get_tracer
-from app.services.agent_roles import ALLOWED_TOOLS, build_agent_definitions, build_role_prompt
+from app.services.agent_roles import (
+    ALLOWED_TOOLS,
+    build_agent_definitions,
+    build_role_prompt,
+)
 from app.services.web_tools import build_web_mcp_server, split_domains
 from app.services.workspace import Workspace
 
@@ -69,6 +73,7 @@ def build_agent_settings(
     project_dir: str | Path,
     config_dir: str | Path | None = None,
     skills_root: str | Path | None = None,
+    allowed_tools: list[str] | None = None,
 ) -> str:
     project = Path(project_dir).resolve()
     workspaces = settings.workspaces_dir.resolve()
@@ -92,6 +97,7 @@ def build_agent_settings(
 
     payload: dict[str, Any] = {
         "permissions": {
+            "allow": list(allowed_tools or ALLOWED_TOOLS),
             "blockReadsOutsideWorkingDirectories": True,
             "blockWritesOutsideWorkingDirectories": True,
             "deny": list(PERMISSION_DENY),
@@ -202,7 +208,9 @@ def build_options(
         permission_mode="acceptEdits",
         allowed_tools=allowed_tools,
         disallowed_tools=["WebFetch", "WebSearch"],
-        settings=build_agent_settings(settings, cwd, config_dir, skills_root),
+        settings=build_agent_settings(
+            settings, cwd, config_dir, skills_root, allowed_tools=allowed_tools
+        ),
         setting_sources=["user"],
         mcp_servers=mcp_servers,
         strict_mcp_config=True,

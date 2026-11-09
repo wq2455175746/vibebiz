@@ -44,7 +44,7 @@ function openFeatured() {
     void router.push({ name: 'project-share', params: { projectId: featured.projectId } })
     return
   }
-  window.open(featured.url, '_blank', 'noopener,noreferrer')
+  window.open(`/share/card/${encodeURIComponent(current.id)}/file`, '_blank', 'noopener,noreferrer')
 }
 
 function openProject(projectId: string) {
