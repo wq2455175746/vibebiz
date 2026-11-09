@@ -49,6 +49,7 @@ func TestInitialSchemaCoversAllBusinessTables(t *testing.T) {
 		"user_usage_daily", "user_access_log", "project_leases",
 		"project_channel_package", "channel_guide",
 		"evolution_version", "evolution_proposal", "evolution_message", "evolution_task",
+		"business_card", "business_card_item",
 	}
 	var all strings.Builder
 	entries, err := fs.ReadDir(FS, ".")
@@ -219,8 +220,8 @@ func TestGooseCanCollectMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("collect migrations: %v", err)
 	}
-	if len(migs) != 32 {
-		t.Fatalf("collected %d migrations, want 32", len(migs))
+	if len(migs) != 33 {
+		t.Fatalf("collected %d migrations, want 33", len(migs))
 	}
 	for i, mig := range migs {
 		want := int64(i + 1)

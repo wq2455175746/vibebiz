@@ -37,6 +37,8 @@ func TestTableNames(t *testing.T) {
 		{&ProjectRag{}, "project_rag"},
 		{&UserAccessLog{}, "user_access_log"},
 		{&ProjectLease{}, "project_leases"},
+		{&BusinessCard{}, "business_card"},
+		{&BusinessCardItem{}, "business_card_item"},
 	}
 	for _, tc := range cases {
 		if got := tc.model.TableName(); got != tc.want {
