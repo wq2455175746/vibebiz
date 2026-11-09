@@ -1,43 +1,50 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { getPublicCard } from '@/api/cards'
 import CardProjectItem from '@/components/card/CardProjectItem.vue'
 import CardPreview from '@/components/card/CardPreview.vue'
-import { useCardStore } from '@/stores/card'
-import type { CardFeatured } from '@/types'
-import { dataUrlToBlob } from '@/utils/media'
+import { useAuthStore } from '@/stores/auth'
+import type { BusinessCard } from '@/types'
 import '@/styles/card.css'
 
 const route = useRoute()
 const router = useRouter()
-const store = useCardStore()
+const auth = useAuthStore()
 const notice = ref('')
 const copied = ref(false)
+const card = ref<BusinessCard | null>(null)
+const loading = ref(true)
+const loadError = ref('')
 
-store.load()
-
-const card = computed(() => store.getCardById(String(route.params.id ?? '')))
-const isOwnCard = computed(() => route.params.id === 'me')
-const shareUrl = computed(() => window.location.href)
-const effectiveFeatured = computed<CardFeatured>(() => {
-  if (!card.value) return null
-  if (card.value.featured) return card.value.featured
-  const first = card.value.items[0]
-  return first ? { kind: 'project', projectId: first.projectId } : null
+onMounted(async () => {
+  try {
+    card.value = await getPublicCard(String(route.params.id ?? ''))
+  } catch (err) {
+    loadError.value = err instanceof Error ? err.message : '名片加载失败'
+  } finally {
+    loading.value = false
+  }
+  await auth.ensure().catch(() => undefined)
 })
+
+const isOwnCard = computed(() => Boolean(card.value && auth.user?.id === card.value.ownerUserId))
+const shareUrl = computed(() => window.location.href)
 const isFileFeatured = computed(() => card.value?.featured?.kind === 'file')
 
 function openFeatured() {
-  const featured = effectiveFeatured.value
+  const current = card.value
+  if (!current) return
+  const featured =
+    current.featured ??
+    (current.items[0] ? { kind: 'project' as const, projectId: current.items[0].projectId } : null)
   if (!featured) return
   if (featured.kind === 'project') {
     void router.push({ name: 'project-share', params: { projectId: featured.projectId } })
     return
   }
-  const url = URL.createObjectURL(dataUrlToBlob(featured.dataUrl))
-  window.open(url, '_blank', 'noopener,noreferrer')
-  window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  window.open(featured.url, '_blank', 'noopener,noreferrer')
 }
 
 function openProject(projectId: string) {
@@ -59,15 +66,25 @@ async function copyLink() {
 
 <template>
   <main class="share-page">
-    <div v-if="!card" class="share-empty">
-      <h1>名片不存在或已下线</h1>
+    <div v-if="loading" class="share-empty">
+      <h1>加载中…</h1>
+    </div>
+    <div v-else-if="loadError || !card" class="share-empty">
+      <h1>{{ loadError || '名片不存在或已下线' }}</h1>
       <a class="card-primary" href="/">返回首页</a>
     </div>
     <template v-else>
       <header class="share-card-head">
         <div class="share-person">
-          <img v-if="card.avatarUrl" class="share-avatar" :src="card.avatarUrl" :alt="card.ownerName" />
-          <span v-else class="share-avatar">{{ (card.ownerName || '?').charAt(0).toUpperCase() }}</span>
+          <img
+            v-if="card.avatarUrl"
+            class="share-avatar"
+            :src="card.avatarUrl"
+            :alt="card.ownerName"
+          />
+          <span v-else class="share-avatar">{{
+            (card.ownerName || '?').charAt(0).toUpperCase()
+          }}</span>
           <div>
             <h1>{{ card.ownerName || '未命名开发者' }}</h1>
             <p>{{ card.headline || '这个人还没有写简介' }}</p>
