@@ -116,4 +116,25 @@ describe('DiscoverPanel', () => {
     expect(host.querySelectorAll('.card-tile')).toHaveLength(12)
     expect(host.textContent).toContain('已到底')
   })
+
+  it('shows loading instead of the end state before the first page resolves', async () => {
+    vi.mocked(getDiscoverCards).mockReturnValue(new Promise(() => {}))
+    mount()
+    await flush()
+    expect(host.textContent).toContain('加载中')
+    expect(host.textContent).not.toContain('已到底')
+  })
+
+  it('shows the empty state without the end state for an empty result', async () => {
+    vi.mocked(getDiscoverCards).mockResolvedValue({
+      cards: [],
+      total: 0,
+      page: 1,
+      pageSize: 12,
+    })
+    mount()
+    await flush()
+    expect(host.textContent).toContain('还没有人发布名片。')
+    expect(host.textContent).not.toContain('已到底')
+  })
 })

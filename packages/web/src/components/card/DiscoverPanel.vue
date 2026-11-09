@@ -10,7 +10,9 @@ import '@/styles/card.css'
 const store = useCardStore()
 const router = useRouter()
 
-const finished = computed(() => store.discoverCards.length >= store.discoverTotal)
+const finished = computed(
+  () => store.discoverTotal > 0 && store.discoverCards.length >= store.discoverTotal,
+)
 const error = computed(() => store.error)
 
 async function loadMore() {
@@ -68,7 +70,10 @@ onBeforeUnmount(() => observer?.disconnect())
     </header>
 
     <p v-if="error" class="error-text">{{ error }}</p>
-    <p v-if="!store.discoverLoading && store.discoverCards.length === 0" class="card-empty">
+    <p
+      v-if="!store.discoverLoading && store.discoverCards.length === 0 && store.discoverTotal === 0"
+      class="card-empty"
+    >
       还没有人发布名片。
     </p>
 
