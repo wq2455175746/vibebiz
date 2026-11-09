@@ -16,6 +16,7 @@ import DocumentWorkspace from '@/components/enterprise/DocumentWorkspace.vue'
 import EnterpriseStageBar from '@/components/enterprise/EnterpriseStageBar.vue'
 import PlaceholderWorkspace from '@/components/enterprise/PlaceholderWorkspace.vue'
 import StageWorkspaceHeader from '@/components/enterprise/StageWorkspaceHeader.vue'
+import SuperTeamContextBar from '@/components/superteam/SuperTeamContextBar.vue'
 import { useAgentRolesStore } from '@/stores/agentRoles'
 import { useChatStore } from '@/stores/chat'
 import { useEnterpriseFlowStore } from '@/stores/enterpriseFlow'
@@ -448,6 +449,8 @@ onBeforeUnmount(() => {
       :show-actions="false"
       @back="goEnterpriseHome"
     />
+
+    <SuperTeamContextBar step="development" />
 
     <p v-if="projectStore.error" class="editor-error">{{ projectStore.error }}</p>
     <p v-if="stageLoadError" class="editor-error">{{ stageLoadError }}</p>

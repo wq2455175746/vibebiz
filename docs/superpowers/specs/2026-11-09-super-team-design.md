@@ -6,7 +6,9 @@
 | 状态 | 待评审 |
 | 范围 | 超级团队模块：web 首页、三个演示详情页、ops-web 只读管理；后端/Redis/sandbox/MySQL 仅设计不实现 |
 | 关联文档 | `docs/superpowers/specs/2026-10-28-cp-dp-ops-web-design.md`、`docs/superpowers/specs/2026-10-30-enterprise-engineering-design.md`、`.ai/rules/architecture.md` |
-| 本轮交付 | 仅 web 与 ops-web 前端效果，使用 mock / localStorage，不新增 CP API |
+| 本轮交付 | web 与 ops-web 前端；三步复用平台项目 / 企业项目 / 定时任务的现有后端逻辑，仅事件源与统计使用 mock / localStorage，不新增 CP API |
+
+> 修订 2026-11-09：需求挖掘复用平台项目，系统开发复用企业级项目，观测运维复用定时任务；删除三个独立演示详情页，改为打开真实项目并在页面内提供「超级团队」上下文条。
 
 ---
 
@@ -47,16 +49,16 @@
 
 | # | 决策 | 理由 |
 |---|---|---|
-| D1 | 本轮只做前端，mock/localStorage | 用户明确先看效果；后端链路单独一轮 |
-| D2 | 三步骤是三个独立项目，严格门禁、人工推进 | 与现有 `enterprise` / `scheduled-tasks` 项目形态一致，避免隐式自动化难控 |
+| D1 | 本轮只做前端，事件源与统计 mock/localStorage | 用户明确先看效果；事件队列与审计后端单独一轮 |
+| D2 | 三步分别复用三类真实项目：需求挖掘=平台项目、系统开发=企业项目、观测运维=定时任务；严格门禁、人工推进 | 用户确认；不新增项目类型，直接复用现有创建、阶段、定时任务逻辑 |
 | D3 | 事件源属于用户，web 可配置，ops-web 只读 | 用户确认；与现有通知渠道「用户级配置」一致 |
 | D4 | 消息队列本轮只占位，禁用 | 用户明确「暂时只占位」 |
-| D5 | 超级团队首页走 HomeView 条件渲染，三个详情页独立全屏视图 | 首页复用侧栏；详情页是编辑器级布局，塞进 HomeView 会继续膨胀 |
-| D6 | 详情页只做演示效果，不调用 DP/sandbox | 本轮无真实项目与聊天接口 |
-| D7 | 图表用 SVG/CSS 手绘，不新增图表库 | web 当前无图表依赖；保持黑白灰蓝 |
+| D5 | 超级团队首页走 HomeView 条件渲染；三步打开现有 `editor` / `enterprise-editor` / `scheduled-tasks` 页面 | 复用成熟后端与页面，避免重复实现编辑器 |
+| D6 | 步骤通过现有 CP API 创建/打开真实项目与定时任务；事件流与统计仍为前端 mock | 满足「复用后端逻辑」，同时不新增接口 |
+| D7 | 不新增图表库；观测图表由定时任务绑定的项目预览/产物提供 | web 当前无图表依赖；保持黑白灰蓝 |
 | D8 | ops-web 单导航 + 三 tab | 用户确认；信息集中，避免主导航膨胀 |
-| D9 | mock 状态集中在一个 Pinia store + localStorage | 便于后续替换为真实 API |
-| D10 | 门禁逻辑做成纯函数并测试 | 防止 UI 与状态耦合，后续接后端可复用 |
+| D9 | 超级团队状态、步骤与项目/任务绑定集中 Pinia + localStorage | 便于后续替换为 `superteam_pipeline` 后端存储 |
+| D10 | 门禁与绑定校验做成纯函数并测试 | 防止 UI 与状态耦合，后续接后端可复用 |
 
 ## 4. 本轮信息架构与路由
 
@@ -64,14 +66,14 @@
 
 | 路由 | name | 组件 | 说明 |
 |---|---|---|---|
-| `/super-team` | `super-team` | HomeView → `SuperTeamPanel` | 保留左侧栏，内容居中 |
-| `/super-team/requirements` | `super-team-requirements` | `SuperTeamRequirementsView` | 需求挖掘演示编辑页 |
-| `/super-team/development` | `super-team-development` | `SuperTeamDevelopmentView` | 系统开发演示编辑页 |
-| `/super-team/operations` | `super-team-operations` | `SuperTeamOperationsView` | 观测运维演示页 |
+| `/super-team` | `super-team` | HomeView → `SuperTeamPanel` | 保留左侧栏，内容居中；步骤创建/打开真实项目 |
+| `/editor/:id?from=super-team&step=requirements` | `editor` | `EditorView` | 平台项目，复用聊天 / 预览 / 代码 / 终端 |
+| `/enterprise/editor/:id?from=super-team&step=development` | `enterprise-editor` | `EnterpriseEditorView` | 企业级项目，复用七阶段流程 |
+| `/scheduled-tasks?from=super-team&step=operations&taskId=…` | `scheduled-tasks` | `ScheduledTasksPanel` | 定时任务，默认每小时执行绑定项目 |
 
 - 侧栏 `HomeSidebar` 在「企业工程开发」后新增 `超级团队`，图标 `pi pi-users`。
-- 详情页使用 `EditorHeader` 风格顶部栏，返回 `/super-team`。
-- `router.afterEach` 增加三个标题：`Vibebiz · 超级团队`、`Vibebiz · 需求挖掘`、`Vibebiz · 系统开发`、`Vibebiz · 观测运维`。
+- 不再新增三个演示详情页；`from=super-team` 时在复用页面顶部显示「超级团队上下文条」，提供「返回超级团队」与「完成本阶段」。
+- `router.afterEach` 只需新增 `Vibebiz · 超级团队`；复用页面保留原有标题。
 
 ### 4.2 ops-web
 
@@ -136,35 +138,54 @@ export interface AgentActionAudit {
   createdAt: string
 }
 
+export interface SuperTeamBindings {
+  requirementsProjectId: string | null
+  developmentProjectId: string | null
+  operationsTaskId: number | null
+  operationsProjectId: string | null
+}
+
 export interface SuperTeamState {
   sources: EventSourceConfig[]
   steps: SuperStepState[]
   events: SuperEvent[]
   audit: AgentActionAudit[]
+  bindings: SuperTeamBindings
 }
 ```
+
+绑定约定：
+
+| 步骤 | 绑定字段 | 真实来源 |
+|---|---|---|
+| 需求挖掘 | `requirementsProjectId` | `POST /cp/api/v1/projects`（默认 `standard`） |
+| 系统开发 | `developmentProjectId` | `POST /cp/api/v1/projects` + `mode=enterprise`，并记录企业项目标记 |
+| 观测运维 | `operationsTaskId` / `operationsProjectId` | `POST /cp/api/v1/scheduled-tasks`（返回 `id` 与 `projectId`） |
 
 ## 6. web 状态与持久化
 
 新增 `packages/web/src/stores/superTeam.ts`（Pinia）：
 
-- state：`sources`、`steps`、`events`、`audit`。
+- state：`sources`、`steps`、`events`、`audit`、`bindings`。
 - localStorage key：`vibebiz:super-team`。
 - 初始化：读取 localStorage，与默认值合并；字段缺失回退默认。
 - actions：
   - `updateSource(kind, patch)`：更新配置，重算 status。
   - `toggleSource(kind)`：启用/停用（`queue` 禁止）。
-  - `advanceStep(key)`：门禁校验后完成当前步骤并解锁下一步。
+  - `setBinding(field, value)`：记录真实项目 / 定时任务 ID。
+  - `reconcile(projects, tasks)`：校验绑定仍存在；缺失时清空并回退步骤状态。
+  - `advance(key)`：门禁校验后完成当前步骤并解锁下一步。
   - `reset()`：恢复默认 demo 数据。
 - 本轮不写事件入队逻辑，`events` / `audit` 为种子 mock。
 
 新增 `packages/web/src/utils/superTeam.ts`：
 
-- `defaultSources()`、`defaultSteps()`、`defaultEvents()`、`defaultAudit()`。
+- `defaultSources()`、`defaultSteps()`、`defaultEvents()`、`defaultAudit()`、`defaultBindings()`。
 - `initialState()`。
 - `loadState(raw)` / `serializeState(state)`：容错合并。
 - `isStepUnlocked(steps, key)`。
 - `advanceStep(steps, key)`：纯函数，已锁定时返回原数组。
+- `reconcileSteps(steps, bindings, projectIds, taskIds)`：删除失效绑定并回退状态。
 - `sourceStatusLabel(kind, config)`。
 - `stepStatusLabel(status)`。
 - `noiseBand(score)`：`low | medium | high`。
@@ -172,11 +193,13 @@ export interface SuperTeamState {
 
 门禁规则：
 
-| 步骤 | 初始状态 | 完成条件 | 完成后 |
+| 步骤 | 初始状态 | 开始条件 | 完成后 |
 |---|---|---|---|
-| requirements | `ready`（若已开始则 `active`） | 用户点击「完成本阶段」 | `development` 变 `ready` |
-| development | `locked` | 上一步 `done` 后可开始 | `operations` 变 `ready` |
-| operations | `locked` | 上一步 `done` 后可开始 | 全流程完成 |
+| requirements | `ready`（绑定存在则 `active`） | 无前置 | `development` 变 `ready` |
+| development | `locked` | requirements `done` | `operations` 变 `ready` |
+| operations | `locked` | development `done` | 全流程完成 |
+
+步骤开始时会调用真实 API 创建项目 / 定时任务；「完成本阶段」只更新超级团队门禁，不改变项目本身状态。
 
 ## 7. web 页面设计
 
@@ -200,11 +223,20 @@ export interface SuperTeamState {
 - 外层 `max-width: 1080px; margin: 0 auto`，上下留白 32px。
 - 事件卡片：图标、名称、状态标签、最近事件、事件数、`配置` 按钮；整卡可点击打开配置。
 - 消息队列卡片置灰，标注「即将支持」，不可配置。
-- 步骤卡片：序号、标题、说明、状态标签、进度条、产物摘要、主按钮。
+- 步骤卡片：序号、标题、说明、状态标签、进度条、绑定摘要、主按钮。
   - `locked`：按钮禁用，提示「完成上一步后解锁」。
-  - `ready`：按钮「开始」，跳转对应详情页。
-  - `active`：按钮「继续」，跳转详情页。
-  - `done`：按钮「查看」，跳转详情页；显示完成时间。
+  - `ready`：按钮「开始」，调用真实 API 创建项目 / 定时任务后跳转。
+  - `active`：按钮「继续」，打开已绑定的真实项目 / 定时任务。
+  - `done`：按钮「查看」，打开已绑定项目；显示完成时间。
+- 步骤与真实对象映射：
+
+| 步骤 | 创建动作 | 打开目标 |
+|---|---|---|
+| 需求挖掘 | `createProject(prompt, [], undefined)` | `/editor/:id?from=super-team&step=requirements` |
+| 系统开发 | `createProject(prompt, [teamRoleId], 'enterprise')` + `markEnterpriseProject` | `/enterprise/editor/:id?from=super-team&step=development` |
+| 观测运维 | `createScheduledTask({ cronExpression: '0 * * * *', … })` | `/scheduled-tasks?from=super-team&step=operations&taskId=…` |
+
+- 企业项目创建前先从 `agentRoles.load()` 取 `roleCode=team` 的角色 ID；取不到时提示错误，不降级创建。
 - 步骤之间用 CSS 箭头/连接线，移动端纵向排列。
 
 ### 7.2 事件源配置抽屉 `EventSourceDialog`
@@ -223,40 +255,30 @@ export interface SuperTeamState {
 - 密码类字段仅本地 mock，不写日志、不打印。
 - 校验：启用时必填关键字段；错误用行内文案，不弹全局错误。
 
-### 7.3 需求挖掘详情页 `SuperTeamRequirementsView`
+### 7.3 需求挖掘：复用平台项目
 
-复用编辑页视觉（`EditorHeader` 风格 + 左侧聊天 + 右侧工作台）：
+不新建独立详情页。开始需求挖掘时创建标准项目（`mode=standard`），跳转现有 `EditorView`：
 
-- 顶部：返回超级团队、标题「需求挖掘」、状态标签、当前事件数。
-- 左侧：mock 聊天流，包含「事件摘要 → Agent 分析 → 生成产物」消息；输入框禁用并提示「本轮为演示效果」。
-- 右侧 tab：
-  1. **思维导图**：CSS 嵌套树（中心主题「需求洞察」→ 场景 / 用户 / 价值 / 风险）。
-  2. **知识图谱**：SVG 节点 + 连线，节点含「事件源、实体、指标、机会」。
-  3. **可行性文档**：静态 markdown 风格文本：背景、市场规模、经济可行性、风险、建议。
-  4. **事件流**：`SuperEvent[]` 列表，显示来源、标题、噪音分、语义分、阶段标签；被丢弃事件标灰。
-- 底部操作：「完成本阶段，解锁系统开发」，调用 `advanceStep('requirements')` 后返回首页。
+- 左侧聊天、右侧预览 / 代码 / 终端全部走既有 DP 与 sandbox 链路。
+- 思维导图、知识图谱、经济可行性文档由 Agent 在项目工作区内生成（例如 markdown / HTML），通过既有预览与代码视图查看；前端不再内置 mock 思维导图与知识图谱。
+- 顶部显示 `SuperTeamContextBar`：`超级团队 · 需求挖掘`、`返回超级团队`、`完成本阶段`。
 
-### 7.4 系统开发详情页 `SuperTeamDevelopmentView`
+### 7.4 系统开发：复用企业级项目
 
-复用企业工程开发七阶段视觉：
+开始系统开发时创建 `mode=enterprise` 项目，跳转现有 `EnterpriseEditorView`：
 
-- 阶段条：需求梳理 → 概要设计 → 详细设计 → 测试用例 → 全栈开发 → 制品空间 → 交付空间；mock 状态（前两个 done，第三个 active，其余 pending）。
-- 左侧 mock 聊天；右侧工作台 tab：应用查看器 / 代码 / 终端，内容为静态占位。
-- 事件注入面板：展示进入本步骤的事件（来自需求挖掘产物与事件源），标注「已评估、进入开发」。
-- 底部操作：「完成本阶段，解锁观测运维」。
+- 七个阶段、阶段确认、文档 / 开发 / 制品 / 交付工作区全部复用现有逻辑。
+- 事件注入信息由需求挖掘产物与事件源提供；前端不在超级团队页重复实现阶段条。
+- 顶部显示 `SuperTeamContextBar`：`超级团队 · 系统开发`、`返回超级团队`、`完成本阶段`。
 
-### 7.5 观测运维详情页 `SuperTeamOperationsView`
+### 7.5 观测运维：复用定时任务
 
-复用定时任务面板结构：
+开始观测运维时创建定时任务（默认 `0 * * * *`，每小时执行），并跳转现有 `ScheduledTasksPanel`：
 
-- 左侧 mock 任务列表：默认「每小时巡检」「每日指标汇总」「周报生成」。
-- 顶部显示默认周期「每 1 小时」，可切换展示（仅 UI，mock）。
-- 右侧 tab：
-  1. **指标看板**：SVG 折线 / 柱状图卡片（事件量、有效事件、转化率、告警数）。
-  2. **可预览报表**：mock 报表卡片 + 预览按钮。
-  3. **定时任务**：任务状态、下次执行、上次执行、执行次数。
-  4. **事件源**：进入运维的事件流与过滤结果。
-- 底部操作：「完成全流程」，返回首页并置为 done。
+- 任务列表、暂停 / 恢复 / 停止、打开绑定项目全部复用现有逻辑。
+- 从 `taskId` 查询参数选中刚创建的任务。
+- 定时生成的指标 / 图表由绑定项目的 Agent 产物提供，通过「打开项目」查看预览。
+- 顶部显示 `SuperTeamContextBar`：`超级团队 · 观测运维`、`返回超级团队`、`完成本阶段`。
 
 ## 8. ops-web 设计
 
@@ -297,20 +319,19 @@ packages/web/src/components/superteam/SuperTeamPanel.vue
 packages/web/src/components/superteam/EventSourceCard.vue
 packages/web/src/components/superteam/EventSourceDialog.vue
 packages/web/src/components/superteam/StepCard.vue
-packages/web/src/components/superteam/MindMap.vue
-packages/web/src/components/superteam/KnowledgeGraph.vue
-packages/web/src/views/SuperTeamRequirementsView.vue
-packages/web/src/views/SuperTeamDevelopmentView.vue
-packages/web/src/views/SuperTeamOperationsView.vue
+packages/web/src/components/superteam/SuperTeamContextBar.vue
 packages/web/src/styles/superteam.css
 ```
 
 ### 9.2 web 修改
 
 ```text
-packages/web/src/components/home/HomeSidebar.vue   # 新增菜单
-packages/web/src/views/HomeView.vue                # 新增 isSuperTeamPage 分支
-packages/web/src/router/index.ts                   # 新增四条路由与标题
+packages/web/src/components/home/HomeSidebar.vue       # 新增菜单
+packages/web/src/views/HomeView.vue                    # 新增 isSuperTeamPage 分支
+packages/web/src/router/index.ts                       # 新增 /super-team 路由与标题
+packages/web/src/views/EditorView.vue                  # from=super-team 时挂载上下文条
+packages/web/src/views/EnterpriseEditorView.vue        # from=super-team 时挂载上下文条
+packages/web/src/components/scheduled/ScheduledTasksPanel.vue  # 上下文条 + taskId 选中
 ```
 
 ### 9.3 ops-web 新增
@@ -347,8 +368,8 @@ packages/ops-web/src/router/navigation.test.ts
 
 | 层 | 测试 | 覆盖 |
 |---|---|---|
-| web utils | vitest | `initialState`、门禁链、锁定步骤不可推进、`noiseBand` / `semanticBand`、`loadState` 容错 |
-| web store | vitest | 更新事件源持久化、`advanceStep` 解锁、`queue` 不可启用 |
+| web utils | vitest | `initialState`、门禁链、锁定步骤不可推进、`reconcileSteps` 失效绑定回退、`noiseBand` / `semanticBand`、`loadState` 容错 |
+| web store | vitest | 更新事件源持久化、绑定读写、`advanceStep` 解锁、`queue` 不可启用 |
 | web 视图 | 可选 smoke | 路由可渲染、tab 切换（纯函数优先，避免脆测试） |
 | ops-web utils | vitest | 标签映射、分数格式化 |
 | ops-web 导航 | vitest | `navItems` 含 `super-team`，`childRoutes` 含 `/super-team` |
@@ -359,7 +380,7 @@ packages/ops-web/src/router/navigation.test.ts
 1. 首页侧栏出现「超级团队」，点击进入 `/super-team`，内容居中，含 4 个事件卡片与 3 个步骤卡片。
 2. 点击飞书 / Webhook / Email 卡片可配置并保存；刷新后配置保留；消息队列卡片禁用并标注「即将支持」。
 3. 三步骤严格门禁：初始仅需求挖掘可用；完成需求挖掘后系统开发解锁；完成后观测运维解锁；锁定步骤无法进入。
-4. 三个详情页可打开，分别呈现思维导图/知识图谱/可行性文档/事件流、企业七阶段、定时任务+指标图表，均可返回。
+4. 需求挖掘创建平台项目并进入 `editor`；系统开发创建企业级项目并进入 `enterprise-editor`；观测运维创建每小时定时任务并在 `scheduled-tasks` 中选中；三个页面顶部均有「超级团队」上下文条，可返回并完成阶段。
 5. ops-web 侧栏出现「超级团队」，三 tab 均为只读，展示事件源、三步项目、Agent 行为审计 mock 数据。
 6. 所有新增颜色仅黑白灰蓝；不新增前端依赖。
 7. `make test`、`make quality`、`make validate` 通过。
@@ -516,9 +537,11 @@ POST    /cp/api/v1/me/superteam/steps/:key/advance
 | 右侧内容居中，多事件入口卡片 | `SuperTeamPanel` 居中布局 + 4 张事件卡片 |
 | 点击卡片可配置 | `EventSourceDialog` + Pinia/localStorage |
 | 三个大步骤严格顺序 | `StepCard` + `advanceStep` 门禁纯函数 |
-| 需求挖掘复用编辑页 + 思维导图/知识图谱/可行性文档 | `SuperTeamRequirementsView` 四 tab |
-| 系统开发复用企业流程 | `SuperTeamDevelopmentView` 七阶段 |
-| 观测运维复用定时任务，默认一小时生成可预览图表 | `SuperTeamOperationsView` 任务列表 + SVG 图表 |
+| 需求挖掘复用平台项目 | 创建标准项目并打开 `EditorView`，产物由 Agent 写入工作区 |
+| 系统开发复用企业级项目 | 创建 `mode=enterprise` 项目并打开 `EnterpriseEditorView` 七阶段 |
+| 观测运维复用定时任务，默认一小时生成可预览图表 | 创建 `0 * * * *` 定时任务，打开 `ScheduledTasksPanel`，图表由绑定项目产物提供 |
+| 复用三类项目后端逻辑 | 仅调用现有 `/projects`、`/projects/:id/stages`、`/scheduled-tasks` API |
+| 页面业务场景调整 | `SuperTeamContextBar` + `taskId` 选中，不复制编辑器 |
 | ops-web 审计 Agent 行为 | `SuperTeamView` 三 tab，含 Agent 行为审计 |
 | 事件源属于用户，ops-web 只读 | web 可配置；ops-web 只读 |
 | 后端/Redis/sandbox/DB | 第 13 节设计，下一轮实现 |

@@ -8,6 +8,7 @@ import EditorHeader from '@/components/editor/EditorHeader.vue'
 import PublishDialog from '@/components/editor/PublishDialog.vue'
 import LogConsole from '@/components/editor/LogConsole.vue'
 import PreviewPane from '@/components/editor/PreviewPane.vue'
+import SuperTeamContextBar from '@/components/superteam/SuperTeamContextBar.vue'
 import { useAgentRolesStore } from '@/stores/agentRoles'
 import { useChatStore } from '@/stores/chat'
 import { useFileStore } from '@/stores/files'
@@ -231,6 +232,8 @@ onBeforeUnmount(() => {
       @share="shareProject"
       @publish="publishOpen = true"
     />
+
+    <SuperTeamContextBar step="requirements" />
 
     <p v-if="shareNotice" class="editor-share-notice">{{ shareNotice }}</p>
     <PublishDialog

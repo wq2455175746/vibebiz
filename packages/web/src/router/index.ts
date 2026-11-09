@@ -9,9 +9,6 @@ import EvolutionView from '@/views/EvolutionView.vue'
 import HomeView from '@/views/HomeView.vue'
 import LoginView from '@/views/LoginView.vue'
 import ProjectShareView from '@/views/ProjectShareView.vue'
-import SuperTeamDevelopmentView from '@/views/SuperTeamDevelopmentView.vue'
-import SuperTeamOperationsView from '@/views/SuperTeamOperationsView.vue'
-import SuperTeamRequirementsView from '@/views/SuperTeamRequirementsView.vue'
 
 import { settingsRoute } from './settingsRoutes'
 
@@ -29,21 +26,6 @@ const router = createRouter({
     { path: '/clones', name: 'clones', component: HomeView },
     { path: '/scheduled-tasks', name: 'scheduled-tasks', component: HomeView },
     { path: '/super-team', name: 'super-team', component: HomeView },
-    {
-      path: '/super-team/requirements',
-      name: 'super-team-requirements',
-      component: SuperTeamRequirementsView,
-    },
-    {
-      path: '/super-team/development',
-      name: 'super-team-development',
-      component: SuperTeamDevelopmentView,
-    },
-    {
-      path: '/super-team/operations',
-      name: 'super-team-operations',
-      component: SuperTeamOperationsView,
-    },
     { path: '/evolve', name: 'evolution', component: EvolutionView },
     { path: '/clone/editor/:id', name: 'clone-editor', component: CloneEditorView },
     { path: '/enterprise/editor/:id', name: 'enterprise-editor', component: EnterpriseEditorView },

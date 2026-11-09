@@ -175,7 +175,9 @@ function setPageSize(next: number): void {
     <header class="page-head">
       <div>
         <h1>超级团队</h1>
-        <p class="page-desc">只读视图；事件源由用户在 web 端配置。</p>
+        <p class="page-desc">
+          只读视图；事件源由用户在 web 端配置。三步分别复用平台项目、企业级项目与定时任务。
+        </p>
       </div>
       <span class="tag">{{ total }} 条</span>
     </header>

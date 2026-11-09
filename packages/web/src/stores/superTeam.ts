@@ -5,13 +5,16 @@ import type {
   EventSourceConfig,
   EventSourceKind,
   SuperStepKey,
+  SuperTeamBindings,
   SuperTeamState,
 } from '@/types/superTeam'
+import type { Project, ScheduledTask } from '@/types'
 import {
   SUPER_TEAM_STORAGE_KEY,
   advanceStep,
   initialState,
   loadState,
+  reconcileSteps,
   serializeState,
 } from '@/utils/superTeam'
 
@@ -42,6 +45,7 @@ export const useSuperTeamStore = defineStore('superTeam', () => {
   const steps = ref(initial.steps)
   const events = ref(initial.events)
   const audit = ref(initial.audit)
+  const bindings = ref<SuperTeamBindings>(initial.bindings)
 
   function persist(): void {
     try {
@@ -53,6 +57,7 @@ export const useSuperTeamStore = defineStore('superTeam', () => {
             steps: steps.value,
             events: events.value,
             audit: audit.value,
+            bindings: bindings.value,
           }),
         )
       }
@@ -96,12 +101,43 @@ export const useSuperTeamStore = defineStore('superTeam', () => {
     persist()
   }
 
+  function setBinding<K extends keyof SuperTeamBindings>(
+    key: K,
+    value: SuperTeamBindings[K],
+  ): void {
+    bindings.value = { ...bindings.value, [key]: value }
+    const stepKey: SuperStepKey =
+      key === 'requirementsProjectId'
+        ? 'requirements'
+        : key === 'developmentProjectId'
+          ? 'development'
+          : 'operations'
+    steps.value = steps.value.map((step) =>
+      step.key === stepKey && step.status === 'ready' ? { ...step, status: 'active' } : step,
+    )
+    persist()
+  }
+
+  function reconcile(projects: Project[], tasks: ScheduledTask[]): void {
+    const projectIds = new Set(projects.map((item) => item.id))
+    const taskIds = new Set(tasks.map((item) => item.id))
+    const result = reconcileSteps(steps.value, bindings.value, projectIds, taskIds)
+    steps.value = result.steps
+    bindings.value = result.bindings
+    persist()
+  }
+
+  function completeStep(key: SuperStepKey): void {
+    advance(key)
+  }
+
   function reset(): void {
     const base = initialState()
     sources.value = base.sources
     steps.value = base.steps
     events.value = base.events
     audit.value = base.audit
+    bindings.value = base.bindings
     try {
       if (typeof localStorage !== 'undefined') {
         localStorage.removeItem(SUPER_TEAM_STORAGE_KEY)
@@ -116,10 +152,14 @@ export const useSuperTeamStore = defineStore('superTeam', () => {
     steps,
     events,
     audit,
+    bindings,
     persist,
     updateSource,
     toggleSource,
+    setBinding,
+    reconcile,
     advance,
+    completeStep,
     reset,
   }
 })

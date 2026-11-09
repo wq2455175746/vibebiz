@@ -3,12 +3,14 @@ import { describe, expect, it } from 'vitest'
 import {
   SUPER_TEAM_STORAGE_KEY,
   advanceStep,
+  defaultBindings,
   defaultSources,
   defaultSteps,
   initialState,
   isStepUnlocked,
   loadState,
   noiseBand,
+  reconcileSteps,
   semanticBand,
   serializeState,
   sourceMeta,
@@ -93,5 +95,34 @@ describe('super team utils', () => {
 
   it('exposes a stable storage key', () => {
     expect(SUPER_TEAM_STORAGE_KEY).toBe('vibebiz:super-team')
+  })
+
+  it('starts with empty bindings', () => {
+    expect(initialState().bindings).toEqual(defaultBindings())
+  })
+
+  it('merges bindings from storage', () => {
+    const state = loadState(
+      JSON.stringify({ bindings: { requirementsProjectId: 'p1', operationsTaskId: 9 } }),
+    )
+    expect(state.bindings.requirementsProjectId).toBe('p1')
+    expect(state.bindings.operationsTaskId).toBe(9)
+    expect(state.bindings.developmentProjectId).toBeNull()
+  })
+
+  it('clears missing bindings and rolls back steps', () => {
+    const steps = advanceStep(defaultSteps(), 'requirements')
+    const bindings = { ...defaultBindings(), requirementsProjectId: 'missing' }
+    const result = reconcileSteps(steps, bindings, new Set<string>(), new Set<number>())
+    expect(result.bindings.requirementsProjectId).toBeNull()
+    expect(result.steps.find((step) => step.key === 'requirements')?.status).toBe('ready')
+    expect(result.steps.find((step) => step.key === 'development')?.status).toBe('locked')
+  })
+
+  it('marks a ready step active when its binding exists', () => {
+    const steps = [{ ...defaultSteps()[0], status: 'ready' as const }, ...defaultSteps().slice(1)]
+    const bindings = { ...defaultBindings(), requirementsProjectId: 'p1' }
+    const result = reconcileSteps(steps, bindings, new Set(['p1']), new Set<number>())
+    expect(result.steps.find((step) => step.key === 'requirements')?.status).toBe('active')
   })
 })

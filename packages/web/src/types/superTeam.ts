@@ -52,9 +52,17 @@ export interface AgentActionAudit {
   createdAt: string
 }
 
+export interface SuperTeamBindings {
+  requirementsProjectId: string | null
+  developmentProjectId: string | null
+  operationsTaskId: number | null
+  operationsProjectId: string | null
+}
+
 export interface SuperTeamState {
   sources: EventSourceConfig[]
   steps: SuperStepState[]
   events: SuperEvent[]
   audit: AgentActionAudit[]
+  bindings: SuperTeamBindings
 }

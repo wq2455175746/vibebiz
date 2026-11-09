@@ -9,6 +9,7 @@ import type {
   SuperStepKey,
   SuperStepState,
   SuperStepStatus,
+  SuperTeamBindings,
   SuperTeamState,
 } from '@/types/superTeam'
 
@@ -271,12 +272,22 @@ export function defaultAudit(): AgentActionAudit[] {
   ]
 }
 
+export function defaultBindings(): SuperTeamBindings {
+  return {
+    requirementsProjectId: null,
+    developmentProjectId: null,
+    operationsTaskId: null,
+    operationsProjectId: null,
+  }
+}
+
 export function initialState(): SuperTeamState {
   return {
     sources: defaultSources(),
     steps: defaultSteps(),
     events: defaultEvents(),
     audit: defaultAudit(),
+    bindings: defaultBindings(),
   }
 }
 
@@ -304,6 +315,22 @@ function mergeSteps(value: unknown, defaults: SuperStepState[]): SuperStepState[
   })
 }
 
+function mergeBindings(value: unknown, fallback: SuperTeamBindings): SuperTeamBindings {
+  if (!value || typeof value !== 'object') {
+    return fallback
+  }
+  const stored = value as Partial<SuperTeamBindings>
+  return {
+    requirementsProjectId:
+      typeof stored.requirementsProjectId === 'string' ? stored.requirementsProjectId : null,
+    developmentProjectId:
+      typeof stored.developmentProjectId === 'string' ? stored.developmentProjectId : null,
+    operationsTaskId: typeof stored.operationsTaskId === 'number' ? stored.operationsTaskId : null,
+    operationsProjectId:
+      typeof stored.operationsProjectId === 'string' ? stored.operationsProjectId : null,
+  }
+}
+
 export function loadState(raw: string | null): SuperTeamState {
   const base = initialState()
   if (!raw) {
@@ -320,6 +347,7 @@ export function loadState(raw: string | null): SuperTeamState {
     steps: mergeSteps(parsed.steps, base.steps),
     events: Array.isArray(parsed.events) ? parsed.events : base.events,
     audit: Array.isArray(parsed.audit) ? parsed.audit : base.audit,
+    bindings: mergeBindings(parsed.bindings, base.bindings),
   }
 }
 
@@ -351,6 +379,72 @@ export function advanceStep(steps: SuperStepState[], key: SuperStepKey): SuperSt
     }
     return step
   })
+}
+
+export function reconcileSteps(
+  steps: SuperStepState[],
+  bindings: SuperTeamBindings,
+  projectIds: ReadonlySet<string>,
+  taskIds: ReadonlySet<number>,
+): { steps: SuperStepState[]; bindings: SuperTeamBindings } {
+  const nextBindings = { ...bindings }
+  if (nextBindings.requirementsProjectId && !projectIds.has(nextBindings.requirementsProjectId)) {
+    nextBindings.requirementsProjectId = null
+  }
+  if (nextBindings.developmentProjectId && !projectIds.has(nextBindings.developmentProjectId)) {
+    nextBindings.developmentProjectId = null
+  }
+  if (nextBindings.operationsTaskId !== null && !taskIds.has(nextBindings.operationsTaskId)) {
+    nextBindings.operationsTaskId = null
+    nextBindings.operationsProjectId = null
+  }
+
+  const requirementsDone =
+    steps.find((step) => step.key === 'requirements')?.status === 'done' &&
+    Boolean(nextBindings.requirementsProjectId)
+  const developmentDone =
+    requirementsDone &&
+    steps.find((step) => step.key === 'development')?.status === 'done' &&
+    Boolean(nextBindings.developmentProjectId)
+
+  function setStatus(step: SuperStepState, status: SuperStepStatus): SuperStepState {
+    if (step.status === status) {
+      return step
+    }
+    return {
+      ...step,
+      status,
+      progress: status === 'done' ? 100 : status === 'ready' ? 0 : step.progress,
+      updatedAt: new Date().toISOString(),
+    }
+  }
+
+  const nextSteps = steps.map((step) => {
+    if (step.key === 'requirements') {
+      if (!nextBindings.requirementsProjectId) {
+        return step.status === 'done' || step.status === 'active' ? setStatus(step, 'ready') : step
+      }
+      return step.status === 'ready' ? setStatus(step, 'active') : step
+    }
+    if (step.key === 'development') {
+      if (!requirementsDone) {
+        return setStatus(step, 'locked')
+      }
+      if (!nextBindings.developmentProjectId) {
+        return step.status === 'done' || step.status === 'active' ? setStatus(step, 'ready') : step
+      }
+      return step.status === 'ready' ? setStatus(step, 'active') : step
+    }
+    if (!developmentDone) {
+      return setStatus(step, 'locked')
+    }
+    if (nextBindings.operationsTaskId === null) {
+      return step.status === 'done' || step.status === 'active' ? setStatus(step, 'ready') : step
+    }
+    return step.status === 'ready' ? setStatus(step, 'active') : step
+  })
+
+  return { steps: nextSteps, bindings: nextBindings }
 }
 
 const SOURCE_STATUS_LABEL: Record<EventSourceStatus, string> = {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import Checkbox from 'primevue/checkbox'
 import Dialog from 'primevue/dialog'
@@ -18,8 +18,10 @@ import {
   stopScheduledTask,
   updateScheduledTask,
 } from '@/api/scheduledTasks'
+import SuperTeamContextBar from '@/components/superteam/SuperTeamContextBar.vue'
 import type { ScheduledTask, ScheduledTaskDraft, ScheduledTaskInput } from '@/types'
 
+const route = useRoute()
 const router = useRouter()
 const tasks = ref<ScheduledTask[]>([])
 const selectedId = ref(0)
@@ -70,7 +72,10 @@ async function load() {
   error.value = ''
   try {
     tasks.value = await listScheduledTasks()
-    if (!tasks.value.some((task) => task.id === selectedId.value)) {
+    const queryTaskId = Number(route.query.taskId ?? 0)
+    if (queryTaskId && tasks.value.some((task) => task.id === queryTaskId)) {
+      selectedId.value = queryTaskId
+    } else if (!tasks.value.some((task) => task.id === selectedId.value)) {
       selectedId.value = tasks.value[0]?.id ?? 0
     }
   } catch (err) {
@@ -219,6 +224,8 @@ onMounted(load)
 
 <template>
   <section class="scheduled-panel">
+    <SuperTeamContextBar step="operations" />
+
     <header class="scheduled-head">
       <div>
         <h1>定时任务</h1>

@@ -4,11 +4,14 @@ import { computed } from 'vue'
 import type { SuperStepState } from '@/types/superTeam'
 import { stepDescription, stepStatusLabel, stepTitle } from '@/utils/superTeam'
 
-const props = defineProps<{ step: SuperStepState; index: number }>()
+const props = defineProps<{ step: SuperStepState; index: number; busy?: boolean }>()
 const emit = defineEmits<{ open: [] }>()
 
 const locked = computed(() => props.step.status === 'locked')
 const actionLabel = computed(() => {
+  if (props.busy) {
+    return '处理中…'
+  }
   if (props.step.status === 'ready') {
     return '开始'
   }
@@ -22,7 +25,7 @@ const actionLabel = computed(() => {
 })
 
 function open(): void {
-  if (!locked.value) {
+  if (!locked.value && !props.busy) {
     emit('open')
   }
 }
@@ -40,7 +43,7 @@ function open(): void {
       <span :style="{ width: `${step.progress}%` }" />
     </div>
     <small class="super-step-summary">{{ step.summary }}</small>
-    <button class="super-step-action" type="button" :disabled="locked" @click="open">
+    <button class="super-step-action" type="button" :disabled="locked || busy" @click="open">
       {{ actionLabel }}
     </button>
   </article>
