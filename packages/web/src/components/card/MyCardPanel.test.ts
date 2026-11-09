@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import MyCardPanel from './MyCardPanel.vue'
 import { getMyCard } from '@/api/cards'
 import { emptyCard } from '@/utils/card'
-import type { CardProjectItem } from '@/types'
+import type { BusinessCard, CardProjectItem } from '@/types'
 
 vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({
@@ -62,6 +62,22 @@ afterEach(() => {
 })
 
 describe('MyCardPanel', () => {
+  it('shows the loading state before the card request resolves', async () => {
+    let resolveCard!: (card: BusinessCard) => void
+    vi.mocked(getMyCard).mockReturnValue(
+      new Promise<BusinessCard>((resolve) => {
+        resolveCard = resolve
+      }),
+    )
+    mount()
+    expect(host.textContent).toContain('加载中...')
+    expect(host.textContent).not.toContain('名片加载失败')
+    resolveCard({ ...emptyCard(), id: 'card-1', ownerUserId: 7, ownerName: 'alice' })
+    await flush()
+    expect(host.textContent).toContain('我的项目')
+    expect(host.textContent).not.toContain('加载中...')
+  })
+
   it('renders the content and profile modules', async () => {
     mount()
     await flush()

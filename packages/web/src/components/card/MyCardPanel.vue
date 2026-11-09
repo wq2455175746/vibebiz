@@ -6,7 +6,11 @@ import CardProfilePanel from './CardProfilePanel.vue'
 import CardProjectItem from './CardProjectItem.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useCardStore } from '@/stores/card'
-import type { CardProjectItem as CardProjectItemType, PublishedProject } from '@/types'
+import type {
+  CardFeatured,
+  CardProjectItem as CardProjectItemType,
+  PublishedProject,
+} from '@/types'
 import { emptyCard } from '@/utils/card'
 import '@/styles/card.css'
 
@@ -15,13 +19,19 @@ const store = useCardStore()
 const addOpen = ref(false)
 const shareOpen = ref(false)
 const copied = ref(false)
+const initializing = ref(true)
+const publishing = ref(false)
 const actionError = ref('')
 const shareUrl = ref('')
 const card = computed(() => store.mine ?? emptyCard())
 
 onMounted(async () => {
-  await auth.ensure().catch(() => undefined)
-  await store.loadMine()
+  try {
+    await auth.ensure().catch(() => undefined)
+    await store.loadMine()
+  } finally {
+    initializing.value = false
+  }
 })
 onBeforeUnmount(() => void store.flushProfile())
 
@@ -41,6 +51,8 @@ async function addProject(published: PublishedProject) {
 }
 
 async function share() {
+  if (publishing.value) return
+  publishing.value = true
   actionError.value = ''
   try {
     const link = await store.publish()
@@ -49,7 +61,25 @@ async function share() {
     shareOpen.value = true
   } catch (err) {
     actionError.value = err instanceof Error ? err.message : '发布失败'
+  } finally {
+    publishing.value = false
   }
+}
+
+function removeItem(projectId: string) {
+  void store.removeItem(projectId).catch(() => undefined)
+}
+
+function setFeatured(featured: CardFeatured) {
+  void store.setFeatured(featured).catch(() => undefined)
+}
+
+function clearFeatured() {
+  void store.clearFeatured().catch(() => undefined)
+}
+
+function uploadFeatured(file: File) {
+  void store.uploadFeatured(file).catch(() => undefined)
 }
 
 async function copyLink() {
@@ -67,7 +97,7 @@ async function copyLink() {
 
 <template>
   <div class="card-page">
-    <div v-if="store.loading" class="dialog-state">加载中...</div>
+    <div v-if="initializing || store.loading" class="dialog-state">加载中...</div>
 
     <template v-else-if="store.mine">
       <header class="card-page-head">
@@ -81,7 +111,7 @@ async function copyLink() {
           <button
             class="card-share-btn"
             type="button"
-            :disabled="!store.hasShareContent"
+            :disabled="!store.hasShareContent || publishing"
             :title="store.hasShareContent ? '分享名片' : '请先添加项目'"
             @click="share"
           >
@@ -113,7 +143,7 @@ async function copyLink() {
               :key="item.projectId"
               :item="item"
               @open="openProject"
-              @remove="store.removeItem"
+              @remove="removeItem"
             />
           </div>
         </section>
@@ -124,9 +154,9 @@ async function copyLink() {
           @update:headline="store.setHeadline"
           @add-tag="store.addTag"
           @remove-tag="store.removeTag"
-          @set-featured="store.setFeatured"
-          @upload-featured="store.uploadFeatured"
-          @clear-featured="store.clearFeatured"
+          @set-featured="setFeatured"
+          @upload-featured="uploadFeatured"
+          @clear-featured="clearFeatured"
         />
       </div>
     </template>
