@@ -57,7 +57,7 @@ describe('CardProfilePanel', () => {
         fileType: 'pdf',
         name: 'resume.pdf',
         size: 1024,
-        dataUrl: 'data:application/pdf;base64,AA==',
+        url: 'data:application/pdf;base64,AA==',
       },
     })
     expect(host.textContent).toContain('resume.pdf')

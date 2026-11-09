@@ -41,7 +41,7 @@ describe('CardPreview', () => {
         fileType: 'pdf',
         name: 'resume.pdf',
         size: 1024,
-        dataUrl: 'data:application/pdf;base64,JVBERi0xLjQK',
+        url: 'data:application/pdf;base64,JVBERi0xLjQK',
       },
     })
     expect(host.querySelector('iframe')?.getAttribute('src')?.startsWith('blob:')).toBe(true)
@@ -55,7 +55,7 @@ describe('CardPreview', () => {
         fileType: 'pdf',
         name: 'resume.pdf',
         size: 1024,
-        dataUrl: 'data:application/pdf;base64,JVBERi0xLjQK',
+        url: 'data:application/pdf;base64,JVBERi0xLjQK',
       },
     })
     const frame = host.querySelector('iframe')
@@ -74,7 +74,7 @@ describe('CardPreview', () => {
         fileType: 'pdf',
         name: 'resume.pdf',
         size: 1024,
-        dataUrl: 'data:application/pdf;base64,AA==',
+        url: 'data:application/pdf;base64,AA==',
       },
     })
     expect(host.querySelector('iframe')?.getAttribute('sandbox')).toBeNull()

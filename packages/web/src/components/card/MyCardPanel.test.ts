@@ -3,6 +3,7 @@ import { createApp, type App } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import MyCardPanel from './MyCardPanel.vue'
+import { getMyCard } from '@/api/cards'
 import { emptyCard } from '@/utils/card'
 import type { CardProjectItem } from '@/types'
 
@@ -13,17 +14,21 @@ vi.mock('@/stores/auth', () => ({
   }),
 }))
 
-vi.mock('@/api/publish', () => ({ listPublishedProjects: vi.fn().mockResolvedValue([]) }))
+vi.mock('@/api/cards', () => ({
+  getMyCard: vi.fn(),
+  updateMyCard: vi.fn(),
+  addCardProject: vi.fn(),
+  removeCardProject: vi.fn(),
+  setCardFeaturedProject: vi.fn(),
+  uploadCardFeatured: vi.fn(),
+  clearCardFeatured: vi.fn(),
+  publishMyCard: vi.fn(),
+  getDiscoverCards: vi.fn(),
+  getPublicCard: vi.fn(),
+  getPublicCardProject: vi.fn(),
+}))
 
-function memoryStorage() {
-  const values = new Map<string, string>()
-  return {
-    getItem: (key: string) => values.get(key) ?? null,
-    setItem: (key: string, value: string) => void values.set(key, value),
-    removeItem: (key: string) => void values.delete(key),
-    clear: () => values.clear(),
-  }
-}
+vi.mock('@/api/publish', () => ({ listPublishedProjects: vi.fn().mockResolvedValue([]) }))
 
 let app: App | null = null
 let host: HTMLElement
@@ -41,7 +46,15 @@ function mount() {
   app.mount(host)
 }
 
-beforeEach(() => vi.stubGlobal('localStorage', memoryStorage()))
+beforeEach(() => {
+  vi.mocked(getMyCard).mockResolvedValue({
+    ...emptyCard(),
+    id: 'card-1',
+    ownerUserId: 7,
+    ownerName: 'alice',
+  })
+})
+
 afterEach(() => {
   app?.unmount()
   app = null
@@ -83,10 +96,13 @@ describe('MyCardPanel', () => {
       shareUrl: '/p/p1',
       addedAt: '2026-11-08T00:00:00.000Z',
     }
-    localStorage.setItem(
-      'vibebiz:cards:mine:v1',
-      JSON.stringify({ ...emptyCard(), ownerName: 'alice', items: [item] }),
-    )
+    vi.mocked(getMyCard).mockResolvedValue({
+      ...emptyCard(),
+      id: 'card-1',
+      ownerUserId: 7,
+      ownerName: 'alice',
+      items: [item],
+    })
     mount()
     await flush()
     expect(host.querySelectorAll('.card-project-remove')).toHaveLength(1)

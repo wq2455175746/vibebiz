@@ -2,8 +2,8 @@
 import { computed } from 'vue'
 
 import { useBlobUrl } from '@/composables/useBlobUrl'
-import { DEMO_IMAGE } from '@/mocks/cards'
 import type { CardFeatured, CardProjectItem } from '@/types'
+import { CARD_COVER_PLACEHOLDER } from '@/utils/card'
 
 const props = withDefaults(
   defineProps<{ featured: CardFeatured; items: CardProjectItem[]; large?: boolean }>(),
@@ -13,7 +13,7 @@ const props = withDefaults(
 const resolved = computed(() => {
   const featured = props.featured
   if (featured?.kind === 'file') {
-    return { kind: featured.fileType, src: featured.dataUrl, name: featured.name }
+    return { kind: featured.fileType, src: featured.url, name: featured.name }
   }
   if (featured?.kind === 'project') {
     const projectId = featured.projectId
@@ -21,7 +21,7 @@ const resolved = computed(() => {
     if (!item) return null
     return {
       kind: 'image' as const,
-      src: item.coverUrl || item.previewUrl || DEMO_IMAGE,
+      src: item.coverUrl || item.previewUrl || CARD_COVER_PLACEHOLDER,
       name: item.name,
     }
   }

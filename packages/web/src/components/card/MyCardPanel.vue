@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import AddProjectDialog from './AddProjectDialog.vue'
 import CardProfilePanel from './CardProfilePanel.vue'
@@ -7,6 +7,7 @@ import CardProjectItem from './CardProjectItem.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useCardStore } from '@/stores/card'
 import type { CardProjectItem as CardProjectItemType, PublishedProject } from '@/types'
+import { emptyCard } from '@/utils/card'
 import '@/styles/card.css'
 
 const auth = useAuthStore()
@@ -15,12 +16,14 @@ const addOpen = ref(false)
 const shareOpen = ref(false)
 const copied = ref(false)
 const actionError = ref('')
-const shareUrl = computed(() => `${window.location.origin}/share/card/me`)
+const shareUrl = ref('')
+const card = computed(() => store.mine ?? emptyCard())
 
 onMounted(async () => {
   await auth.ensure().catch(() => undefined)
-  store.load()
+  await store.loadMine()
 })
+onBeforeUnmount(() => void store.flushProfile())
 
 function openProject(item: CardProjectItemType) {
   window.open(`/share/project/${encodeURIComponent(item.projectId)}`, '_blank', 'noopener,noreferrer')
@@ -29,7 +32,7 @@ function openProject(item: CardProjectItemType) {
 async function addProject(published: PublishedProject) {
   actionError.value = ''
   try {
-    await store.addPublishedProject(published)
+    await store.addProject(published.projectId)
     actionError.value = ''
     addOpen.value = false
   } catch (err) {
@@ -37,10 +40,11 @@ async function addProject(published: PublishedProject) {
   }
 }
 
-function share() {
+async function share() {
   actionError.value = ''
   try {
-    store.publish()
+    const link = await store.publish()
+    shareUrl.value = `${window.location.origin}${link}`
     copied.value = false
     shareOpen.value = true
   } catch (err) {
@@ -63,62 +67,72 @@ async function copyLink() {
 
 <template>
   <div class="card-page">
-    <header class="card-page-head">
-      <div>
-        <h1>我的名片</h1>
-        <p>{{ store.saving ? '保存中…' : '已保存' }}</p>
-      </div>
-      <div class="card-page-actions">
-        <span v-if="store.error" class="error-text">{{ store.error }}</span>
-        <span v-if="!store.hasShareContent" class="card-share-hint">请先添加项目</span>
-        <button
-          class="card-share-btn"
-          type="button"
-          :disabled="!store.hasShareContent"
-          :title="store.hasShareContent ? '分享名片' : '请先添加项目'"
-          @click="share"
-        >
-          <i class="pi pi-share-alt" />
-          分享
-        </button>
-      </div>
-    </header>
+    <div v-if="store.loading" class="dialog-state">加载中...</div>
 
-    <p v-if="actionError" class="error-text" role="alert">{{ actionError }}</p>
-
-    <div class="card-page-grid">
-      <section class="card-content-panel">
-        <header class="card-panel-head">
-          <div>
-            <h2>我的项目</h2>
-            <p>从自己已发布的项目中挑选最多 5 个。</p>
-          </div>
-          <button class="card-add-btn" type="button" :disabled="store.items.length >= 5" @click="addOpen = true">
-            <i class="pi pi-plus" />
-            添加项目
-          </button>
-        </header>
-
-        <p v-if="store.items.length === 0" class="card-empty">还没有项目，添加自己已发布的作品吧。</p>
-        <div v-else class="card-project-list">
-          <CardProjectItem
-            v-for="item in store.items"
-            :key="item.projectId"
-            :item="item"
-            @open="openProject"
-            @remove="store.removeItem"
-          />
+    <template v-else-if="store.mine">
+      <header class="card-page-head">
+        <div>
+          <h1>我的名片</h1>
+          <p>{{ store.saving ? '保存中…' : '已保存' }}</p>
         </div>
-      </section>
+        <div class="card-page-actions">
+          <span v-if="store.error" class="error-text">{{ store.error }}</span>
+          <span v-if="!store.hasShareContent" class="card-share-hint">请先添加项目</span>
+          <button
+            class="card-share-btn"
+            type="button"
+            :disabled="!store.hasShareContent"
+            :title="store.hasShareContent ? '分享名片' : '请先添加项目'"
+            @click="share"
+          >
+            <i class="pi pi-share-alt" />
+            分享
+          </button>
+        </div>
+      </header>
 
-      <CardProfilePanel
-        :card="store.mine"
-        @update:headline="store.setHeadline"
-        @add-tag="store.addTag"
-        @remove-tag="store.removeTag"
-        @set-featured="store.setFeatured"
-        @clear-featured="store.clearFeatured"
-      />
+      <p v-if="actionError" class="error-text" role="alert">{{ actionError }}</p>
+
+      <div class="card-page-grid">
+        <section class="card-content-panel">
+          <header class="card-panel-head">
+            <div>
+              <h2>我的项目</h2>
+              <p>从自己已发布的项目中挑选最多 5 个。</p>
+            </div>
+            <button class="card-add-btn" type="button" :disabled="store.items.length >= 5" @click="addOpen = true">
+              <i class="pi pi-plus" />
+              添加项目
+            </button>
+          </header>
+
+          <p v-if="store.items.length === 0" class="card-empty">还没有项目，添加自己已发布的作品吧。</p>
+          <div v-else class="card-project-list">
+            <CardProjectItem
+              v-for="item in store.items"
+              :key="item.projectId"
+              :item="item"
+              @open="openProject"
+              @remove="store.removeItem"
+            />
+          </div>
+        </section>
+
+        <CardProfilePanel
+          :card="card"
+          :uploading-featured="store.uploadingFeatured"
+          @update:headline="store.setHeadline"
+          @add-tag="store.addTag"
+          @remove-tag="store.removeTag"
+          @set-featured="store.setFeatured"
+          @upload-featured="store.uploadFeatured"
+          @clear-featured="store.clearFeatured"
+        />
+      </div>
+    </template>
+
+    <div v-else class="dialog-state">
+      <span class="error-text" role="alert">{{ store.error || '名片加载失败' }}</span>
     </div>
 
     <AddProjectDialog

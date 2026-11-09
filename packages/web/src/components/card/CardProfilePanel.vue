@@ -3,21 +3,21 @@ import { computed, ref } from 'vue'
 
 import CardPreview from './CardPreview.vue'
 import type { BusinessCard, CardFeatured } from '@/types'
-import { CARD_MAX_TAGS, isPdfFile, readFileAsDataUrl, validateCardUpload } from '@/utils/card'
+import { CARD_MAX_TAGS, validateCardUpload } from '@/utils/card'
 
-const props = defineProps<{ card: BusinessCard }>()
+const props = defineProps<{ card: BusinessCard; uploadingFeatured?: boolean }>()
 const emit = defineEmits<{
   'update:headline': [value: string]
   'add-tag': [raw: string]
   'remove-tag': [tag: string]
   'set-featured': [featured: CardFeatured]
+  'upload-featured': [file: File]
   'clear-featured': []
 }>()
 
 const tagInput = ref('')
 const tagError = ref('')
 const uploadError = ref('')
-const uploading = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 
 const initial = computed(() => (props.card.ownerName || '?').charAt(0).toUpperCase())
@@ -59,7 +59,7 @@ function openUpload() {
   fileInput.value?.click()
 }
 
-async function onFileChange(event: Event) {
+function onFileChange(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = ''
@@ -69,24 +69,8 @@ async function onFileChange(event: Event) {
     uploadError.value = message
     return
   }
-  uploading.value = true
   uploadError.value = ''
-  try {
-    const dataUrl = await readFileAsDataUrl(file)
-    const isPdf = isPdfFile(file)
-    emit('set-featured', {
-      kind: 'file',
-      fileType: isPdf ? 'pdf' : 'image',
-      name: file.name,
-      size: file.size,
-      dataUrl,
-    })
-  } catch (err) {
-    uploadError.value = err instanceof Error ? err.message : '文件读取失败'
-  } finally {
-    uploading.value = false
-    if (fileInput.value) fileInput.value.value = ''
-  }
+  emit('upload-featured', file)
 }
 </script>
 
@@ -126,9 +110,9 @@ async function onFileChange(event: Event) {
             {{ item.name }}
           </option>
         </select>
-        <button type="button" class="card-secondary" :disabled="uploading" @click="openUpload">
-          <i :class="uploading ? 'pi pi-spin pi-spinner' : 'pi pi-upload'" />
-          {{ uploading ? '读取中…' : '上传 PDF / 图片' }}
+        <button type="button" class="card-secondary" :disabled="uploadingFeatured" @click="openUpload">
+          <i :class="uploadingFeatured ? 'pi pi-spin pi-spinner' : 'pi pi-upload'" />
+          {{ uploadingFeatured ? '上传中…' : '上传 PDF / 图片' }}
         </button>
         <button v-if="card.featured" type="button" class="card-text-btn" @click="emit('clear-featured')">
           移除主预览
