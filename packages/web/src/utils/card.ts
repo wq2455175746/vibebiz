@@ -5,6 +5,12 @@ export const CARD_MAX_TAGS = 5
 export const CARD_MAX_TAG_LENGTH = 12
 export const CARD_MAX_UPLOAD_BYTES = 2 * 1024 * 1024
 
+export const CARD_COVER_PLACEHOLDER =
+  'data:image/svg+xml;charset=utf-8,' +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="#f3f4f6"/><text x="320" y="190" text-anchor="middle" fill="#6b7280" font-size="28" font-family="sans-serif">Vibebiz</text></svg>',
+  )
+
 export const CARD_TYPE_LABELS: Record<CardContentType, string> = {
   html: 'HTML',
   image: '图片',

@@ -363,7 +363,7 @@ export interface CardProjectItem {
   type: CardContentType
   shareUrl: string
   previewUrl?: string
-  addedAt: string
+  addedAt?: string
 }
 
 export type CardFeatured =
@@ -373,9 +373,27 @@ export type CardFeatured =
       fileType: 'pdf' | 'image'
       name: string
       size: number
-      dataUrl: string
+      url: string
     }
   | null
+
+export interface DiscoverCardsResult {
+  cards: BusinessCard[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+export interface PublicCardSummary {
+  id: string
+  ownerName: string
+  avatarUrl: string
+}
+
+export interface PublicProjectCard {
+  card: PublicCardSummary
+  item: CardProjectItem
+}
 
 export interface BusinessCard {
   id: string
