@@ -16,6 +16,7 @@ type BusinessCard struct {
 	Published               int8       `gorm:"column:published" json:"published"`
 	PublishedAt             *time.Time `gorm:"column:published_at" json:"publishedAt,omitempty"`
 	CommentCount            int        `gorm:"column:comment_count" json:"commentCount"`
+	LikeCount               int        `gorm:"column:like_count" json:"likeCount"`
 	IsHidden                int8       `gorm:"column:is_hidden" json:"hidden"`
 }
 

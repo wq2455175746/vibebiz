@@ -2,12 +2,14 @@
 import { computed } from 'vue'
 
 import CardPreview from './CardPreview.vue'
+import CardLikeButton from './CardLikeButton.vue'
 import type { BusinessCard, CardFeatured } from '@/types'
 
 const props = defineProps<{ card: BusinessCard }>()
 const emit = defineEmits<{
   open: [id: string]
   'open-featured': [id: string]
+  like: [id: string]
 }>()
 const initial = computed(() => (props.card.ownerName || '?').charAt(0).toUpperCase())
 
@@ -53,8 +55,23 @@ const isFileFeatured = computed(() => props.card.featured?.kind === 'file')
       </div>
       <footer class="card-tile-foot">
         <span>{{ card.items.length }} 个项目</span>
-        <span><i class="pi pi-comment" /> {{ card.commentCount }}</span>
+        <span class="card-tile-social">
+          <span><i class="pi pi-comment" /> {{ card.commentCount }}</span>
+          <CardLikeButton
+            :liked="card.liked"
+            :count="card.likeCount"
+            @toggle="emit('like', card.id)"
+          />
+        </span>
       </footer>
     </div>
   </article>
 </template>
+
+<style scoped>
+.card-tile-social {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+</style>

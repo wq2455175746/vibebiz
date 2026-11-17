@@ -33,9 +33,14 @@ type CardService interface {
 	AdminDelete(ctx context.Context, publicID string) error
 }
 
+type CardLikeEnricher interface {
+	States(ctx context.Context, cards []businesscard.Card, userID int64) error
+}
+
 type CardHandler struct {
 	Service       CardService
 	PublicBaseURL string
+	Likes         CardLikeEnricher
 }
 
 func NewCardHandler(service CardService, publicBaseURL string) *CardHandler {
@@ -181,6 +186,7 @@ func (h *CardHandler) Discover(c echo.Context) error {
 		for index := range result.Cards {
 			h.normalizeItems(c, result.Cards[index].Items)
 		}
+		h.enrichLikes(c, result.Cards)
 	}
 	return response.OK(c, result)
 }
@@ -245,9 +251,23 @@ func (h *CardHandler) AdminDelete(c echo.Context) error {
 
 func (h *CardHandler) okCard(c echo.Context, card *businesscard.Card) error {
 	if card != nil {
+		cards := []businesscard.Card{*card}
+		h.enrichLikes(c, cards)
+		*card = cards[0]
 		h.normalizeItems(c, card.Items)
 	}
 	return response.OK(c, card)
+}
+
+func (h *CardHandler) enrichLikes(c echo.Context, cards []businesscard.Card) {
+	if h.Likes == nil || len(cards) == 0 {
+		return
+	}
+	userID := int64(0)
+	if session, ok := auth.SessionFrom(c); ok {
+		userID = session.UserID
+	}
+	_ = h.Likes.States(c.Request().Context(), cards, userID)
 }
 
 func (h *CardHandler) normalizeItems(c echo.Context, items []businesscard.CardItem) {

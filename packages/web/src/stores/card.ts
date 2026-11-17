@@ -8,9 +8,11 @@ import {
   getMyCard,
   getPublicCard,
   getPublicCardProject,
+  likeCard,
   publishMyCard,
   removeCardProject,
   setCardFeaturedProject,
+  unlikeCard,
   updateMyCard,
   uploadCardFeatured,
 } from '@/api/cards'
@@ -234,6 +236,26 @@ export const useCardStore = defineStore('card', () => {
     }
   }
 
+  async function toggleLike(card: BusinessCard): Promise<void> {
+    const previousLiked = card.liked
+    const previousCount = card.likeCount
+    const nextLiked = !previousLiked
+    card.liked = nextLiked
+    card.likeCount = Math.max(0, previousCount + (nextLiked ? 1 : -1))
+
+    try {
+      const next = nextLiked ? await likeCard(card.id) : await unlikeCard(card.id)
+      card.liked = next.liked
+      card.likeCount = next.likeCount
+      error.value = ''
+    } catch (cause) {
+      card.liked = previousLiked
+      card.likeCount = previousCount
+      error.value = messageOf(cause, '点赞失败')
+      throw cause
+    }
+  }
+
   function fetchPublicCard(id: string): Promise<BusinessCard> {
     return getPublicCard(id)
   }
@@ -269,6 +291,7 @@ export const useCardStore = defineStore('card', () => {
     clearFeatured,
     publish,
     loadDiscover,
+    toggleLike,
     fetchPublicCard,
     fetchPublicProject,
   }

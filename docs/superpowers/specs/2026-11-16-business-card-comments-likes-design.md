@@ -3,7 +3,7 @@
 | 项 | 内容 |
 |---|---|
 | 日期 | 2026-11-16 |
-| 状态 | 待评审 |
+| 状态 | 已确认 |
 | 范围 | 发现页名片评论树、评论编辑删除、名片点赞、Redis 小时级落库 |
 | 关联文档 | `docs/superpowers/specs/2026-11-08-business-card-social-design.md`、`docs/superpowers/specs/2026-11-09-business-card-backend-design.md`、`.ai/rules/architecture.md` |
 | 数据库 | MySQL 8；新增评论表、点赞表，`business_card` 增加点赞数 |

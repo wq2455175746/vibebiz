@@ -31,6 +31,11 @@ type Config struct {
 	RedisPassword string
 	RedisDB       int
 
+	CardLikeStreamShards int
+	CardLikeStreamMaxLen int64
+	CardLikeSyncBatch    int
+	CardLikeStreamTTL    time.Duration
+
 	SandboxRegistryToken      string
 	SandboxHeartbeatTTL       time.Duration
 	SandboxHealthInterval     time.Duration
@@ -103,6 +108,11 @@ func Load(plane string) Config {
 		RedisHost:     getString("REDIS_HOST", "127.0.0.1:6379"),
 		RedisPassword: getString("REDIS_PASSWORD", ""),
 		RedisDB:       getInt("REDIS_DB", 0),
+
+		CardLikeStreamShards: getInt("CARD_LIKE_STREAM_SHARDS", 1),
+		CardLikeStreamMaxLen: int64(getInt("CARD_LIKE_STREAM_MAXLEN", 1_000_000)),
+		CardLikeSyncBatch:    getInt("CARD_LIKE_SYNC_BATCH", 1000),
+		CardLikeStreamTTL:    getDuration("CARD_LIKE_STREAM_TTL", 7*24*time.Hour),
 
 		SandboxRegistryToken:      getString("SANDBOX_REGISTRY_TOKEN", ""),
 		SandboxHeartbeatTTL:       getDuration("SANDBOX_HEARTBEAT_TTL", 15*time.Second),

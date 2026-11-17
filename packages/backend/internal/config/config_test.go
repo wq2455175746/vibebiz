@@ -284,6 +284,42 @@ func TestLoadUserTraceDefaults(t *testing.T) {
 	}
 }
 
+func TestConfigCardLikeSyncDefaults(t *testing.T) {
+	t.Setenv("CARD_LIKE_STREAM_SHARDS", "")
+	t.Setenv("CARD_LIKE_STREAM_MAXLEN", "")
+	t.Setenv("CARD_LIKE_SYNC_BATCH", "")
+	t.Setenv("CARD_LIKE_STREAM_TTL", "")
+
+	cfg := Load("cp")
+	if cfg.CardLikeStreamShards != 1 {
+		t.Fatalf("shards = %d, want 1", cfg.CardLikeStreamShards)
+	}
+	if cfg.CardLikeStreamMaxLen != 1_000_000 {
+		t.Fatalf("maxlen = %d, want 1000000", cfg.CardLikeStreamMaxLen)
+	}
+	if cfg.CardLikeSyncBatch != 1000 {
+		t.Fatalf("batch = %d, want 1000", cfg.CardLikeSyncBatch)
+	}
+	if cfg.CardLikeStreamTTL != 168*time.Hour {
+		t.Fatalf("ttl = %v, want 168h", cfg.CardLikeStreamTTL)
+	}
+}
+
+func TestConfigCardLikeSyncOverrides(t *testing.T) {
+	t.Setenv("CARD_LIKE_STREAM_SHARDS", "4")
+	t.Setenv("CARD_LIKE_STREAM_MAXLEN", "5000")
+	t.Setenv("CARD_LIKE_SYNC_BATCH", "250")
+	t.Setenv("CARD_LIKE_STREAM_TTL", "48h")
+
+	cfg := Load("cp")
+	if cfg.CardLikeStreamShards != 4 || cfg.CardLikeStreamMaxLen != 5000 {
+		t.Fatalf("stream config = %d/%d", cfg.CardLikeStreamShards, cfg.CardLikeStreamMaxLen)
+	}
+	if cfg.CardLikeSyncBatch != 250 || cfg.CardLikeStreamTTL != 48*time.Hour {
+		t.Fatalf("sync config = %d/%v", cfg.CardLikeSyncBatch, cfg.CardLikeStreamTTL)
+	}
+}
+
 func TestScheduledTaskDefaults(t *testing.T) {
 	t.Setenv("SCHEDULED_DISPATCH_INTERVAL", "")
 	t.Setenv("SCHEDULED_RUN_TIMEOUT", "")

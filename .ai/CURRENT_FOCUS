@@ -101,6 +101,7 @@
     "验证：go test/vet、web 355、ops-web 132、两端 build/lint、make validate 全部通过"
   ],
   "next_tasks": [
+    "名片评论与点赞：树形评论 + 作者编辑删除 + Redis Stream 点赞小时同步",
     "克隆制品空间：源码归档、镜像构建与版本说明",
     "通用项目删除级联清理工作区、克隆附件与阶段记录",
     "接 CP ProjectStore 与 admin Repository 到 DAO；先不写业务 handler",

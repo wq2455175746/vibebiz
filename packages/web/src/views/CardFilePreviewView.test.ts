@@ -27,6 +27,8 @@ function makeCard(featured: CardFeatured): BusinessCard {
     featured,
     published: true,
     commentCount: 0,
+    likeCount: 0,
+    liked: false,
     createdAt: '2026-11-08T00:00:00.000Z',
     updatedAt: '2026-11-08T00:00:00.000Z',
   }

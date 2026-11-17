@@ -1,12 +1,17 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 import CardTile from './CardTile.vue'
+import { useAuthStore } from '@/stores/auth'
 import { useCardStore } from '@/stores/card'
 import type { CardFeatured } from '@/types'
 import '@/styles/card.css'
 
 const store = useCardStore()
+const router = useRouter()
+const auth = useAuthStore()
+const liking = ref<string | null>(null)
 
 const finished = computed(
   () =>
@@ -44,6 +49,23 @@ function openFeatured(id: string) {
     return
   }
   window.open(`/share/card/${encodeURIComponent(card.id)}/file`, '_blank', 'noopener,noreferrer')
+}
+
+async function like(id: string) {
+  if (!auth.isAuthenticated) {
+    await router.push({ name: 'login', query: { redirect: '/discover' } })
+    return
+  }
+  const card = store.discoverCards.find((item) => item.id === id)
+  if (!card || liking.value) return
+  liking.value = id
+  try {
+    await store.toggleLike(card)
+  } catch {
+    // store.error carries the failure message
+  } finally {
+    liking.value = null
+  }
 }
 
 const sentinel = ref<HTMLElement | null>(null)
@@ -87,6 +109,7 @@ onBeforeUnmount(() => observer?.disconnect())
         :card="card"
         @open="open"
         @open-featured="openFeatured"
+        @like="like"
       />
     </div>
 

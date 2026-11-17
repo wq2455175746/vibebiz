@@ -29,6 +29,14 @@ type fakeCardService struct {
 	adminList          func(context.Context, string, int, int) (*businesscard.AdminListResult, error)
 	adminSetHidden     func(context.Context, string, bool) (*businesscard.AdminRow, error)
 	adminDelete        func(context.Context, string) error
+	likes              CardLikeEnricher
+}
+
+func (f *fakeCardService) States(ctx context.Context, cards []businesscard.Card, userID int64) error {
+	if f.likes == nil {
+		return nil
+	}
+	return f.likes.States(ctx, cards, userID)
 }
 
 func (f *fakeCardService) GetMine(ctx context.Context, userID int64, workspaceIDs []int64) (*businesscard.Card, error) {
@@ -147,6 +155,7 @@ func newCardEcho(t *testing.T) (*echo.Echo, *fakeCardService) {
 	}
 
 	h := NewCardHandler(fake, "")
+	h.Likes = fake
 	session := sessionForTest(7)
 	e := echo.New()
 	routeWithSession(e, http.MethodGet, "/cp/api/v1/me/card", h.GetMine, session)

@@ -273,8 +273,9 @@ func main() {
 	if s3Presigner != nil {
 		cardS3 = s3Presigner
 	}
+	cardRepo := businesscard.NewMySQLRepository(db)
 	cardService := businesscard.NewService(
-		businesscard.NewMySQLRepository(db),
+		cardRepo,
 		projectStore,
 		publishService,
 		cardS3,
@@ -282,6 +283,36 @@ func main() {
 		cfg.S3PresignExpiry(),
 	)
 	cardHandler := handler.NewCardHandler(cardService, cfg.PublicBaseURL)
+	consumer, _ := os.Hostname()
+	if consumer == "" {
+		consumer = "cp"
+	}
+	likeStore := businesscard.NewRedisLikeStore(redisClient, redisPrefix, cfg.CardLikeStreamMaxLen, cfg.CardLikeStreamShards)
+	likeRepo := businesscard.NewMySQLLikeRepository(db)
+	likeService := &businesscard.LikeService{
+		Store: likeStore,
+		Cards: cardRepo,
+		Repo:  likeRepo,
+	}
+	likeSync := &businesscard.LikeSync{
+		Client: redisClient, Repo: likeRepo,
+		Prefix: redisPrefix, Group: "card-like-sync", Consumer: consumer,
+		Batch: cfg.CardLikeSyncBatch, MaxLen: cfg.CardLikeStreamMaxLen,
+		TTL: cfg.CardLikeStreamTTL, Shards: cfg.CardLikeStreamShards, Logger: obs.Logger,
+		Metrics: obs.Metrics,
+	}
+	cardHandler.Likes = likeService
+	cardLikeHandler := handler.NewCardLikeHandler(likeService)
+	cardLikeHandler.Metrics = obs.Metrics
+	commentService := &businesscard.CommentService{
+		Repo:    cardRepo,
+		Cards:   cardRepo,
+		Limiter: &businesscard.RedisCommentRateLimiter{Client: redisClient, Prefix: redisPrefix},
+	}
+	cardCommentHandler := handler.NewCardCommentHandler(commentService)
+	cardCommentHandler.Covers = avatarPresigner
+	cardCommentHandler.CoverExpiry = cfg.S3PresignExpiry()
+	cardCommentHandler.Metrics = obs.Metrics
 	evolutionService := evolution.NewService(evolution.NewMySQLStore(db))
 	evolutionService.Workspaces = &evolution.WorkspaceProvisioner{
 		Projects:    projectStore,
@@ -343,6 +374,7 @@ func main() {
 	asynqMux.HandleFunc(sandboxregistry.TaskTypeHealthCheck, healthChecker.HandleTask)
 	asynqMux.HandleFunc(scheduledtask.TaskTypeDispatch, scheduledDispatcher.HandleTask)
 	asynqMux.HandleFunc(scheduledtask.TaskTypeRun, scheduledRunner.HandleTask)
+	asynqMux.HandleFunc(businesscard.TaskTypeLikeSync, likeSync.HandleTask)
 	asynqScheduler := asynq.NewScheduler(asynqRedis, &asynq.SchedulerOpts{Logger: asynqLogger})
 	if _, err := asynqScheduler.Register("@every "+cfg.SandboxHealthInterval.String(), asynq.NewTask(sandboxregistry.TaskTypeHealthCheck, nil), asynq.MaxRetry(0), asynq.Timeout(15*time.Second), asynq.Unique(cfg.SandboxHealthInterval)); err != nil {
 		obs.Logger.Error("sandbox health scheduler register failed", "error", err)
@@ -354,6 +386,10 @@ func main() {
 	}
 	if _, err := asynqScheduler.Register("@every "+cfg.ScheduledDispatchInterval.String(), asynq.NewTask(scheduledtask.TaskTypeDispatch, nil), asynq.MaxRetry(0), asynq.Unique(dispatchUnique)); err != nil {
 		obs.Logger.Error("scheduled task dispatcher register failed", "error", err)
+		os.Exit(1)
+	}
+	if _, err := asynqScheduler.Register("@hourly", asynq.NewTask(businesscard.TaskTypeLikeSync, nil), asynq.MaxRetry(3), asynq.Timeout(10*time.Minute), asynq.Unique(time.Hour)); err != nil {
+		obs.Logger.Error("card like sync scheduler register failed", "error", err)
 		os.Exit(1)
 	}
 	if err := asynqScheduler.Start(); err != nil {
@@ -378,7 +414,7 @@ func main() {
 	templateHandler := handler.NewTemplateHandler(templateService, projectStore, provisioner, sandboxRouter)
 	templateHandler.Metas = metas
 
-	router.RegisterControl(e, adminRepo, projectStore, provisioner, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler, registryHandler, modelHandler, roleHandler, avatarPresigner, cfg.S3PresignExpiry(), sandboxRouter, templateHandler, harnessImporter, stageStore, sandboxRouter, notificationChannelHandler, fdeResourceHandler, publishHandler, channelPackageHandler, channelGuideHandler, cloneHandler, usageService, accessLogHandler, skillManager, leaderboardHandler, evolutionHandler, cardHandler)
+	router.RegisterControl(e, adminRepo, projectStore, provisioner, obs, authn, authHandler, settingsHandler, storageHandler, metas, notificationHandler, registryHandler, modelHandler, roleHandler, avatarPresigner, cfg.S3PresignExpiry(), sandboxRouter, templateHandler, harnessImporter, stageStore, sandboxRouter, notificationChannelHandler, fdeResourceHandler, publishHandler, channelPackageHandler, channelGuideHandler, cloneHandler, usageService, accessLogHandler, skillManager, leaderboardHandler, evolutionHandler, cardHandler, cardCommentHandler, cardLikeHandler)
 	router.RegisterScheduledTasks(e, scheduledHandler, authn)
 	router.RegisterChatHistory(e, handler.NewChatHistoryHandler(sandboxRouter, projectStore), authn)
 

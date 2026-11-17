@@ -91,6 +91,10 @@
 | GET | `/projects/:id/chat/history` | 用户登录 + 工作区过滤；`GET /internal/projects/{id}/chat/history` |
 | POST/GET | `/clones` | 创建 / 列表克隆项目（`mode=clone`） |
 | GET/DELETE | `/clones/:id` | 克隆详情 / 删除 |
+| GET/POST | `/public/cards/:id/comments` | 评论列表 / 发表评论 |
+| GET | `/public/cards/:id/comments/:commentId/replies` | 回复分页 |
+| PUT/DELETE | `/public/cards/:id/comments/:commentId` | 编辑 / 删除自己的评论 |
+| PUT/DELETE | `/public/cards/:id/like` | 点赞 / 取消点赞 |
 | POST | `/admin/auth/login` | 公开，ops 登录 |
 | GET | `/admin/auth/me` | ops Cookie |
 | POST | `/admin/auth/logout` | ops Cookie |
@@ -103,6 +107,11 @@
 | GET | `/admin/usage/daily` | 按日使用趋势，支持 `from`/`to`/`userId` |
 | GET | `/admin/audit` | - |
 | POST | `/internal/sandboxes/heartbeat` | sandbox 心跳，`X-Sandbox-Token` |
+
+### Redis 键与名片点赞同步
+
+- 名片点赞先写 Redis：`vibebiz:card:like:count`、`vibebiz:card:like:users:{cardID}`、`vibebiz:card:like:stream`。
+- asynq `@hourly` 任务 `card:like:sync` 批量落库，MySQL 唯一键 + `COUNT(*)` 重算保证幂等。
 
 ### DP · `/dp/api/v1`
 

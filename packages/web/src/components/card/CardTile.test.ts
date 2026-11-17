@@ -54,6 +54,32 @@ describe('CardTile', () => {
     expect(host.textContent).toContain('Vue')
   })
 
+  it('emits like without opening the card', () => {
+    const like = vi.fn()
+    const open = vi.fn()
+    mount(
+      { ...emptyCard(), id: 'demo-1', items: [item], liked: false, likeCount: 2 },
+      { onLike: like, onOpen: open },
+    )
+
+    const button = host.querySelector<HTMLButtonElement>('.card-like-button')
+    expect(button?.textContent).toContain('2')
+    button?.click()
+    expect(like).toHaveBeenCalledWith('demo-1')
+    expect(open).not.toHaveBeenCalled()
+  })
+
+  it('renders the liked state on the tile', () => {
+    mount({
+      ...emptyCard(),
+      id: 'demo-1',
+      items: [item],
+      liked: true,
+      likeCount: 4,
+    })
+    expect(host.querySelector('.card-like-button.is-liked')).not.toBeNull()
+  })
+
   it('opens the card from personal info and the content from the preview', () => {
     const open = vi.fn()
     const openFeatured = vi.fn()

@@ -50,6 +50,7 @@ func TestInitialSchemaCoversAllBusinessTables(t *testing.T) {
 		"project_channel_package", "channel_guide",
 		"evolution_version", "evolution_proposal", "evolution_message", "evolution_task",
 		"business_card", "business_card_item",
+		"business_card_comment", "business_card_like",
 	}
 	var all strings.Builder
 	entries, err := fs.ReadDir(FS, ".")
@@ -70,6 +71,30 @@ func TestInitialSchemaCoversAllBusinessTables(t *testing.T) {
 	for _, table := range tables {
 		if !strings.Contains(schema, "create table `"+table+"`") {
 			t.Errorf("migration schema missing table %q", table)
+		}
+	}
+}
+
+func TestBusinessCardSocialMigration(t *testing.T) {
+	body, err := fs.ReadFile(FS, "00034_business_card_social.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	for _, want := range []string{
+		"CREATE TABLE `business_card_comment`",
+		"CREATE TABLE `business_card_like`",
+		"ADD COLUMN `like_count`",
+		"uk_business_card_comment_public",
+		"idx_business_card_comment_roots",
+		"idx_business_card_comment_replies",
+		"fk_business_card_comment_card",
+		"uk_business_card_like_card_user",
+		"-- +goose Up",
+		"-- +goose Down",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("social migration missing %q", want)
 		}
 	}
 }
@@ -220,8 +245,8 @@ func TestGooseCanCollectMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("collect migrations: %v", err)
 	}
-	if len(migs) != 33 {
-		t.Fatalf("collected %d migrations, want 33", len(migs))
+	if len(migs) != 34 {
+		t.Fatalf("collected %d migrations, want 34", len(migs))
 	}
 	for i, mig := range migs {
 		want := int64(i + 1)

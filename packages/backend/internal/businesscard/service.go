@@ -68,6 +68,7 @@ func NewService(repo Repository, projects ProjectReader, publisher Publisher, s3
 }
 
 type Card struct {
+	InternalID   int64      `json:"-"`
 	ID           string     `json:"id"`
 	OwnerUserID  int64      `json:"ownerUserId"`
 	OwnerName    string     `json:"ownerName"`
@@ -78,6 +79,8 @@ type Card struct {
 	Featured     *Featured  `json:"featured"`
 	Published    bool       `json:"published"`
 	CommentCount int        `json:"commentCount"`
+	LikeCount    int64      `json:"likeCount"`
+	Liked        bool       `json:"liked"`
 	CreatedAt    time.Time  `json:"createdAt"`
 	UpdatedAt    time.Time  `json:"updatedAt"`
 }
@@ -357,7 +360,8 @@ func (s *Service) resolve(ctx context.Context, rec *CardRecord, allowed map[int6
 		tags = []string{}
 	}
 	return &Card{
-		ID: rec.PublicID, OwnerUserID: rec.UserID, OwnerName: rec.OwnerName,
+		InternalID: rec.ID,
+		ID:         rec.PublicID, OwnerUserID: rec.UserID, OwnerName: rec.OwnerName,
 		AvatarURL: s.avatarURL(ctx, rec.OwnerAvatarS3Path), Headline: rec.Headline, Tags: tags,
 		Items: items, Featured: s.resolveFeatured(ctx, rec, items), Published: rec.Published,
 		CommentCount: rec.CommentCount, CreatedAt: rec.CreatedAt, UpdatedAt: rec.UpdatedAt,

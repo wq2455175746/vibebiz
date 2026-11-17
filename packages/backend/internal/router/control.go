@@ -15,7 +15,7 @@ import (
 	"vibebiz/internal/usage"
 )
 
-func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.ProjectStore, provisioner handler.ProjectInitializer, obs *observability.Provider, authn *auth.Authenticator, authHandler *handler.AuthHandler, settingsHandler *handler.SettingsHandler, storageHandler *handler.StorageHandler, metas auth.ProjectMetaStore, notifications *handler.NotificationHandler, registry *handler.SandboxRegistryHandler, models *handler.ModelHandler, roles *handler.RoleHandler, coverSigner handler.CoverURLSigner, coverExpiry time.Duration, adminSandbox handler.AdminSandbox, templates *handler.TemplateHandler, harness handler.HarnessImporter, stageStore projectstage.Store, stageSandbox handler.StageSandbox, notificationChannels *handler.NotificationChannelHandler, fdeResources *handler.FdeResourceHandler, publishApp *handler.PublishHandler, channelPackages *handler.ChannelPackageHandler, channelGuides *handler.ChannelGuideHandler, cloneHandler *handler.CloneHandler, usageService *usage.Service, accessLogs *handler.AccessLogHandler, skillManager *handler.SkillManager, leaderboardHandler *handler.LeaderboardHandler, evolutionHandler *handler.EvolutionHandler, cardHandler *handler.CardHandler) {
+func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.ProjectStore, provisioner handler.ProjectInitializer, obs *observability.Provider, authn *auth.Authenticator, authHandler *handler.AuthHandler, settingsHandler *handler.SettingsHandler, storageHandler *handler.StorageHandler, metas auth.ProjectMetaStore, notifications *handler.NotificationHandler, registry *handler.SandboxRegistryHandler, models *handler.ModelHandler, roles *handler.RoleHandler, coverSigner handler.CoverURLSigner, coverExpiry time.Duration, adminSandbox handler.AdminSandbox, templates *handler.TemplateHandler, harness handler.HarnessImporter, stageStore projectstage.Store, stageSandbox handler.StageSandbox, notificationChannels *handler.NotificationChannelHandler, fdeResources *handler.FdeResourceHandler, publishApp *handler.PublishHandler, channelPackages *handler.ChannelPackageHandler, channelGuides *handler.ChannelGuideHandler, cloneHandler *handler.CloneHandler, usageService *usage.Service, accessLogs *handler.AccessLogHandler, skillManager *handler.SkillManager, leaderboardHandler *handler.LeaderboardHandler, evolutionHandler *handler.EvolutionHandler, cardHandler *handler.CardHandler, cardCommentHandler *handler.CardCommentHandler, cardLikeHandler *handler.CardLikeHandler) {
 	var roleStore handler.AgentRoleStore
 	if roles != nil {
 		roleStore = roles.Service
@@ -156,8 +156,22 @@ func RegisterControl(e *echo.Echo, repo admin.Repository, projects store.Project
 
 	if cardHandler != nil {
 		api.GET("/cards/discover", cardHandler.Discover, authn.RequireUser)
-		api.GET("/public/cards/:id", cardHandler.PublicCard)
+		api.GET("/public/cards/:id", cardHandler.PublicCard, authHandler.AttachUserSession)
 		api.GET("/public/card-projects/:projectId", cardHandler.PublicProject)
+	}
+
+	if cardLikeHandler != nil {
+		api.PUT("/public/cards/:id/like", cardLikeHandler.Set, authn.RequireUser)
+		api.DELETE("/public/cards/:id/like", cardLikeHandler.Unset, authn.RequireUser)
+	}
+
+	if cardCommentHandler != nil {
+		api.GET("/public/cards/:id/comments", cardCommentHandler.ListRoots, authHandler.AttachUserSession)
+		api.GET("/public/cards/:id/comments/:commentId/replies", cardCommentHandler.ListReplies, authHandler.AttachUserSession)
+		commentWrite := api.Group("/public/cards/:id/comments", authn.RequireUser)
+		commentWrite.POST("", cardCommentHandler.Create)
+		commentWrite.PUT("/:commentId", cardCommentHandler.Update)
+		commentWrite.DELETE("/:commentId", cardCommentHandler.Delete)
 	}
 
 	if evolutionHandler != nil {

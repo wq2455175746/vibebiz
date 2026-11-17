@@ -1,5 +1,13 @@
 import { cpHttp, request } from './client'
-import type { BusinessCard, DiscoverCardsResult, PublicProjectCard } from '@/types'
+import type {
+  BusinessCard,
+  CardComment,
+  CardCommentDeleteResult,
+  CardCommentPage,
+  CardLikeState,
+  DiscoverCardsResult,
+  PublicProjectCard,
+} from '@/types'
 
 export function getMyCard(): Promise<BusinessCard> {
   return request<BusinessCard>(cpHttp, { method: 'get', url: '/me/card' })
@@ -74,5 +82,75 @@ export function getPublicCardProject(projectId: string): Promise<PublicProjectCa
   return request<PublicProjectCard>(cpHttp, {
     method: 'get',
     url: `/public/card-projects/${encodeURIComponent(projectId)}`,
+  })
+}
+
+export function getCardComments(
+  cardId: string,
+  params: { cursor?: string; limit?: number } = {},
+): Promise<CardCommentPage> {
+  return request<CardCommentPage>(cpHttp, {
+    method: 'get',
+    url: `/public/cards/${encodeURIComponent(cardId)}/comments`,
+    params,
+  })
+}
+
+export function getCardCommentReplies(
+  cardId: string,
+  commentId: string,
+  params: { cursor?: string; limit?: number } = {},
+): Promise<CardCommentPage> {
+  return request<CardCommentPage>(cpHttp, {
+    method: 'get',
+    url: `/public/cards/${encodeURIComponent(cardId)}/comments/${encodeURIComponent(commentId)}/replies`,
+    params,
+  })
+}
+
+export function createCardComment(
+  cardId: string,
+  input: { content: string; parentId?: string },
+): Promise<CardComment> {
+  return request<CardComment>(cpHttp, {
+    method: 'post',
+    url: `/public/cards/${encodeURIComponent(cardId)}/comments`,
+    data: input,
+  })
+}
+
+export function updateCardComment(
+  cardId: string,
+  commentId: string,
+  content: string,
+): Promise<CardComment> {
+  return request<CardComment>(cpHttp, {
+    method: 'put',
+    url: `/public/cards/${encodeURIComponent(cardId)}/comments/${encodeURIComponent(commentId)}`,
+    data: { content },
+  })
+}
+
+export function deleteCardComment(
+  cardId: string,
+  commentId: string,
+): Promise<CardCommentDeleteResult> {
+  return request<CardCommentDeleteResult>(cpHttp, {
+    method: 'delete',
+    url: `/public/cards/${encodeURIComponent(cardId)}/comments/${encodeURIComponent(commentId)}`,
+  })
+}
+
+export function likeCard(cardId: string): Promise<CardLikeState> {
+  return request<CardLikeState>(cpHttp, {
+    method: 'put',
+    url: `/public/cards/${encodeURIComponent(cardId)}/like`,
+  })
+}
+
+export function unlikeCard(cardId: string): Promise<CardLikeState> {
+  return request<CardLikeState>(cpHttp, {
+    method: 'delete',
+    url: `/public/cards/${encodeURIComponent(cardId)}/like`,
   })
 }

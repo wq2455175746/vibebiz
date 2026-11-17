@@ -82,6 +82,20 @@ describe('pageCards', () => {
 })
 
 describe('normalizeCard', () => {
+  it('defaults like fields and keeps provided values', () => {
+    expect(emptyCard()).toMatchObject({ likeCount: 0, liked: false })
+    const raw = {
+      ...card('demo-1'),
+      likeCount: undefined,
+      liked: undefined,
+    } as unknown as BusinessCard
+    expect(normalizeCard(raw)).toMatchObject({ likeCount: 0, liked: false })
+    expect(normalizeCard(card('demo-2', { likeCount: 7, liked: true }))).toMatchObject({
+      likeCount: 7,
+      liked: true,
+    })
+  })
+
   it('keeps a featured project only when it exists in items', () => {
     expect(
       normalizeCard(

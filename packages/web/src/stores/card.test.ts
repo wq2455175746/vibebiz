@@ -17,6 +17,8 @@ vi.mock('@/api/cards', () => ({
   getDiscoverCards: vi.fn(),
   getPublicCard: vi.fn(),
   getPublicCardProject: vi.fn(),
+  likeCard: vi.fn(),
+  unlikeCard: vi.fn(),
 }))
 
 const card = (overrides = {}) => ({
@@ -30,6 +32,8 @@ const card = (overrides = {}) => ({
   featured: null,
   published: false,
   commentCount: 0,
+  likeCount: 0,
+  liked: false,
   createdAt: '2026-11-09T00:00:00.000Z',
   updatedAt: '2026-11-09T00:00:00.000Z',
   ...overrides,
@@ -91,6 +95,53 @@ describe('card store', () => {
     await store.loadDiscover(2, true)
     expect(store.discoverCards.map((item) => item.id)).toEqual(['card-1', 'card-2'])
     expect(store.discoverTotal).toBe(2)
+  })
+
+  it('optimistically likes and reconciles with the API state', async () => {
+    let resolveLike!: (value: { liked: boolean; likeCount: number }) => void
+    vi.mocked(api.likeCard).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveLike = resolve
+        }),
+    )
+    const store = useCardStore()
+    const target = card({ likeCount: 2, liked: false })
+    store.discoverCards = [target]
+
+    const pending = store.toggleLike(target)
+    expect(target.liked).toBe(true)
+    expect(target.likeCount).toBe(3)
+
+    resolveLike({ liked: true, likeCount: 9 })
+    await pending
+    expect(api.likeCard).toHaveBeenCalledWith('card-1')
+    expect(target.liked).toBe(true)
+    expect(target.likeCount).toBe(9)
+  })
+
+  it('optimistically unlikes and reconciles with the API state', async () => {
+    vi.mocked(api.unlikeCard).mockResolvedValue({ liked: false, likeCount: 0 })
+    const store = useCardStore()
+    const target = card({ likeCount: 1, liked: true })
+    store.discoverCards = [target]
+
+    await store.toggleLike(target)
+    expect(api.unlikeCard).toHaveBeenCalledWith('card-1')
+    expect(target.liked).toBe(false)
+    expect(target.likeCount).toBe(0)
+  })
+
+  it('rolls back an optimistic like when the API fails', async () => {
+    vi.mocked(api.likeCard).mockRejectedValue(new Error('boom'))
+    const store = useCardStore()
+    const target = card({ likeCount: 2, liked: false })
+    store.discoverCards = [target]
+
+    await expect(store.toggleLike(target)).rejects.toThrow('boom')
+    expect(target.liked).toBe(false)
+    expect(target.likeCount).toBe(2)
+    expect(store.error).toBe('boom')
   })
 
   it('keeps newer edits when an earlier save resolves late', async () => {

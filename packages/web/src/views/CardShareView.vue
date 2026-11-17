@@ -3,17 +3,22 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getPublicCard } from '@/api/cards'
+import CardCommentTree from '@/components/card/CardCommentTree.vue'
+import CardLikeButton from '@/components/card/CardLikeButton.vue'
 import CardProjectItem from '@/components/card/CardProjectItem.vue'
 import CardPreview from '@/components/card/CardPreview.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useCardStore } from '@/stores/card'
 import type { BusinessCard } from '@/types'
 import '@/styles/card.css'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const store = useCardStore()
 const notice = ref('')
 const copied = ref(false)
+const liking = ref(false)
 const card = ref<BusinessCard | null>(null)
 const loading = ref(true)
 const loadError = ref('')
@@ -49,6 +54,36 @@ function openFeatured() {
 
 function openProject(projectId: string) {
   window.open(`/share/project/${encodeURIComponent(projectId)}`, '_blank', 'noopener,noreferrer')
+}
+
+function scrollToComments() {
+  document.getElementById('comments')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+function handleCommentCountChange(count: number) {
+  if (card.value) card.value.commentCount = count
+}
+
+function requireLogin() {
+  void router.push({ name: 'login', query: { redirect: route.fullPath } })
+}
+
+async function toggleLike() {
+  const current = card.value
+  if (!current) return
+  if (!auth.user) {
+    await router.push({ name: 'login', query: { redirect: route.fullPath } })
+    return
+  }
+  if (liking.value) return
+  liking.value = true
+  try {
+    await store.toggleLike(current)
+  } catch {
+    notice.value = '点赞失败，请稍后重试'
+  } finally {
+    liking.value = false
+  }
 }
 
 async function copyLink() {
@@ -95,6 +130,12 @@ async function copyLink() {
         </div>
         <div class="card-share-actions">
           <a v-if="isOwnCard" class="card-primary" href="/my-card">编辑名片</a>
+          <CardLikeButton
+            :liked="card.liked"
+            :count="card.likeCount"
+            :busy="liking"
+            @toggle="toggleLike"
+          />
           <button class="card-secondary" type="button" @click="copyLink">
             <i class="pi pi-copy" />
             {{ copied ? '已复制' : '复制分享链接' }}
@@ -130,8 +171,16 @@ async function copyLink() {
         </div>
       </section>
 
+      <CardCommentTree
+        :card-id="card.id"
+        :current-user-id="auth.user?.id ?? null"
+        :comment-count="card.commentCount"
+        @count-change="handleCommentCountChange"
+        @login-required="requireLogin"
+      />
+
       <footer class="share-social">
-        <button class="card-social-comment" type="button" disabled>
+        <button class="card-social-comment" type="button" @click="scrollToComments">
           <i class="pi pi-comment" />
           评论 · {{ card.commentCount }}
         </button>

@@ -406,6 +406,50 @@ export interface BusinessCard {
   featured: CardFeatured
   published: boolean
   commentCount: number
+  likeCount: number
+  liked: boolean
   createdAt: string
   updatedAt: string
+}
+
+export interface CardCommentAuthor {
+  userId: number
+  name: string
+  avatarUrl: string | null
+}
+
+export type CardCommentStatus = 'normal' | 'deleted'
+
+export interface CardComment {
+  id: string
+  cardId: string
+  parentId?: string
+  rootId?: string
+  depth: number
+  content: string
+  author: CardCommentAuthor
+  replyToName?: string
+  replyCount: number
+  status: CardCommentStatus
+  editable: boolean
+  deletable: boolean
+  editedAt: string | null
+  createdAt: string
+  replies?: CardComment[]
+}
+
+export interface CardCommentPage {
+  comments: CardComment[]
+  nextCursor: string
+  hasMore: boolean
+}
+
+export interface CardLikeState {
+  liked: boolean
+  likeCount: number
+}
+
+export interface CardCommentDeleteResult {
+  tombstoned: boolean
+  commentCount: number
 }

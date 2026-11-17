@@ -63,6 +63,45 @@ func TestMetricsHandlerExposesProjectLeaseMetrics(t *testing.T) {
 	}
 }
 
+func TestMetricsHandlerExposesCardSocialMetrics(t *testing.T) {
+	ctx := context.Background()
+	p, err := New(ctx, "vibebiz-test", "cp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Shutdown(ctx)
+
+	p.RecordCardComment("create", "ok")
+	p.RecordCardLike("like", "ok")
+	p.ObserveCardLikeSync(0.25)
+	p.SetCardLikeStreamPending(3)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/metrics", nil)
+	p.MetricsHandler.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	for _, metric := range []string{
+		"vibebiz_card_comments_total",
+		"vibebiz_card_likes_total",
+		"vibebiz_card_like_sync_duration_seconds",
+		"vibebiz_card_like_stream_pending",
+	} {
+		if !strings.Contains(body, metric) {
+			t.Fatalf("metrics missing %s: %s", metric, body)
+		}
+	}
+	if !strings.Contains(body, `vibebiz_card_comments_total{action="create",status="ok"} 1`) {
+		t.Fatalf("comment labels missing: %s", body)
+	}
+	if !strings.Contains(body, `vibebiz_card_likes_total{action="like",status="ok"} 1`) {
+		t.Fatalf("like labels missing: %s", body)
+	}
+	if !strings.Contains(body, "vibebiz_card_like_stream_pending 3") {
+		t.Fatalf("pending gauge missing: %s", body)
+	}
+}
+
 func TestMiddlewareAddsRequestIDToContext(t *testing.T) {
 	ctx := context.Background()
 	p, err := New(ctx, "vibebiz-test", "cp")

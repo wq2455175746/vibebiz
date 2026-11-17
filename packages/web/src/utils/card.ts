@@ -69,6 +69,8 @@ export function emptyCard(now = new Date()): BusinessCard {
     featured: null,
     published: false,
     commentCount: 0,
+    likeCount: 0,
+    liked: false,
     createdAt: timestamp,
     updatedAt: timestamp,
   }
@@ -111,6 +113,8 @@ export function normalizeCard(card: BusinessCard): BusinessCard {
     featured,
     published: Boolean(card.published),
     commentCount: Number.isFinite(card.commentCount) ? card.commentCount : 0,
+    likeCount: Number.isFinite(card.likeCount) ? card.likeCount : 0,
+    liked: typeof card.liked === 'boolean' ? card.liked : false,
     createdAt: typeof card.createdAt === 'string' ? card.createdAt : new Date().toISOString(),
     updatedAt: typeof card.updatedAt === 'string' ? card.updatedAt : new Date().toISOString(),
   }

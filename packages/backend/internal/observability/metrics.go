@@ -14,6 +14,10 @@ type Metrics struct {
 	SSEEvents             *prometheus.CounterVec
 	ProjectLeaseAcquire   *prometheus.CounterVec
 	ProjectLeaseRenewFail *prometheus.CounterVec
+	Comments              *prometheus.CounterVec
+	Likes                 *prometheus.CounterVec
+	LikeSyncSeconds       prometheus.Histogram
+	LikeStreamPending     prometheus.Gauge
 
 	registry *prometheus.Registry
 }
@@ -46,6 +50,23 @@ func newMetrics() *Metrics {
 			Name: "vibebiz_project_lease_renew_fail_total",
 			Help: "Total number of project lease renewal failures.",
 		}, []string{"service", "plane"}),
+		Comments: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "vibebiz_card_comments_total",
+			Help: "Total number of card comment mutations.",
+		}, []string{"action", "status"}),
+		Likes: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "vibebiz_card_likes_total",
+			Help: "Total number of card like mutations.",
+		}, []string{"action", "status"}),
+		LikeSyncSeconds: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Name:    "vibebiz_card_like_sync_duration_seconds",
+			Help:    "Card like stream sync duration.",
+			Buckets: prometheus.DefBuckets,
+		}),
+		LikeStreamPending: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "vibebiz_card_like_stream_pending",
+			Help: "Card like stream pending messages.",
+		}),
 		registry: registry,
 	}
 
@@ -56,6 +77,10 @@ func newMetrics() *Metrics {
 		m.SSEEvents,
 		m.ProjectLeaseAcquire,
 		m.ProjectLeaseRenewFail,
+		m.Comments,
+		m.Likes,
+		m.LikeSyncSeconds,
+		m.LikeStreamPending,
 	)
 	return m
 }
@@ -78,4 +103,20 @@ func (m *Metrics) RecordProjectLeaseAcquire(serviceName, plane, result string) {
 
 func (m *Metrics) RecordProjectLeaseRenewFail(serviceName, plane string) {
 	m.ProjectLeaseRenewFail.WithLabelValues(serviceName, plane).Inc()
+}
+
+func (m *Metrics) RecordCardComment(action, status string) {
+	m.Comments.WithLabelValues(action, status).Inc()
+}
+
+func (m *Metrics) RecordCardLike(action, status string) {
+	m.Likes.WithLabelValues(action, status).Inc()
+}
+
+func (m *Metrics) ObserveCardLikeSync(seconds float64) {
+	m.LikeSyncSeconds.Observe(seconds)
+}
+
+func (m *Metrics) SetCardLikeStreamPending(n float64) {
+	m.LikeStreamPending.Set(n)
 }
